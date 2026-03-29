@@ -470,8 +470,34 @@ input[type=file] { display: none; }
           <span style="font-size:12px; color:var(--text3);"><span id="total-count">0</span> transacciones</span>
         </div>
         <div style="margin-top:16px; padding-top:16px; border-top:1px solid var(--border); display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
-          <input type="month" id="borrar-mes-input" class="form-input" style="width:160px;" value="">
-          <button onclick="borrarMes()" style="background:transparent;border:1px solid rgba(255,107,74,0.3);border-radius:100px;padding:8px 16px;color:var(--coral);font-size:12px;font-family:'DM Sans',sans-serif;cursor:pointer;transition:all .2s;" onmouseover="this.style.background='rgba(255,107,74,0.1)'" onmouseout="this.style.background='transparent'">🗑 Borrar mes seleccionado</button>
+          <select id="borrar-mes-input" class="form-input" style="width:160px;">
+            <option value="2026-01">Enero 2026</option>
+            <option value="2026-02">Febrero 2026</option>
+            <option value="2026-03">Marzo 2026</option>
+            <option value="2026-04">Abril 2026</option>
+            <option value="2026-05">Mayo 2026</option>
+            <option value="2026-06">Junio 2026</option>
+            <option value="2026-07">Julio 2026</option>
+            <option value="2026-08">Agosto 2026</option>
+            <option value="2026-09">Septiembre 2026</option>
+            <option value="2026-10">Octubre 2026</option>
+            <option value="2026-11">Noviembre 2026</option>
+            <option value="2026-12">Diciembre 2026</option>
+            <option value="2025-01">Enero 2025</option>
+            <option value="2025-02">Febrero 2025</option>
+            <option value="2025-03">Marzo 2025</option>
+            <option value="2025-04">Abril 2025</option>
+            <option value="2025-05">Mayo 2025</option>
+            <option value="2025-06">Junio 2025</option>
+            <option value="2025-07">Julio 2025</option>
+            <option value="2025-08">Agosto 2025</option>
+            <option value="2025-09">Septiembre 2025</option>
+            <option value="2025-10">Octubre 2025</option>
+            <option value="2025-11">Noviembre 2025</option>
+            <option value="2025-12">Diciembre 2025</option>
+          </select>
+          <button onclick="borrarMes()" style="background:transparent;border:1px solid rgba(255,107,74,0.3);border-radius:100px;padding:8px 16px;color:var(--coral);font-size:12px;font-family:'DM Sans',sans-serif;cursor:pointer;transition:all .2s;" onmouseover="this.style.background='rgba(255,107,74,0.1)'" onmouseout="this.style.background='transparent'">🗑 Borrar mes</button>
+          <button onclick="borrarTodo()" style="background:transparent;border:1px solid rgba(255,107,74,0.5);border-radius:100px;padding:8px 16px;color:var(--coral);font-size:12px;font-family:'DM Sans',sans-serif;cursor:pointer;transition:all .2s;" onmouseover="this.style.background='rgba(255,107,74,0.1)'" onmouseout="this.style.background='transparent'">⚠️ Borrar todo el historial</button>
         </div>
       </div>
     </div>
@@ -625,6 +651,72 @@ input[type=file] { display: none; }
     <button class="tab-btn" onclick="showTab('metas', this)"><div class="tab-icon">🎯</div>Metas</button>
     <button class="tab-btn" onclick="showTab('inversiones', this)"><div class="tab-icon">📈</div>Inversión</button>
   </nav>
+
+  <!-- BOTÓN FLOTANTE EFECTIVO -->
+  <button id="btn-efectivo" onclick="abrirEfectivo()" style="
+    position:fixed; bottom:80px; right:20px; z-index:200;
+    width:52px; height:52px; border-radius:50%;
+    background:var(--lime); border:none; cursor:pointer;
+    box-shadow:0 4px 20px rgba(200,241,53,0.4);
+    font-size:22px; display:flex; align-items:center; justify-content:center;
+    transition:all .2s;
+  " onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='scale(1)'">💵</button>
+
+  <!-- MODAL EFECTIVO -->
+  <div id="modal-efectivo" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:400; align-items:flex-end; justify-content:center;">
+    <div style="background:var(--bg2); border:1px solid var(--border); border-radius:24px 24px 0 0; padding:28px 24px 40px; width:100%; max-width:480px; animation:slideUp .25s ease;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+        <div style="font-size:18px; font-weight:600;">💵 Gasto en efectivo</div>
+        <button onclick="cerrarEfectivo()" style="background:none;border:none;color:var(--text3);font-size:22px;cursor:pointer;">×</button>
+      </div>
+
+      <!-- TIPO -->
+      <div style="display:flex; background:var(--surface); border-radius:10px; padding:3px; margin-bottom:16px;">
+        <button class="tipo-btn active gasto" id="ef-tipo-gasto" onclick="setTipoEfectivo('gasto')">− Gasto</button>
+        <button class="tipo-btn ingreso" id="ef-tipo-ingreso" onclick="setTipoEfectivo('ingreso')">+ Ingreso</button>
+      </div>
+
+      <!-- VOZ O TEXTO -->
+      <div style="margin-bottom:16px;">
+        <div style="font-size:11px; color:var(--text3); margin-bottom:8px; text-transform:uppercase; letter-spacing:1px;">Descripción</div>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <input class="form-input" id="ef-desc" placeholder="Ej: café, taxi, mercado..." style="flex:1;">
+          <button id="ef-mic-btn" onclick="toggleVoz()" style="
+            width:44px; height:44px; border-radius:50%; border:1px solid var(--border);
+            background:var(--surface); cursor:pointer; font-size:20px;
+            display:flex; align-items:center; justify-content:center; flex-shrink:0;
+            transition:all .2s;
+          ">🎤</button>
+        </div>
+        <div id="ef-voz-status" style="font-size:11px; color:var(--text3); margin-top:6px; min-height:16px;"></div>
+      </div>
+
+      <!-- IMPORTE Y CATEGORÍA -->
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:16px;">
+        <div>
+          <div style="font-size:11px; color:var(--text3); margin-bottom:6px; text-transform:uppercase; letter-spacing:1px;">Importe (€)</div>
+          <input class="form-input" type="number" id="ef-importe" placeholder="0" min="0" step="0.01">
+        </div>
+        <div>
+          <div style="font-size:11px; color:var(--text3); margin-bottom:6px; text-transform:uppercase; letter-spacing:1px;">Categoría</div>
+          <select class="form-input" id="ef-categoria">
+            <option value="🍔 Comida">🍔 Comida</option>
+            <option value="🎉 Ocio">🎉 Ocio</option>
+            <option value="🚇 Transporte">🚇 Transporte</option>
+            <option value="👕 Ropa">👕 Ropa</option>
+            <option value="📚 Estudios">📚 Estudios</option>
+            <option value="💊 Salud">💊 Salud</option>
+            <option value="💰 Nómina">💰 Nómina</option>
+            <option value="🎁 Regalo">🎁 Regalo</option>
+            <option value="🔧 Otros">🔧 Otros</option>
+          </select>
+        </div>
+      </div>
+
+      <button class="btn-add" onclick="guardarEfectivo()">Añadir →</button>
+      <div id="ef-msg" style="font-size:12px; color:var(--lime); text-align:center; margin-top:10px; min-height:16px;"></div>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -713,7 +805,6 @@ function entrarApp(nombre) {
   document.getElementById('header-name').textContent = nombre;
   document.getElementById('tx-fecha').value = hoy();
   document.getElementById('inicio-mes').value = mesActual();
-  document.getElementById('borrar-mes-input').value = mesActual();
   cargarReglas().then(() => cargarTodo());
   calcInv();
 }
@@ -1189,6 +1280,16 @@ function dibujarGrafico(inicial, mensual, anos, rm, maxVal) {
   ctx.stroke();
 }
 
+async function borrarTodo() {
+  if (!confirm('⚠️ ¿Borrar TODO el historial de transacciones? Esta acción no se puede deshacer.')) return;
+  if (isDemo) {
+    demoData.transacciones = [];
+    await cargarTransacciones(); await cargarPresupuestos(); return;
+  }
+  await sb.from('pj_transacciones').delete().eq('user_id', currentUser.id);
+  await cargarTransacciones(); await cargarPresupuestos();
+}
+
 async function borrarMes() {
   const input = document.getElementById('borrar-mes-input');
   const mes = input.value || mesActual();
@@ -1203,6 +1304,98 @@ async function borrarMes() {
     .gte('fecha', mes + '-01')
     .lte('fecha', mes + '-31');
   await cargarTransacciones(); await cargarPresupuestos();
+}
+
+// ─── EFECTIVO ───
+let tipoEfectivo = 'gasto';
+let reconocimiento = null;
+let vozActiva = false;
+
+function abrirEfectivo() {
+  document.getElementById('modal-efectivo').style.display = 'flex';
+  document.getElementById('ef-desc').value = '';
+  document.getElementById('ef-importe').value = '';
+  document.getElementById('ef-msg').textContent = '';
+  document.getElementById('ef-voz-status').textContent = '';
+}
+
+function cerrarEfectivo() {
+  if (vozActiva) pararVoz();
+  document.getElementById('modal-efectivo').style.display = 'none';
+}
+
+function setTipoEfectivo(tipo) {
+  tipoEfectivo = tipo;
+  document.getElementById('ef-tipo-gasto').className = 'tipo-btn' + (tipo === 'gasto' ? ' active gasto' : '');
+  document.getElementById('ef-tipo-ingreso').className = 'tipo-btn' + (tipo === 'ingreso' ? ' active ingreso' : '');
+}
+
+function toggleVoz() {
+  if (vozActiva) { pararVoz(); return; }
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) {
+    document.getElementById('ef-voz-status').textContent = 'Tu navegador no soporta reconocimiento de voz';
+    return;
+  }
+  reconocimiento = new SR();
+  reconocimiento.lang = 'es-ES';
+  reconocimiento.continuous = false;
+  reconocimiento.interimResults = true;
+
+  reconocimiento.onstart = () => {
+    vozActiva = true;
+    document.getElementById('ef-mic-btn').style.background = 'rgba(255,107,74,0.2)';
+    document.getElementById('ef-mic-btn').style.borderColor = 'var(--coral)';
+    document.getElementById('ef-voz-status').textContent = '🔴 Escuchando...';
+  };
+
+  reconocimiento.onresult = (e) => {
+    const texto = Array.from(e.results).map(r => r[0].transcript).join('');
+    document.getElementById('ef-desc').value = texto;
+    // Intentar extraer importe del texto (ej: "café 2 euros", "taxi 15")
+    const match = texto.match(/(\d+(?:[.,]\d+)?)\s*(?:euros?|€)?/i);
+    if (match && !document.getElementById('ef-importe').value) {
+      document.getElementById('ef-importe').value = parseFloat(match[1].replace(',', '.'));
+    }
+  };
+
+  reconocimiento.onend = () => { pararVoz(); };
+  reconocimiento.onerror = (e) => {
+    document.getElementById('ef-voz-status').textContent = 'Error: ' + e.error;
+    pararVoz();
+  };
+
+  reconocimiento.start();
+}
+
+function pararVoz() {
+  vozActiva = false;
+  if (reconocimiento) { try { reconocimiento.stop(); } catch(e) {} }
+  document.getElementById('ef-mic-btn').style.background = 'var(--surface)';
+  document.getElementById('ef-mic-btn').style.borderColor = 'var(--border)';
+  document.getElementById('ef-voz-status').textContent = '';
+}
+
+async function guardarEfectivo() {
+  const desc = document.getElementById('ef-desc').value.trim();
+  const importe = parseFloat(document.getElementById('ef-importe').value);
+  const categoria = document.getElementById('ef-categoria').value;
+  if (!desc || !importe) { document.getElementById('ef-msg').textContent = 'Rellena descripción e importe'; return; }
+
+  const tx = { fecha: hoy(), descripcion: desc, importe, tipo: tipoEfectivo, categoria };
+
+  if (isDemo) {
+    demoData.transacciones.unshift({ id: 'd' + Date.now(), ...tx });
+  } else {
+    await sb.from('pj_transacciones').insert({ user_id: currentUser.id, ...tx });
+  }
+
+  document.getElementById('ef-msg').textContent = '✓ Añadido';
+  document.getElementById('ef-desc').value = '';
+  document.getElementById('ef-importe').value = '';
+  await cargarTransacciones();
+  await cargarPresupuestos();
+  setTimeout(() => cerrarEfectivo(), 800);
 }
 
 // ─── CATEGORÍAS APRENDIDAS (Supabase) ───
@@ -1413,7 +1606,6 @@ async function guardarImportacion(txs) {
 document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('tx-fecha').value = hoy();
   document.getElementById('inicio-mes').value = mesActual();
-  document.getElementById('borrar-mes-input').value = mesActual();
   const { data: { session } } = await sb.auth.getSession();
   if (session) { currentUser = session.user; entrarApp(session.user.email.split('@')[0]); }
 });

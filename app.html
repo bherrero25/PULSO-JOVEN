@@ -328,6 +328,10 @@ input[type=file] { display: none; }
   <div class="app-content">
     <!-- INICIO -->
     <div id="tab-inicio" class="tab-content active">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; flex-wrap:wrap; gap:10px;">
+        <div style="font-size:15px; font-weight:600;">Resumen</div>
+        <input type="month" id="inicio-mes" class="form-input" style="width:160px;" onchange="cargarTransacciones()">
+      </div>
       <div id="semaforo-card" class="semaforo-card verde">
         <div id="sem-circle" class="sem-circle verde"><span id="sem-emoji">🟢</span></div>
         <div class="sem-info">
@@ -413,9 +417,16 @@ input[type=file] { display: none; }
       </div>
       <div class="card">
         <div class="card-title">Todas las transacciones</div>
+        <div style="display:flex; gap:8px; margin-bottom:14px; flex-wrap:wrap;">
+          <input type="text" id="buscar-tx" class="form-input" placeholder="🔍 Buscar por concepto..." style="flex:1; min-width:140px;" oninput="filtrarTxs()">
+          <select id="filtrar-cat" class="form-input" style="flex:1; min-width:140px;" onchange="filtrarTxs()">
+            <option value="">Todas las categorías</option>
+          </select>
+        </div>
         <div id="lista-txs"><div class="empty-state"><div class="empty-icon">📋</div><div class="empty-text">Añade tu primer movimiento</div></div></div>
-        <div style="margin-top:16px; padding-top:16px; border-top:1px solid var(--border); text-align:right;">
-          <button onclick="borrarMes()" style="background:transparent;border:1px solid rgba(255,107,74,0.3);border-radius:100px;padding:8px 16px;color:var(--coral);font-size:12px;font-family:'DM Sans',sans-serif;cursor:pointer;transition:all .2s;" onmouseover="this.style.background='rgba(255,107,74,0.1)'" onmouseout="this.style.background='transparent'">🗑 Borrar transacciones de este mes</button>
+        <div style="margin-top:16px; padding-top:16px; border-top:1px solid var(--border); display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+          <input type="month" id="borrar-mes-input" class="form-input" style="width:160px;" value="">
+          <button onclick="borrarMes()" style="background:transparent;border:1px solid rgba(255,107,74,0.3);border-radius:100px;padding:8px 16px;color:var(--coral);font-size:12px;font-family:'DM Sans',sans-serif;cursor:pointer;transition:all .2s;" onmouseover="this.style.background='rgba(255,107,74,0.1)'" onmouseout="this.style.background='transparent'">🗑 Borrar mes seleccionado</button>
         </div>
       </div>
     </div>
@@ -699,19 +710,49 @@ async function cargarTransacciones() {
   renderInicio(txs);
 }
 
+let todasTxs = [];
+
 function renderTxs(txs) {
+  todasTxs = txs;
+  // Poblar filtro de categorías
+  const cats = [...new Set(txs.map(t => t.categoria))].sort();
+  const sel = document.getElementById('filtrar-cat');
+  if (sel) {
+    const val = sel.value;
+    sel.innerHTML = '<option value="">Todas las categorías</option>' + cats.map(c => `<option value="${c}" ${c === val ? 'selected' : ''}>${c}</option>`).join('');
+  }
+  filtrarTxs();
+}
+
+function filtrarTxs() {
+  const buscar = (document.getElementById('buscar-tx')?.value || '').toLowerCase();
+  const cat = document.getElementById('filtrar-cat')?.value || '';
+  const txs = todasTxs.filter(t => {
+    const matchBuscar = !buscar || t.descripcion.toLowerCase().includes(buscar);
+    const matchCat = !cat || t.categoria === cat;
+    return matchBuscar && matchCat;
+  });
+  renderListaTxs(txs);
+}
+
+function renderListaTxs(txs) {
   const el = document.getElementById('lista-txs');
-  if (!txs.length) { el.innerHTML = '<div class="empty-state"><div class="empty-icon">📋</div><div class="empty-text">Añade tu primer movimiento</div></div>'; return; }
+  if (!txs.length) { el.innerHTML = '<div class="empty-state"><div class="empty-icon">📋</div><div class="empty-text">No hay transacciones</div></div>'; return; }
+  const CATS = ['🍔 Comida','🏠 Alquiler','🎉 Ocio','🚇 Transporte','📦 Suscripciones','👕 Ropa','📚 Estudios','💊 Salud','💰 Nómina','🎁 Regalo','✈️ Viaje','📱 Tecnología','🏋️ Deporte','💳 Liquidación tarjeta','🔧 Otros'];
   el.innerHTML = txs.map(t => `
     <div class="tx-row">
       <div class="tx-left">
         <div class="tx-icon">${t.categoria.split(' ')[0]}</div>
         <div>
           <div class="tx-desc">${t.descripcion}${t.tipo === 'liquidacion_tarjeta' ? '<span class="badge-liq">compensado</span>' : ''}</div>
-          <div class="tx-meta">${fmtFecha(t.fecha)} · ${t.categoria.split(' ').slice(1).join(' ')}</div>
+          <div class="tx-meta">${fmtFecha(t.fecha)}</div>
+          <select onchange="cambiarCategoria('${t.id}', this.value)" style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:3px 6px;color:var(--text2);font-size:11px;font-family:'DM Sans',sans-serif;margin-top:4px;outline:none;">
+            ${CATS.map(c => `<option value="${c}" ${c === t.categoria ? 'selected' : ''}>${c}</option>`).join('')}
+            <option value="${t.categoria}" ${!CATS.includes(t.categoria) ? 'selected' : ''}>${!CATS.includes(t.categoria) ? t.categoria : ''}</option>
+          </select>
         </div>
       </div>
-      <div style="display:flex;align-items:center;gap:8px">
+      <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
         <div class="tx-amount ${t.tipo === 'gasto' ? 'neg' : t.tipo === 'liquidacion_tarjeta' ? '' : 'pos'}" style="${t.tipo === 'liquidacion_tarjeta' ? 'color:var(--amber)' : ''}">${t.tipo === 'gasto' ? '−' : t.tipo === 'liquidacion_tarjeta' ? '≈' : '+'}${fmt(t.importe)}</div>
         ${!isDemo ? `<button class="tx-delete" onclick="deleteTx('${t.id}')">×</button>` : ''}
       </div>
@@ -719,8 +760,8 @@ function renderTxs(txs) {
 }
 
 function renderInicio(txs) {
-  const hoyStr = hoy().slice(0, 7);
-  const mesTxs = txs.filter(t => t.fecha.slice(0, 7) === hoyStr);
+  const mesSel = document.getElementById('inicio-mes')?.value || mesActual();
+  const mesTxs = txs.filter(t => t.fecha.slice(0, 7) === mesSel);
   const ingresos = mesTxs.filter(t => t.tipo === 'ingreso').reduce((s, t) => s + parseFloat(t.importe), 0);
   const gastos = mesTxs.filter(t => t.tipo === 'gasto').reduce((s, t) => s + parseFloat(t.importe), 0);
   // Las liquidaciones de tarjeta NO se suman a gastos (ya están en los movimientos de tarjeta)
@@ -790,6 +831,18 @@ async function addTransaccion() {
   await sb.from('pj_transacciones').insert({ user_id: currentUser.id, fecha, descripcion: desc, importe, tipo: tipoActual, categoria: cat });
   document.getElementById('tx-desc').value = ''; document.getElementById('tx-importe').value = '';
   await cargarTransacciones(); await cargarPresupuestos();
+}
+
+async function cambiarCategoria(id, nuevaCat) {
+  if (isDemo) {
+    const t = demoData.transacciones.find(x => x.id === id);
+    if (t) t.categoria = nuevaCat;
+    return;
+  }
+  await sb.from('pj_transacciones').update({ categoria: nuevaCat }).eq('id', id);
+  // Actualizar local sin recargar para no perder el filtro
+  const t = todasTxs.find(x => x.id === id);
+  if (t) t.categoria = nuevaCat;
 }
 
 async function deleteTx(id) {
@@ -1014,7 +1067,8 @@ function dibujarGrafico(inicial, mensual, anos, rm, maxVal) {
 }
 
 async function borrarMes() {
-  const mes = mesActual();
+  const input = document.getElementById('borrar-mes-input');
+  const mes = input.value || mesActual();
   if (!confirm(`¿Borrar todas las transacciones de ${mes}? Esta acción no se puede deshacer.`)) return;
   if (isDemo) {
     demoData.transacciones = demoData.transacciones.filter(t => t.fecha.slice(0, 7) !== mes);
@@ -1195,6 +1249,8 @@ async function guardarImportacion(txs) {
 // ─── INIT ───
 document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('tx-fecha').value = hoy();
+  document.getElementById('borrar-mes-input').value = mesActual();
+  document.getElementById('inicio-mes').value = mesActual();
   const { data: { session } } = await sb.auth.getSession();
   if (session) { currentUser = session.user; entrarApp(session.user.email.split('@')[0]); }
 });

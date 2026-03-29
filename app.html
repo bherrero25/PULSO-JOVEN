@@ -756,7 +756,14 @@ function renderTxs(txs) {
   filtrarTxs();
 }
 
-function limpiarFiltros() {
+function getIconoCat(categoria) {
+  if (!categoria) return '🔧';
+  const primera = [...categoria][0]; // Primer carácter unicode
+  // Comprobar si es emoji (rango unicode de emojis)
+  const code = primera.codePointAt(0);
+  if (code > 127) return primera; // Es emoji
+  return '🏷️'; // No tiene emoji, usar genérico
+}
   document.getElementById('buscar-tx').value = '';
   document.getElementById('filtrar-cat').value = '';
   document.getElementById('filtrar-desde').value = '';
@@ -788,7 +795,7 @@ function renderListaTxs(txs) {
   el.innerHTML = txs.map(t => `
     <div class="tx-row" id="tx-row-${t.id}">
       <div class="tx-left">
-        <div class="tx-icon">${t.categoria.split(' ')[0]}</div>
+        <div class="tx-icon">${getIconoCat(t.categoria)}</div>
         <div>
           <div class="tx-desc">${t.descripcion}${t.tipo === 'liquidacion_tarjeta' ? '<span class="badge-liq">compensado</span>' : ''}</div>
           <div class="tx-meta">
@@ -854,7 +861,7 @@ function renderInicio(txs) {
   el.innerHTML = ultimas.map(t => `
     <div class="tx-mini">
       <div class="tx-mini-left">
-        <div class="tx-mini-icon">${t.categoria.split(' ')[0]}</div>
+        <div class="tx-mini-icon">${getIconoCat(t.categoria)}</div>
         <div><div class="tx-mini-desc">${t.descripcion}</div><div class="tx-mini-cat">${t.categoria.split(' ').slice(1).join(' ')}</div></div>
       </div>
       <div class="tx-mini-amount ${t.tipo === 'gasto' ? 'neg' : 'pos'}">${t.tipo === 'gasto' ? '−' : '+'}${fmt(t.importe)}</div>

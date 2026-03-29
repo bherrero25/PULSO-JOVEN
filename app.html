@@ -330,7 +330,20 @@ input[type=file] { display: none; }
     <div id="tab-inicio" class="tab-content active">
       <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; flex-wrap:wrap; gap:10px;">
         <div style="font-size:15px; font-weight:600;">Resumen</div>
-        <input type="month" id="inicio-mes" class="form-input" style="width:160px;" onchange="cargarTransacciones()">
+        <select id="inicio-mes" class="form-input" style="width:160px;" onchange="cargarTransacciones()">
+          <option value="2026-01">Enero 2026</option>
+          <option value="2026-02">Febrero 2026</option>
+          <option value="2026-03">Marzo 2026</option>
+          <option value="2026-04">Abril 2026</option>
+          <option value="2026-05">Mayo 2026</option>
+          <option value="2026-06">Junio 2026</option>
+          <option value="2026-07">Julio 2026</option>
+          <option value="2026-08">Agosto 2026</option>
+          <option value="2026-09">Septiembre 2026</option>
+          <option value="2026-10">Octubre 2026</option>
+          <option value="2026-11">Noviembre 2026</option>
+          <option value="2026-12">Diciembre 2026</option>
+        </select>
       </div>
       <div id="semaforo-card" class="semaforo-card verde">
         <div id="sem-circle" class="sem-circle verde"><span id="sem-emoji">🟢</span></div>
@@ -738,18 +751,21 @@ function filtrarTxs() {
 function renderListaTxs(txs) {
   const el = document.getElementById('lista-txs');
   if (!txs.length) { el.innerHTML = '<div class="empty-state"><div class="empty-icon">📋</div><div class="empty-text">No hay transacciones</div></div>'; return; }
-  const CATS = ['🍔 Comida','🏠 Alquiler','🎉 Ocio','🚇 Transporte','📦 Suscripciones','👕 Ropa','📚 Estudios','💊 Salud','💰 Nómina','🎁 Regalo','✈️ Viaje','📱 Tecnología','🏋️ Deporte','💳 Liquidación tarjeta','🔧 Otros'];
+  const CATS = ['🍔 Comida','🏠 Alquiler','🎉 Ocio','🚇 Transporte','📦 Suscripciones','👕 Ropa','📚 Estudios','💊 Salud','💰 Nómina','🎁 Regalo','✈️ Viaje','📱 Tecnología','🏋️ Deporte','💳 Liquidación tarjeta','🔧 Otros','✏️ Otra...'];
   el.innerHTML = txs.map(t => `
-    <div class="tx-row">
+    <div class="tx-row" id="tx-row-${t.id}">
       <div class="tx-left">
         <div class="tx-icon">${t.categoria.split(' ')[0]}</div>
         <div>
           <div class="tx-desc">${t.descripcion}${t.tipo === 'liquidacion_tarjeta' ? '<span class="badge-liq">compensado</span>' : ''}</div>
           <div class="tx-meta">${fmtFecha(t.fecha)}</div>
-          <select onchange="cambiarCategoria('${t.id}', this.value)" style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:3px 6px;color:var(--text2);font-size:11px;font-family:'DM Sans',sans-serif;margin-top:4px;outline:none;">
-            ${CATS.map(c => `<option value="${c}" ${c === t.categoria ? 'selected' : ''}>${c}</option>`).join('')}
-            <option value="${t.categoria}" ${!CATS.includes(t.categoria) ? 'selected' : ''}>${!CATS.includes(t.categoria) ? t.categoria : ''}</option>
-          </select>
+          <div style="display:flex;align-items:center;gap:6px;margin-top:4px;flex-wrap:wrap;">
+            <select onchange="cambiarCategoriaSelect('${t.id}', this)" style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:3px 6px;color:var(--text2);font-size:11px;font-family:'DM Sans',sans-serif;outline:none;">
+              ${CATS.map(c => `<option value="${c}" ${c === t.categoria ? 'selected' : ''}>${c}</option>`).join('')}
+              ${!CATS.includes(t.categoria) ? `<option value="${t.categoria}" selected>${t.categoria}</option>` : ''}
+            </select>
+            <input id="cat-custom-${t.id}" placeholder="Escribe categoría..." onkeydown="if(event.key==='Enter')guardarCatCustom('${t.id}',this.value)" style="display:none;background:var(--surface);border:1px solid rgba(200,241,53,0.3);border-radius:8px;padding:3px 8px;color:var(--text);font-size:11px;font-family:'DM Sans',sans-serif;outline:none;width:140px;">
+          </div>
         </div>
       </div>
       <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
@@ -831,6 +847,24 @@ async function addTransaccion() {
   await sb.from('pj_transacciones').insert({ user_id: currentUser.id, fecha, descripcion: desc, importe, tipo: tipoActual, categoria: cat });
   document.getElementById('tx-desc').value = ''; document.getElementById('tx-importe').value = '';
   await cargarTransacciones(); await cargarPresupuestos();
+}
+
+function cambiarCategoriaSelect(id, select) {
+  if (select.value === '✏️ Otra...') {
+    const input = document.getElementById('cat-custom-' + id);
+    if (input) { input.style.display = 'inline-block'; input.focus(); }
+  } else {
+    cambiarCategoria(id, select.value);
+  }
+}
+
+async function guardarCatCustom(id, valor) {
+  const v = valor.trim();
+  if (!v) return;
+  const input = document.getElementById('cat-custom-' + id);
+  if (input) input.style.display = 'none';
+  await cambiarCategoria(id, v);
+  await cargarTransacciones();
 }
 
 async function cambiarCategoria(id, nuevaCat) {
@@ -1249,8 +1283,8 @@ async function guardarImportacion(txs) {
 // ─── INIT ───
 document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('tx-fecha').value = hoy();
-  document.getElementById('borrar-mes-input').value = mesActual();
   document.getElementById('inicio-mes').value = mesActual();
+  document.getElementById('borrar-mes-input').value = mesActual();
   const { data: { session } } = await sb.auth.getSession();
   if (session) { currentUser = session.user; entrarApp(session.user.email.split('@')[0]); }
 });

@@ -923,7 +923,7 @@ function filtrarTxs() {
     const matchBuscar = !buscar || t.descripcion.toLowerCase().includes(buscar);
     const matchCat = !cat || t.categoria === cat;
     const matchTipo = !tipo || t.tipo === tipo;
-    const matchMedio = !medio || t.medio === medio;
+    const matchMedio = !medio || (t.medio || 'transferencia') === medio;
     const matchDesde = !desde || t.fecha >= desde;
     const matchHasta = !hasta || t.fecha <= hasta;
     return matchBuscar && matchCat && matchTipo && matchMedio && matchDesde && matchHasta;

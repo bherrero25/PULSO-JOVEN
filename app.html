@@ -699,7 +699,9 @@ function entrarApp(nombre) {
   document.getElementById('app').classList.add('visible');
   document.getElementById('header-name').textContent = nombre;
   document.getElementById('tx-fecha').value = hoy();
-  cargarTodo();
+  document.getElementById('inicio-mes').value = mesActual();
+  document.getElementById('borrar-mes-input').value = mesActual();
+  cargarReglas().then(() => cargarTodo());
   calcInv();
 }
 
@@ -1355,10 +1357,11 @@ async function guardarImportacion(txs) {
     .select('fecha, descripcion, importe')
     .eq('user_id', currentUser.id);
 
-  const claves = new Set((existentes || []).map(t => `${t.fecha}|${t.descripcion}|${t.importe}`));
+  const norm = (s) => String(s || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  const claves = new Set((existentes || []).map(t => `${t.fecha}|${norm(t.descripcion)}|${parseFloat(t.importe)}`));
 
   // Filtrar duplicados
-  const nuevas = txs.filter(t => !claves.has(`${t.fecha}|${t.descripcion}|${t.importe}`));
+  const nuevas = txs.filter(t => !claves.has(`${t.fecha}|${norm(t.descripcion)}|${parseFloat(t.importe)}`));
 
   if (!nuevas.length) {
     setImportMsg('Todos los movimientos ya estaban importados — no se añadió nada', '');

@@ -435,6 +435,17 @@ input[type=file] { display: none; }
             </select>
           </div>
           <div class="form-field">
+            <label>Medio de pago</label>
+            <select class="form-input" id="tx-medio">
+              <option value="efectivo">💵 Efectivo</option>
+              <option value="tarjeta">💳 Tarjeta</option>
+              <option value="transferencia" selected>🏦 Transferencia</option>
+              <option value="bizum">📱 Bizum</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-field">
             <label>Fecha</label>
             <input class="form-input" type="date" id="tx-fecha">
           </div>
@@ -453,6 +464,13 @@ input[type=file] { display: none; }
             <option value="gasto">Solo gastos</option>
             <option value="ingreso">Solo ingresos</option>
             <option value="liquidacion_tarjeta">Liquidaciones</option>
+          </select>
+          <select id="filtrar-medio" class="form-input" style="width:140px;" onchange="filtrarTxs()">
+            <option value="">Todos los medios</option>
+            <option value="efectivo">💵 Efectivo</option>
+            <option value="tarjeta">💳 Tarjeta</option>
+            <option value="transferencia">🏦 Transferencia</option>
+            <option value="bizum">📱 Bizum</option>
           </select>
         </div>
         <div style="display:flex; gap:8px; margin-bottom:14px; flex-wrap:wrap; align-items:center;">
@@ -700,6 +718,7 @@ input[type=file] { display: none; }
         <div>
           <div style="font-size:11px; color:var(--text3); margin-bottom:6px; text-transform:uppercase; letter-spacing:1px;">Categoría</div>
           <select class="form-input" id="ef-categoria">
+            <option value="" disabled selected>Elige categoría</option>
             <option value="🍔 Comida">🍔 Comida</option>
             <option value="🎉 Ocio">🎉 Ocio</option>
             <option value="🚇 Transporte">🚇 Transporte</option>
@@ -708,6 +727,11 @@ input[type=file] { display: none; }
             <option value="💊 Salud">💊 Salud</option>
             <option value="💰 Nómina">💰 Nómina</option>
             <option value="🎁 Regalo">🎁 Regalo</option>
+            <option value="🏠 Alquiler">🏠 Alquiler</option>
+            <option value="📦 Suscripciones">📦 Suscripciones</option>
+            <option value="✈️ Viaje">✈️ Viaje</option>
+            <option value="🏋️ Deporte">🏋️ Deporte</option>
+            <option value="📱 Tecnología">📱 Tecnología</option>
             <option value="🔧 Otros">🔧 Otros</option>
           </select>
         </div>
@@ -875,6 +899,7 @@ function limpiarFiltros() {
   document.getElementById('buscar-tx').value = '';
   document.getElementById('filtrar-cat').value = '';
   document.getElementById('filtrar-tipo').value = '';
+  document.getElementById('filtrar-medio').value = '';
   document.getElementById('filtrar-desde').value = '';
   document.getElementById('filtrar-hasta').value = '';
   filtrarTxs();
@@ -884,15 +909,17 @@ function filtrarTxs() {
   const buscar = (document.getElementById('buscar-tx')?.value || '').toLowerCase();
   const cat = document.getElementById('filtrar-cat')?.value || '';
   const tipo = document.getElementById('filtrar-tipo')?.value || '';
+  const medio = document.getElementById('filtrar-medio')?.value || '';
   const desde = document.getElementById('filtrar-desde')?.value || '';
   const hasta = document.getElementById('filtrar-hasta')?.value || '';
   const txs = todasTxs.filter(t => {
     const matchBuscar = !buscar || t.descripcion.toLowerCase().includes(buscar);
     const matchCat = !cat || t.categoria === cat;
     const matchTipo = !tipo || t.tipo === tipo;
+    const matchMedio = !medio || t.medio === medio;
     const matchDesde = !desde || t.fecha >= desde;
     const matchHasta = !hasta || t.fecha <= hasta;
-    return matchBuscar && matchCat && matchTipo && matchDesde && matchHasta;
+    return matchBuscar && matchCat && matchTipo && matchMedio && matchDesde && matchHasta;
   });
   renderListaTxs(txs);
 }
@@ -926,6 +953,7 @@ function renderListaTxs(txs) {
           <div class="tx-desc">${t.descripcion}${t.tipo === 'liquidacion_tarjeta' ? '<span class="badge-liq">compensado</span>' : ''}</div>
           <div class="tx-meta">
             <input type="date" value="${t.fecha}" onchange="cambiarFecha('${t.id}', this.value)" style="background:transparent;border:none;border-bottom:1px solid var(--border);color:var(--text3);font-size:11px;font-family:'DM Sans',sans-serif;outline:none;padding:1px 0;cursor:pointer;">
+            ${t.medio ? `<span style="font-size:9px;background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:1px 6px;margin-left:6px;color:var(--text3);">${t.medio === 'efectivo' ? '💵' : t.medio === 'tarjeta' ? '💳' : t.medio === 'bizum' ? '📱' : '🏦'} ${t.medio}</span>` : ''}
           </div>
           <div style="display:flex;align-items:center;gap:6px;margin-top:4px;flex-wrap:wrap;">
             <select onchange="cambiarCategoriaSelect('${t.id}', this)" style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:3px 6px;color:var(--text2);font-size:11px;font-family:'DM Sans',sans-serif;outline:none;">
@@ -1005,14 +1033,15 @@ async function addTransaccion() {
   const importe = parseFloat(document.getElementById('tx-importe').value);
   const cat = document.getElementById('tx-categoria').value;
   const fecha = document.getElementById('tx-fecha').value;
+  const medio = document.getElementById('tx-medio').value;
   if (!desc || !importe || !fecha) { alert('Rellena todos los campos'); return; }
 
   if (isDemo) {
-    demoData.transacciones.unshift({ id: 'd' + Date.now(), fecha, descripcion: desc, importe, tipo: tipoActual, categoria: cat });
+    demoData.transacciones.unshift({ id: 'd' + Date.now(), fecha, descripcion: desc, importe, tipo: tipoActual, categoria: cat, medio });
     document.getElementById('tx-desc').value = ''; document.getElementById('tx-importe').value = '';
     await cargarTransacciones(); await cargarPresupuestos(); return;
   }
-  await sb.from('pj_transacciones').insert({ user_id: currentUser.id, fecha, descripcion: desc, importe, tipo: tipoActual, categoria: cat });
+  await sb.from('pj_transacciones').insert({ user_id: currentUser.id, fecha, descripcion: desc, importe, tipo: tipoActual, categoria: cat, medio });
   document.getElementById('tx-desc').value = ''; document.getElementById('tx-importe').value = '';
   await cargarTransacciones(); await cargarPresupuestos();
 }
@@ -1351,11 +1380,16 @@ function toggleVoz() {
 
   reconocimiento.onresult = (e) => {
     const texto = Array.from(e.results).map(r => r[0].transcript).join('');
-    document.getElementById('ef-desc').value = texto;
-    // Intentar extraer importe del texto (ej: "café 2 euros", "taxi 15")
-    const match = texto.match(/(\d+(?:[.,]\d+)?)\s*(?:euros?|€)?/i);
-    if (match && !document.getElementById('ef-importe').value) {
-      document.getElementById('ef-importe').value = parseFloat(match[1].replace(',', '.'));
+    // Limpiar el texto de la descripción quitando el importe si lo detectamos
+    const matchImporte = texto.match(/\b(\d+(?:[.,]\d{1,2})?)\s*(?:euros?|€|eur)?\b/i);
+    if (matchImporte) {
+      const importe = parseFloat(matchImporte[1].replace(',', '.'));
+      document.getElementById('ef-importe').value = importe;
+      // Descripción sin el número y la palabra euros
+      const descLimpia = texto.replace(matchImporte[0], '').replace(/euros?|€/gi, '').trim();
+      document.getElementById('ef-desc').value = descLimpia || texto;
+    } else {
+      document.getElementById('ef-desc').value = texto;
     }
   };
 
@@ -1381,8 +1415,11 @@ async function guardarEfectivo() {
   const importe = parseFloat(document.getElementById('ef-importe').value);
   const categoria = document.getElementById('ef-categoria').value;
   if (!desc || !importe) { document.getElementById('ef-msg').textContent = 'Rellena descripción e importe'; return; }
+  if (!categoria) { document.getElementById('ef-msg').textContent = 'Elige una categoría'; return; }
 
-  const tx = { fecha: hoy(), descripcion: desc, importe, tipo: tipoEfectivo, categoria };
+  // Añadir marca de efectivo a la descripción
+  const descFinal = desc.startsWith('[Efectivo]') ? desc : '[Efectivo] ' + desc;
+  const tx = { fecha: hoy(), descripcion: descFinal, importe, tipo: tipoEfectivo, categoria, medio: 'efectivo' };
 
   if (isDemo) {
     demoData.transacciones.unshift({ id: 'd' + Date.now(), ...tx });
@@ -1390,7 +1427,7 @@ async function guardarEfectivo() {
     await sb.from('pj_transacciones').insert({ user_id: currentUser.id, ...tx });
   }
 
-  document.getElementById('ef-msg').textContent = '✓ Añadido';
+  document.getElementById('ef-msg').textContent = '✓ Añadido como efectivo';
   document.getElementById('ef-desc').value = '';
   document.getElementById('ef-importe').value = '';
   await cargarTransacciones();
@@ -1514,7 +1551,10 @@ async function importarCuenta(input) {
       const tipo = esLiq ? 'liquidacion_tarjeta' : (importeRaw < 0 ? 'gasto' : 'ingreso');
       const importe = Math.abs(importeRaw);
       const categoria = esLiq ? '💳 Liquidación tarjeta' : categoriaConAprendizaje(descripcion);
-      txsNuevas.push({ fecha, descripcion, importe, tipo, categoria });
+      // Detectar medio automáticamente
+      const descLow = descripcion.toLowerCase();
+      const medio = esLiq ? 'tarjeta' : descLow.includes('bizum') ? 'bizum' : descLow.includes('tarjeta') ? 'tarjeta' : 'transferencia';
+      txsNuevas.push({ fecha, descripcion, importe, tipo, categoria, medio });
     }
 
     if (!txsNuevas.length) { setImportMsg('No se encontraron movimientos', 'err'); return; }
@@ -1557,7 +1597,7 @@ async function importarTarjeta(input) {
       const tipo = importeRaw < 0 ? 'gasto' : 'ingreso';
       const importe = Math.abs(importeRaw);
       const categoria = categoriaConAprendizaje(descripcion);
-      txsNuevas.push({ fecha, descripcion, importe, tipo, categoria });
+      txsNuevas.push({ fecha, descripcion, importe, tipo, categoria, medio: 'tarjeta' });
     }
 
     if (!txsNuevas.length) { setImportMsg('No se encontraron movimientos en la tarjeta', 'err'); return; }

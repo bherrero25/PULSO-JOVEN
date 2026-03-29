@@ -1011,7 +1011,7 @@ function dibujarGrafico(inicial, mensual, anos, rm, maxVal) {
 }
 
 // ─── PALABRAS CLAVE LIQUIDACIÓN TARJETA ───
-const KEYWORDS_LIQ = ['liquidacion tarjeta', 'liquidación tarjeta', 'tarjeta credito', 'tarjeta crédito', 'pago tarjeta', 'recibo tarjeta'];
+const KEYWORDS_LIQ = ['liquidacion tarjeta', 'liquidación tarjeta', 'tarjeta credito', 'tarjeta crédito', 'pago tarjeta', 'recibo tarjeta', 'recibo visa', 'visa clasica', 'visa clásica', 'recibo visa clasica'];
 
 function esLiquidacionTarjeta(descripcion) {
   const d = (descripcion || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
@@ -1148,11 +1148,29 @@ async function guardarImportacion(txs) {
     txs.forEach(t => demoData.transacciones.unshift({ id: 'd' + Date.now() + Math.random(), ...t }));
     await cargarTransacciones(); await cargarPresupuestos(); return;
   }
-  const rows = txs.map(t => ({ user_id: currentUser.id, ...t }));
-  // Insertar en lotes de 100
+
+  // Obtener transacciones existentes para detectar duplicados
+  const { data: existentes } = await sb.from('pj_transacciones')
+    .select('fecha, descripcion, importe')
+    .eq('user_id', currentUser.id);
+
+  const claves = new Set((existentes || []).map(t => `${t.fecha}|${t.descripcion}|${t.importe}`));
+
+  // Filtrar duplicados
+  const nuevas = txs.filter(t => !claves.has(`${t.fecha}|${t.descripcion}|${t.importe}`));
+
+  if (!nuevas.length) {
+    setImportMsg('Todos los movimientos ya estaban importados — no se añadió nada', '');
+    await cargarTransacciones(); await cargarPresupuestos(); return;
+  }
+
+  const rows = nuevas.map(t => ({ user_id: currentUser.id, ...t }));
   for (let i = 0; i < rows.length; i += 100) {
     await sb.from('pj_transacciones').insert(rows.slice(i, i + 100));
   }
+
+  const omitidos = txs.length - nuevas.length;
+  if (omitidos > 0) setImportMsg(`✓ ${nuevas.length} importados · ${omitidos} ya existían (omitidos)`, 'ok');
   await cargarTransacciones(); await cargarPresupuestos();
 }
 

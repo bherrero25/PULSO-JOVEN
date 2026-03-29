@@ -472,6 +472,13 @@ input[type=file] { display: none; }
             <option value="transferencia">🏦 Transferencia</option>
             <option value="bizum">📱 Bizum</option>
           </select>
+          <select id="filtrar-medio" class="form-input" style="width:140px;" onchange="filtrarTxs()">
+            <option value="">Todos los medios</option>
+            <option value="efectivo">💵 Efectivo</option>
+            <option value="tarjeta">💳 Tarjeta</option>
+            <option value="transferencia">🏦 Transferencia</option>
+            <option value="bizum">📱 Bizum</option>
+          </select>
         </div>
         <div style="display:flex; gap:8px; margin-bottom:14px; flex-wrap:wrap; align-items:center;">
           <input type="date" id="filtrar-desde" class="form-input" style="flex:1; min-width:130px;" onchange="filtrarTxs()">
@@ -953,7 +960,12 @@ function renderListaTxs(txs) {
           <div class="tx-desc">${t.descripcion}${t.tipo === 'liquidacion_tarjeta' ? '<span class="badge-liq">compensado</span>' : ''}</div>
           <div class="tx-meta">
             <input type="date" value="${t.fecha}" onchange="cambiarFecha('${t.id}', this.value)" style="background:transparent;border:none;border-bottom:1px solid var(--border);color:var(--text3);font-size:11px;font-family:'DM Sans',sans-serif;outline:none;padding:1px 0;cursor:pointer;">
-            ${t.medio ? `<span style="font-size:9px;background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:1px 6px;margin-left:6px;color:var(--text3);">${t.medio === 'efectivo' ? '💵' : t.medio === 'tarjeta' ? '💳' : t.medio === 'bizum' ? '📱' : '🏦'} ${t.medio}</span>` : ''}
+            <select onchange="cambiarMedio('${t.id}', this.value)" style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:2px 6px;color:var(--text3);font-size:10px;font-family:'DM Sans',sans-serif;outline:none;margin-left:6px;">
+              <option value="transferencia" ${(t.medio||'transferencia')==='transferencia'?'selected':''}>🏦 Transferencia</option>
+              <option value="tarjeta" ${t.medio==='tarjeta'?'selected':''}>💳 Tarjeta</option>
+              <option value="bizum" ${t.medio==='bizum'?'selected':''}>📱 Bizum</option>
+              <option value="efectivo" ${t.medio==='efectivo'?'selected':''}>💵 Efectivo</option>
+            </select>
           </div>
           <div style="display:flex;align-items:center;gap:6px;margin-top:4px;flex-wrap:wrap;">
             <select onchange="cambiarCategoriaSelect('${t.id}', this)" style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:3px 6px;color:var(--text2);font-size:11px;font-family:'DM Sans',sans-serif;outline:none;">
@@ -1062,6 +1074,13 @@ async function guardarCatCustom(id, valor) {
   if (input) input.style.display = 'none';
   await cambiarCategoria(id, v);
   await cargarTransacciones();
+}
+
+async function cambiarMedio(id, nuevoMedio) {
+  if (isDemo) { const t = todasTxs.find(x => x.id === id); if (t) t.medio = nuevoMedio; return; }
+  await sb.from('pj_transacciones').update({ medio: nuevoMedio }).eq('id', id);
+  const t = todasTxs.find(x => x.id === id);
+  if (t) t.medio = nuevoMedio;
 }
 
 async function cambiarFecha(id, nuevaFecha) {
@@ -1475,6 +1494,14 @@ function categoriaConAprendizaje(descripcion) {
 }
 
 // ─── PALABRAS CLAVE LIQUIDACIÓN TARJETA ───
+function medioAutomatico(descripcion) {
+  const d = (descripcion || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  if (/bizum/.test(d)) return 'bizum';
+  if (/recibo visa|visa clasica|tarjeta|liquidacion tarjeta/.test(d)) return 'tarjeta';
+  if (/efectivo|cajero/.test(d)) return 'efectivo';
+  return 'transferencia';
+}
+
 const KEYWORDS_LIQ = ['liquidacion tarjeta', 'liquidación tarjeta', 'tarjeta credito', 'tarjeta crédito', 'pago tarjeta', 'recibo tarjeta', 'recibo visa', 'visa clasica', 'visa clásica', 'recibo visa clasica'];
 
 function esLiquidacionTarjeta(descripcion) {
@@ -1551,9 +1578,7 @@ async function importarCuenta(input) {
       const tipo = esLiq ? 'liquidacion_tarjeta' : (importeRaw < 0 ? 'gasto' : 'ingreso');
       const importe = Math.abs(importeRaw);
       const categoria = esLiq ? '💳 Liquidación tarjeta' : categoriaConAprendizaje(descripcion);
-      // Detectar medio automáticamente
-      const descLow = descripcion.toLowerCase();
-      const medio = esLiq ? 'tarjeta' : descLow.includes('bizum') ? 'bizum' : descLow.includes('tarjeta') ? 'tarjeta' : 'transferencia';
+      const medio = medioAutomatico(descripcion);
       txsNuevas.push({ fecha, descripcion, importe, tipo, categoria, medio });
     }
 

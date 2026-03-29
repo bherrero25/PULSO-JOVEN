@@ -331,6 +331,7 @@ input[type=file] { display: none; }
       <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; flex-wrap:wrap; gap:10px;">
         <div style="font-size:15px; font-weight:600;">Resumen</div>
         <select id="inicio-mes" class="form-input" style="width:160px;" onchange="cargarTransacciones()">
+          <option value="todo">📅 Todo el año</option>
           <option value="2026-01">Enero 2026</option>
           <option value="2026-02">Febrero 2026</option>
           <option value="2026-03">Marzo 2026</option>
@@ -343,6 +344,18 @@ input[type=file] { display: none; }
           <option value="2026-10">Octubre 2026</option>
           <option value="2026-11">Noviembre 2026</option>
           <option value="2026-12">Diciembre 2026</option>
+          <option value="2025-01">Enero 2025</option>
+          <option value="2025-02">Febrero 2025</option>
+          <option value="2025-03">Marzo 2025</option>
+          <option value="2025-04">Abril 2025</option>
+          <option value="2025-05">Mayo 2025</option>
+          <option value="2025-06">Junio 2025</option>
+          <option value="2025-07">Julio 2025</option>
+          <option value="2025-08">Agosto 2025</option>
+          <option value="2025-09">Septiembre 2025</option>
+          <option value="2025-10">Octubre 2025</option>
+          <option value="2025-11">Noviembre 2025</option>
+          <option value="2025-12">Diciembre 2025</option>
         </select>
       </div>
       <div id="semaforo-card" class="semaforo-card verde">
@@ -430,11 +443,17 @@ input[type=file] { display: none; }
       </div>
       <div class="card">
         <div class="card-title">Todas las transacciones</div>
-        <div style="display:flex; gap:8px; margin-bottom:14px; flex-wrap:wrap;">
+        <div style="display:flex; gap:8px; margin-bottom:8px; flex-wrap:wrap;">
           <input type="text" id="buscar-tx" class="form-input" placeholder="🔍 Buscar por concepto..." style="flex:1; min-width:140px;" oninput="filtrarTxs()">
           <select id="filtrar-cat" class="form-input" style="flex:1; min-width:140px;" onchange="filtrarTxs()">
             <option value="">Todas las categorías</option>
           </select>
+        </div>
+        <div style="display:flex; gap:8px; margin-bottom:14px; flex-wrap:wrap; align-items:center;">
+          <input type="date" id="filtrar-desde" class="form-input" style="flex:1; min-width:130px;" onchange="filtrarTxs()">
+          <span style="font-size:12px; color:var(--text3);">hasta</span>
+          <input type="date" id="filtrar-hasta" class="form-input" style="flex:1; min-width:130px;" onchange="filtrarTxs()">
+          <button onclick="limpiarFiltros()" style="background:transparent;border:1px solid var(--border);border-radius:100px;padding:6px 12px;color:var(--text3);font-size:11px;font-family:'DM Sans',sans-serif;cursor:pointer;">✕ Limpiar</button>
         </div>
         <div id="lista-txs"><div class="empty-state"><div class="empty-icon">📋</div><div class="empty-text">Añade tu primer movimiento</div></div></div>
         <div style="margin-top:16px; padding-top:16px; border-top:1px solid var(--border); display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
@@ -737,13 +756,25 @@ function renderTxs(txs) {
   filtrarTxs();
 }
 
+function limpiarFiltros() {
+  document.getElementById('buscar-tx').value = '';
+  document.getElementById('filtrar-cat').value = '';
+  document.getElementById('filtrar-desde').value = '';
+  document.getElementById('filtrar-hasta').value = '';
+  filtrarTxs();
+}
+
 function filtrarTxs() {
   const buscar = (document.getElementById('buscar-tx')?.value || '').toLowerCase();
   const cat = document.getElementById('filtrar-cat')?.value || '';
+  const desde = document.getElementById('filtrar-desde')?.value || '';
+  const hasta = document.getElementById('filtrar-hasta')?.value || '';
   const txs = todasTxs.filter(t => {
     const matchBuscar = !buscar || t.descripcion.toLowerCase().includes(buscar);
     const matchCat = !cat || t.categoria === cat;
-    return matchBuscar && matchCat;
+    const matchDesde = !desde || t.fecha >= desde;
+    const matchHasta = !hasta || t.fecha <= hasta;
+    return matchBuscar && matchCat && matchDesde && matchHasta;
   });
   renderListaTxs(txs);
 }
@@ -751,14 +782,18 @@ function filtrarTxs() {
 function renderListaTxs(txs) {
   const el = document.getElementById('lista-txs');
   if (!txs.length) { el.innerHTML = '<div class="empty-state"><div class="empty-icon">📋</div><div class="empty-text">No hay transacciones</div></div>'; return; }
-  const CATS = ['🍔 Comida','🏠 Alquiler','🎉 Ocio','🚇 Transporte','📦 Suscripciones','👕 Ropa','📚 Estudios','💊 Salud','💰 Nómina','🎁 Regalo','✈️ Viaje','📱 Tecnología','🏋️ Deporte','💳 Liquidación tarjeta','🔧 Otros','✏️ Otra...'];
+  const CATS_BASE = ['🍔 Comida','🏠 Alquiler','🎉 Ocio','🚇 Transporte','📦 Suscripciones','👕 Ropa','📚 Estudios','💊 Salud','💰 Nómina','🎁 Regalo','✈️ Viaje','📱 Tecnología','🏋️ Deporte','💳 Liquidación tarjeta','🔧 Otros'];
+  const catsExtra = getCatsPersonalizadas().filter(c => !CATS_BASE.includes(c));
+  const CATS = [...CATS_BASE, ...catsExtra, '✏️ Otra...'];
   el.innerHTML = txs.map(t => `
     <div class="tx-row" id="tx-row-${t.id}">
       <div class="tx-left">
         <div class="tx-icon">${t.categoria.split(' ')[0]}</div>
         <div>
           <div class="tx-desc">${t.descripcion}${t.tipo === 'liquidacion_tarjeta' ? '<span class="badge-liq">compensado</span>' : ''}</div>
-          <div class="tx-meta">${fmtFecha(t.fecha)}</div>
+          <div class="tx-meta">
+            <input type="date" value="${t.fecha}" onchange="cambiarFecha('${t.id}', this.value)" style="background:transparent;border:none;border-bottom:1px solid var(--border);color:var(--text3);font-size:11px;font-family:'DM Sans',sans-serif;outline:none;padding:1px 0;cursor:pointer;">
+          </div>
           <div style="display:flex;align-items:center;gap:6px;margin-top:4px;flex-wrap:wrap;">
             <select onchange="cambiarCategoriaSelect('${t.id}', this)" style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:3px 6px;color:var(--text2);font-size:11px;font-family:'DM Sans',sans-serif;outline:none;">
               ${CATS.map(c => `<option value="${c}" ${c === t.categoria ? 'selected' : ''}>${c}</option>`).join('')}
@@ -777,7 +812,7 @@ function renderListaTxs(txs) {
 
 function renderInicio(txs) {
   const mesSel = document.getElementById('inicio-mes')?.value || mesActual();
-  const mesTxs = txs.filter(t => t.fecha.slice(0, 7) === mesSel);
+  const mesTxs = mesSel === 'todo' ? txs : txs.filter(t => t.fecha.slice(0, 7) === mesSel);
   const ingresos = mesTxs.filter(t => t.tipo === 'ingreso').reduce((s, t) => s + parseFloat(t.importe), 0);
   const gastos = mesTxs.filter(t => t.tipo === 'gasto').reduce((s, t) => s + parseFloat(t.importe), 0);
   // Las liquidaciones de tarjeta NO se suman a gastos (ya están en los movimientos de tarjeta)
@@ -867,15 +902,28 @@ async function guardarCatCustom(id, valor) {
   await cargarTransacciones();
 }
 
-async function cambiarCategoria(id, nuevaCat) {
+async function cambiarFecha(id, nuevaFecha) {
+  if (!nuevaFecha) return;
   if (isDemo) {
     const t = demoData.transacciones.find(x => x.id === id);
+    if (t) t.fecha = nuevaFecha;
+    return;
+  }
+  await sb.from('pj_transacciones').update({ fecha: nuevaFecha }).eq('id', id);
+  const t = todasTxs.find(x => x.id === id);
+  if (t) t.fecha = nuevaFecha;
+}
+
+async function cambiarCategoria(id, nuevaCat) {
+  guardarCatPersonalizada(nuevaCat);
+  // Guardar regla de aprendizaje
+  const t = todasTxs.find(x => x.id === id);
+  if (t) guardarRegla(t.descripcion, nuevaCat);
+  if (isDemo) {
     if (t) t.categoria = nuevaCat;
     return;
   }
   await sb.from('pj_transacciones').update({ categoria: nuevaCat }).eq('id', id);
-  // Actualizar local sin recargar para no perder el filtro
-  const t = todasTxs.find(x => x.id === id);
   if (t) t.categoria = nuevaCat;
 }
 
@@ -1116,6 +1164,42 @@ async function borrarMes() {
   await cargarTransacciones(); await cargarPresupuestos();
 }
 
+// ─── CATEGORÍAS APRENDIDAS (localStorage) ───
+function getCatsAprendidas() {
+  try { return JSON.parse(localStorage.getItem('pulso_cats') || '{}'); } catch { return {}; }
+}
+
+function guardarRegla(concepto, categoria) {
+  const reglas = getCatsAprendidas();
+  const clave = concepto.toLowerCase().trim();
+  reglas[clave] = categoria;
+  localStorage.setItem('pulso_cats', JSON.stringify(reglas));
+}
+
+function getCatsPersonalizadas() {
+  try { return JSON.parse(localStorage.getItem('pulso_cats_lista') || '[]'); } catch { return []; }
+}
+
+function guardarCatPersonalizada(cat) {
+  const lista = getCatsPersonalizadas();
+  if (!lista.includes(cat)) {
+    lista.push(cat);
+    localStorage.setItem('pulso_cats_lista', JSON.stringify(lista));
+  }
+}
+
+function categoriaConAprendizaje(descripcion) {
+  const reglas = getCatsAprendidas();
+  const clave = descripcion.toLowerCase().trim();
+  // Buscar coincidencia exacta primero
+  if (reglas[clave]) return reglas[clave];
+  // Buscar coincidencia parcial
+  for (const [k, v] of Object.entries(reglas)) {
+    if (clave.includes(k) || k.includes(clave)) return v;
+  }
+  return categoriaAutomatica(descripcion);
+}
+
 // ─── PALABRAS CLAVE LIQUIDACIÓN TARJETA ───
 const KEYWORDS_LIQ = ['liquidacion tarjeta', 'liquidación tarjeta', 'tarjeta credito', 'tarjeta crédito', 'pago tarjeta', 'recibo tarjeta', 'recibo visa', 'visa clasica', 'visa clásica', 'recibo visa clasica'];
 
@@ -1192,7 +1276,7 @@ async function importarCuenta(input) {
       const esLiq = esLiquidacionTarjeta(descripcion);
       const tipo = esLiq ? 'liquidacion_tarjeta' : (importeRaw < 0 ? 'gasto' : 'ingreso');
       const importe = Math.abs(importeRaw);
-      const categoria = esLiq ? '💳 Liquidación tarjeta' : categoriaAutomatica(descripcion);
+      const categoria = esLiq ? '💳 Liquidación tarjeta' : categoriaConAprendizaje(descripcion);
       txsNuevas.push({ fecha, descripcion, importe, tipo, categoria });
     }
 
@@ -1235,7 +1319,7 @@ async function importarTarjeta(input) {
       // En tarjeta Bankinter los gastos vienen en negativo
       const tipo = importeRaw < 0 ? 'gasto' : 'ingreso';
       const importe = Math.abs(importeRaw);
-      const categoria = categoriaAutomatica(descripcion);
+      const categoria = categoriaConAprendizaje(descripcion);
       txsNuevas.push({ fecha, descripcion, importe, tipo, categoria });
     }
 

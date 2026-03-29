@@ -764,6 +764,8 @@ function getIconoCat(categoria) {
   if (code > 127) return primera; // Es emoji
   return '🏷️'; // No tiene emoji, usar genérico
 }
+
+function limpiarFiltros() {
   document.getElementById('buscar-tx').value = '';
   document.getElementById('filtrar-cat').value = '';
   document.getElementById('filtrar-desde').value = '';

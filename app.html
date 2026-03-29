@@ -448,6 +448,12 @@ input[type=file] { display: none; }
           <select id="filtrar-cat" class="form-input" style="flex:1; min-width:140px;" onchange="filtrarTxs()">
             <option value="">Todas las categorías</option>
           </select>
+          <select id="filtrar-tipo" class="form-input" style="width:140px;" onchange="filtrarTxs()">
+            <option value="">Todos</option>
+            <option value="gasto">Solo gastos</option>
+            <option value="ingreso">Solo ingresos</option>
+            <option value="liquidacion_tarjeta">Liquidaciones</option>
+          </select>
         </div>
         <div style="display:flex; gap:8px; margin-bottom:14px; flex-wrap:wrap; align-items:center;">
           <input type="date" id="filtrar-desde" class="form-input" style="flex:1; min-width:130px;" onchange="filtrarTxs()">
@@ -456,6 +462,13 @@ input[type=file] { display: none; }
           <button onclick="limpiarFiltros()" style="background:transparent;border:1px solid var(--border);border-radius:100px;padding:6px 12px;color:var(--text3);font-size:11px;font-family:'DM Sans',sans-serif;cursor:pointer;">✕ Limpiar</button>
         </div>
         <div id="lista-txs"><div class="empty-state"><div class="empty-icon">📋</div><div class="empty-text">Añade tu primer movimiento</div></div></div>
+        <div id="txs-totales" style="display:none; margin-top:14px; padding:12px 16px; background:var(--surface); border-radius:12px; border:1px solid var(--border); display:flex; gap:16px; flex-wrap:wrap;">
+          <span style="font-size:12px; color:var(--text3);">Resultado filtros:</span>
+          <span style="font-size:13px; font-weight:600; color:var(--coral);">Gastos: <span id="total-gastos">0 €</span></span>
+          <span style="font-size:13px; font-weight:600; color:var(--lime);">Ingresos: <span id="total-ingresos">0 €</span></span>
+          <span style="font-size:13px; font-weight:600; color:var(--text);">Neto: <span id="total-neto">0 €</span></span>
+          <span style="font-size:12px; color:var(--text3);"><span id="total-count">0</span> transacciones</span>
+        </div>
         <div style="margin-top:16px; padding-top:16px; border-top:1px solid var(--border); display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
           <input type="month" id="borrar-mes-input" class="form-input" style="width:160px;" value="">
           <button onclick="borrarMes()" style="background:transparent;border:1px solid rgba(255,107,74,0.3);border-radius:100px;padding:8px 16px;color:var(--coral);font-size:12px;font-family:'DM Sans',sans-serif;cursor:pointer;transition:all .2s;" onmouseover="this.style.background='rgba(255,107,74,0.1)'" onmouseout="this.style.background='transparent'">🗑 Borrar mes seleccionado</button>
@@ -770,6 +783,7 @@ function getIconoCat(categoria) {
 function limpiarFiltros() {
   document.getElementById('buscar-tx').value = '';
   document.getElementById('filtrar-cat').value = '';
+  document.getElementById('filtrar-tipo').value = '';
   document.getElementById('filtrar-desde').value = '';
   document.getElementById('filtrar-hasta').value = '';
   filtrarTxs();
@@ -778,20 +792,37 @@ function limpiarFiltros() {
 function filtrarTxs() {
   const buscar = (document.getElementById('buscar-tx')?.value || '').toLowerCase();
   const cat = document.getElementById('filtrar-cat')?.value || '';
+  const tipo = document.getElementById('filtrar-tipo')?.value || '';
   const desde = document.getElementById('filtrar-desde')?.value || '';
   const hasta = document.getElementById('filtrar-hasta')?.value || '';
   const txs = todasTxs.filter(t => {
     const matchBuscar = !buscar || t.descripcion.toLowerCase().includes(buscar);
     const matchCat = !cat || t.categoria === cat;
+    const matchTipo = !tipo || t.tipo === tipo;
     const matchDesde = !desde || t.fecha >= desde;
     const matchHasta = !hasta || t.fecha <= hasta;
-    return matchBuscar && matchCat && matchDesde && matchHasta;
+    return matchBuscar && matchCat && matchTipo && matchDesde && matchHasta;
   });
   renderListaTxs(txs);
 }
 
 function renderListaTxs(txs) {
   const el = document.getElementById('lista-txs');
+
+  // Totales
+  const gastos = txs.filter(t => t.tipo === 'gasto').reduce((s, t) => s + parseFloat(t.importe), 0);
+  const ingresos = txs.filter(t => t.tipo === 'ingreso').reduce((s, t) => s + parseFloat(t.importe), 0);
+  const neto = ingresos - gastos;
+  const totDiv = document.getElementById('txs-totales');
+  if (totDiv) {
+    totDiv.style.display = txs.length ? 'flex' : 'none';
+    document.getElementById('total-gastos').textContent = fmt(gastos);
+    document.getElementById('total-ingresos').textContent = fmt(ingresos);
+    const netoEl = document.getElementById('total-neto');
+    netoEl.textContent = (neto >= 0 ? '+' : '−') + fmt(Math.abs(neto));
+    netoEl.style.color = neto >= 0 ? 'var(--lime)' : 'var(--coral)';
+    document.getElementById('total-count').textContent = txs.length;
+  }
   if (!txs.length) { el.innerHTML = '<div class="empty-state"><div class="empty-icon">📋</div><div class="empty-text">No hay transacciones</div></div>'; return; }
   const CATS_BASE = ['🍔 Comida','🏠 Alquiler','🎉 Ocio','🚇 Transporte','📦 Suscripciones','👕 Ropa','📚 Estudios','💊 Salud','💰 Nómina','🎁 Regalo','✈️ Viaje','📱 Tecnología','🏋️ Deporte','💳 Liquidación tarjeta','🔧 Otros'];
   const catsExtra = getCatsPersonalizadas().filter(c => !CATS_BASE.includes(c));

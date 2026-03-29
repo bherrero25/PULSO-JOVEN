@@ -726,7 +726,7 @@ function showTab(name, btn) {
 
 // ─── CARGAR TODO ───
 async function cargarTodo() {
-  await Promise.all([cargarTransacciones(), cargarPresupuestos(), cargarMetas()]);
+  await Promise.all([cargarReglas(), cargarTransacciones(), cargarPresupuestos(), cargarMetas()]);
 }
 
 // ─── TRANSACCIONES ───
@@ -915,10 +915,9 @@ async function cambiarFecha(id, nuevaFecha) {
 }
 
 async function cambiarCategoria(id, nuevaCat) {
-  guardarCatPersonalizada(nuevaCat);
-  // Guardar regla de aprendizaje
+  // Guardar regla de aprendizaje en Supabase
   const t = todasTxs.find(x => x.id === id);
-  if (t) guardarRegla(t.descripcion, nuevaCat);
+  if (t) await guardarRegla(t.descripcion, nuevaCat);
   if (isDemo) {
     if (t) t.categoria = nuevaCat;
     return;
@@ -1164,37 +1163,40 @@ async function borrarMes() {
   await cargarTransacciones(); await cargarPresupuestos();
 }
 
-// ─── CATEGORÍAS APRENDIDAS (localStorage) ───
-function getCatsAprendidas() {
-  try { return JSON.parse(localStorage.getItem('pulso_cats') || '{}'); } catch { return {}; }
+// ─── CATEGORÍAS APRENDIDAS (Supabase) ───
+let reglasCache = {}; // cache local para no hacer queries en cada importación
+
+async function cargarReglas() {
+  if (isDemo) return;
+  try {
+    const { data } = await sb.from('pj_reglas_categoria').select('concepto, categoria').eq('user_id', currentUser.id);
+    reglasCache = {};
+    (data || []).forEach(r => { reglasCache[r.concepto.toLowerCase().trim()] = r.categoria; });
+  } catch(e) { console.error('Error cargando reglas', e); }
 }
 
-function guardarRegla(concepto, categoria) {
-  const reglas = getCatsAprendidas();
+async function guardarRegla(concepto, categoria) {
+  if (isDemo) return;
   const clave = concepto.toLowerCase().trim();
-  reglas[clave] = categoria;
-  localStorage.setItem('pulso_cats', JSON.stringify(reglas));
+  reglasCache[clave] = categoria;
+  try {
+    await sb.from('pj_reglas_categoria').upsert(
+      { user_id: currentUser.id, concepto: clave, categoria },
+      { onConflict: 'user_id,concepto' }
+    );
+  } catch(e) { console.error('Error guardando regla', e); }
 }
 
 function getCatsPersonalizadas() {
-  try { return JSON.parse(localStorage.getItem('pulso_cats_lista') || '[]'); } catch { return []; }
-}
-
-function guardarCatPersonalizada(cat) {
-  const lista = getCatsPersonalizadas();
-  if (!lista.includes(cat)) {
-    lista.push(cat);
-    localStorage.setItem('pulso_cats_lista', JSON.stringify(lista));
-  }
+  // Obtener categorías únicas de las reglas en caché
+  const cats = [...new Set(Object.values(reglasCache))];
+  return cats;
 }
 
 function categoriaConAprendizaje(descripcion) {
-  const reglas = getCatsAprendidas();
   const clave = descripcion.toLowerCase().trim();
-  // Buscar coincidencia exacta primero
-  if (reglas[clave]) return reglas[clave];
-  // Buscar coincidencia parcial
-  for (const [k, v] of Object.entries(reglas)) {
+  if (reglasCache[clave]) return reglasCache[clave];
+  for (const [k, v] of Object.entries(reglasCache)) {
     if (clave.includes(k) || k.includes(clave)) return v;
   }
   return categoriaAutomatica(descripcion);

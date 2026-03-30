@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pulso · Informe mensual</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+:root {
+  --bg: #0a0a0a; --bg2: #111; --surface: #1e1e1e; --border: #2a2a2a;
+  --lime: #c8f135; --text: #f0f0f0; --text2: #bbb; --text3: #888;
+  --coral: #ff6b4a; --blue: #4a9eff; --amber: #f59e0b; --purple: #a78bfa;
+}
+body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+/* PRINT */
+@media print {
+  body { background: white; color: #111; }
+  .no-print { display: none !important; }
+  .card { border: 1px solid #ddd !important; background: white !important; break-inside: avoid; }
+  .page-break { page-break-before: always; }
+  :root { --text: #111; --text2: #555; --text3: #888; --bg2: #f9f9f9; --border: #ddd; --surface: #f5f5f5; }
+}
+
+.header {
+  padding: 32px 40px 24px;
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+  background: var(--bg2);
+}
+.header-left { display: flex; align-items: center; gap: 12px; }
+.header-logo { font-size: 20px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+.logo-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--lime); }
+.header-title { font-size: 14px; color: var(--text2); }
+.header-actions { display: flex; gap: 10px; }
+.btn { padding: 10px 20px; border-radius: 100px; font-size: 13px; font-weight: 500; font-family: 'DM Sans', sans-serif; cursor: pointer; border: none; transition: all .2s; }
+.btn-primary { background: var(--lime); color: #0a0a0a; }
+.btn-primary:hover { background: #a8d020; }
+.btn-secondary { background: var(--surface); color: var(--text2); border: 1px solid var(--border); }
+.btn-secondary:hover { border-color: var(--lime); color: var(--lime); }
+
+.wrapper { max-width: 1000px; margin: 0 auto; padding: 32px 24px; }
+
+.section-title { font-size: 11px; font-weight: 600; color: var(--text3); text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 16px; }
+
+.card { background: var(--bg2); border: 1px solid var(--border); border-radius: 16px; padding: 24px; margin-bottom: 16px; }
+
+/* KPIs */
+.kpis-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px; }
+.kpi { background: var(--bg2); border: 1px solid var(--border); border-radius: 14px; padding: 20px; }
+.kpi-label { font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
+.kpi-value { font-size: 26px; font-weight: 600; line-height: 1; margin-bottom: 4px; }
+.kpi-value.pos { color: var(--lime); }
+.kpi-value.neg { color: var(--coral); }
+.kpi-value.neu { color: var(--text); }
+.kpi-sub { font-size: 11px; color: var(--text3); }
+
+/* COMPARATIVA */
+.comp-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+.comp-item { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px; }
+.comp-label { font-size: 11px; color: var(--text3); margin-bottom: 10px; }
+.comp-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; font-size: 13px; }
+.comp-mes { color: var(--text2); font-size: 11px; }
+.comp-val { font-weight: 600; }
+.comp-diff { font-size: 11px; padding: 2px 8px; border-radius: 100px; }
+.comp-diff.mejor { background: rgba(200,241,53,0.15); color: var(--lime); }
+.comp-diff.peor { background: rgba(255,107,74,0.15); color: var(--coral); }
+.comp-diff.igual { background: var(--surface); color: var(--text3); }
+
+/* GRÁFICOS */
+.charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+.chart-wrap { position: relative; height: 260px; }
+.chart-wrap-full { position: relative; height: 200px; }
+
+/* TABLA TRANSACCIONES */
+.tx-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.tx-table th { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: var(--text3); font-weight: 500; padding: 8px 12px; border-bottom: 1px solid var(--border); text-align: left; }
+.tx-table td { padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+.tx-table tr:last-child td { border-bottom: none; }
+.tx-table tr:hover td { background: var(--surface); }
+.amount-neg { color: var(--coral); font-weight: 600; }
+.amount-pos { color: var(--lime); font-weight: 600; }
+.amount-liq { color: var(--amber); }
+.badge { font-size: 9px; padding: 2px 7px; border-radius: 100px; font-weight: 500; }
+.badge-gasto { background: rgba(255,107,74,0.12); color: var(--coral); }
+.badge-ingreso { background: rgba(200,241,53,0.12); color: var(--lime); }
+.badge-liq { background: rgba(245,158,11,0.12); color: var(--amber); }
+
+.loading { text-align: center; padding: 80px; color: var(--text3); font-size: 15px; }
+.mes-selector { display: flex; align-items: center; gap: 12px; margin-bottom: 32px; }
+.mes-selector select { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; color: var(--text); font-size: 14px; font-family: 'DM Sans', sans-serif; outline: none; }
+
+@media (max-width: 680px) {
+  .kpis-grid { grid-template-columns: 1fr 1fr; }
+  .charts-grid { grid-template-columns: 1fr; }
+  .comp-grid { grid-template-columns: 1fr; }
+  .header { padding: 20px; flex-direction: column; gap: 16px; }
+  .wrapper { padding: 20px 16px; }
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <div class="header-logo"><div class="logo-dot"></div> Pulso</div>
+    <div class="header-title" id="header-subtitle">Informe mensual</div>
+  </div>
+  <div class="header-actions no-print">
+    <button class="btn btn-secondary" onclick="window.close()">← Volver</button>
+    <button class="btn btn-primary" onclick="window.print()">🖨 Descargar PDF</button>
+  </div>
+</div>
+
+<div class="wrapper">
+  <div class="mes-selector no-print">
+    <span style="font-size:13px;color:var(--text2);">Ver informe de:</span>
+    <select id="sel-mes" onchange="cargarInforme()">
+      <option value="2026-03">Marzo 2026</option>
+      <option value="2026-02">Febrero 2026</option>
+      <option value="2026-01">Enero 2026</option>
+      <option value="2025-12">Diciembre 2025</option>
+      <option value="2025-11">Noviembre 2025</option>
+      <option value="2025-10">Octubre 2025</option>
+      <option value="2025-09">Septiembre 2025</option>
+      <option value="2025-08">Agosto 2025</option>
+      <option value="2025-07">Julio 2025</option>
+      <option value="2025-06">Junio 2025</option>
+      <option value="2025-05">Mayo 2025</option>
+      <option value="2025-04">Abril 2025</option>
+      <option value="2025-03">Marzo 2025</option>
+      <option value="2025-02">Febrero 2025</option>
+      <option value="2025-01">Enero 2025</option>
+    </select>
+    <select id="sel-cuenta" onchange="cargarInforme()">
+      <option value="">Todas las cuentas</option>
+      <option value="bankinter">🏦 Bankinter</option>
+      <option value="bankinter_tarjeta">💳 Bankinter Tarjeta</option>
+      <option value="bbva">🏦 BBVA</option>
+      <option value="bbva_tarjeta">💳 BBVA Tarjeta</option>
+      <option value="santander">🏦 Santander</option>
+      <option value="caixabank">🏦 CaixaBank</option>
+      <option value="ing">🏦 ING</option>
+      <option value="revolut">🏦 Revolut</option>
+      <option value="n26">🏦 N26</option>
+      <option value="efectivo">💵 Efectivo</option>
+    </select>
+  </div>
+
+  <div id="contenido"><div class="loading">Cargando informe...</div></div>
+</div>
+
+<script>
+const SUPABASE_URL = 'https://tqjukdleqgbpseaipfel.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_8tXAzCiTvfbcrD3rlj5I-w_zF4gXpcN';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+let userId = null;
+let chartInstances = {};
+
+function fmt(n) { return Math.abs(n).toLocaleString('es-ES', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) + ' €'; }
+function fmtFecha(f) { return new Date(f + 'T12:00:00').toLocaleDateString('es-ES', { day: 'numeric', month: 'short' }); }
+
+function mesAnterior(mes) {
+  const [y, m] = mes.split('-').map(Number);
+  return m === 1 ? `${y-1}-12` : `${y}-${String(m-1).padStart(2,'0')}`;
+}
+
+function nombreMes(mes) {
+  const nombres = { '01':'Enero','02':'Febrero','03':'Marzo','04':'Abril','05':'Mayo','06':'Junio','07':'Julio','08':'Agosto','09':'Septiembre','10':'Octubre','11':'Noviembre','12':'Diciembre' };
+  const [y, m] = mes.split('-');
+  return `${nombres[m]} ${y}`;
+}
+
+function destruirGraficos() {
+  Object.values(chartInstances).forEach(c => { try { c.destroy(); } catch(e) {} });
+  chartInstances = {};
+}
+
+async function cargarInforme() {
+  destruirGraficos();
+  const mes = document.getElementById('sel-mes').value;
+  const cuenta = document.getElementById('sel-cuenta').value;
+  const cuentaLabel = cuenta ? ` · ${cuenta}` : ' · Todas las cuentas';
+  document.getElementById('header-subtitle').textContent = `Informe · ${nombreMes(mes)}${cuentaLabel}`;
+  document.getElementById('contenido').innerHTML = '<div class="loading">Cargando datos...</div>';
+
+  const { data: txs } = await sb.from('pj_transacciones')
+    .select('*').eq('user_id', userId).order('fecha');
+
+  if (!txs || !txs.length) {
+    document.getElementById('contenido').innerHTML = '<div class="loading">No hay datos para este mes.</div>';
+    return;
+  }
+
+  const mesAnt = mesAnterior(mes);
+  let txsMes = txs.filter(t => t.fecha.slice(0,7) === mes);
+  let txsAnt = txs.filter(t => t.fecha.slice(0,7) === mesAnt);
+  if (cuenta) {
+    txsMes = txsMes.filter(t => (t.cuenta || 'principal') === cuenta);
+    txsAnt = txsAnt.filter(t => (t.cuenta || 'principal') === cuenta);
+  }
+
+  const calc = (arr) => ({
+    ingresos: arr.filter(t => t.tipo === 'ingreso').reduce((s,t) => s + parseFloat(t.importe), 0),
+    gastos: arr.filter(t => t.tipo === 'gasto').reduce((s,t) => s + parseFloat(t.importe), 0),
+    count: arr.filter(t => t.tipo !== 'liquidacion_tarjeta').length
+  });
+
+  const actual = calc(txsMes);
+  const anterior = calc(txsAnt);
+  actual.ahorro = actual.ingresos - actual.gastos;
+  anterior.ahorro = anterior.ingresos - anterior.gastos;
+
+  // Gastos por categoría
+  const porCat = {};
+  txsMes.filter(t => t.tipo === 'gasto').forEach(t => {
+    porCat[t.categoria] = (porCat[t.categoria] || 0) + parseFloat(t.importe);
+  });
+  const catsSorted = Object.entries(porCat).sort((a,b) => b[1]-a[1]);
+
+  // Gastos por medio
+  const porMedio = { efectivo: 0, tarjeta: 0, bizum: 0, transferencia: 0 };
+  txsMes.filter(t => t.tipo === 'gasto').forEach(t => {
+    const m = t.medio || 'transferencia';
+    porMedio[m] = (porMedio[m] || 0) + parseFloat(t.importe);
+  });
+
+  // Evolución día a día
+  const diasDelMes = {};
+  const [y, mo] = mes.split('-').map(Number);
+  const diasEnMes = new Date(y, mo, 0).getDate();
+  for (let d = 1; d <= diasEnMes; d++) {
+    diasDelMes[`${mes}-${String(d).padStart(2,'0')}`] = { gastos: 0, ingresos: 0 };
+  }
+  txsMes.filter(t => t.tipo !== 'liquidacion_tarjeta').forEach(t => {
+    if (diasDelMes[t.fecha]) {
+      if (t.tipo === 'gasto') diasDelMes[t.fecha].gastos += parseFloat(t.importe);
+      else diasDelMes[t.fecha].ingresos += parseFloat(t.importe);
+    }
+  });
+
+  // Acumulado
+  let acum = 0;
+  const acumData = Object.values(diasDelMes).map(d => { acum += d.ingresos - d.gastos; return acum; });
+
+  // Diferencia comparativa
+  const diffPct = (actual, prev) => {
+    if (!prev) return null;
+    return Math.round(((actual - prev) / prev) * 100);
+  };
+
+  const html = `
+    <!-- KPIs -->
+    <div class="section-title">${nombreMes(mes)} · Resumen</div>
+    <div class="kpis-grid">
+      <div class="kpi">
+        <div class="kpi-label">Ingresos</div>
+        <div class="kpi-value pos">${fmt(actual.ingresos)}</div>
+        <div class="kpi-sub">${actual.count} movimientos</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">Gastos</div>
+        <div class="kpi-value neg">${fmt(actual.gastos)}</div>
+        <div class="kpi-sub">${txsMes.filter(t=>t.tipo==='gasto').length} transacciones</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">Ahorro neto</div>
+        <div class="kpi-value ${actual.ahorro >= 0 ? 'pos' : 'neg'}">${actual.ahorro >= 0 ? '+' : ''}${fmt(actual.ahorro)}</div>
+        <div class="kpi-sub">${actual.ingresos > 0 ? Math.round((actual.ahorro/actual.ingresos)*100) : 0}% de los ingresos</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">Tasa de ahorro</div>
+        <div class="kpi-value neu">${actual.ingresos > 0 ? Math.round((1 - actual.gastos/actual.ingresos)*100) : 0}%</div>
+        <div class="kpi-sub">objetivo: >20%</div>
+      </div>
+    </div>
+
+    <!-- COMPARATIVA -->
+    <div class="section-title">Comparativa con ${nombreMes(mesAnt)}</div>
+    <div class="comp-grid">
+      <div class="comp-item">
+        <div class="comp-label">Ingresos</div>
+        <div class="comp-row"><span class="comp-mes">${nombreMes(mes)}</span><span class="comp-val" style="color:var(--lime)">${fmt(actual.ingresos)}</span></div>
+        <div class="comp-row"><span class="comp-mes">${nombreMes(mesAnt)}</span><span class="comp-val" style="color:var(--text2)">${fmt(anterior.ingresos)}</span></div>
+        ${anterior.ingresos ? `<span class="comp-diff ${actual.ingresos >= anterior.ingresos ? 'mejor' : 'peor'}">${actual.ingresos >= anterior.ingresos ? '▲' : '▼'} ${Math.abs(diffPct(actual.ingresos, anterior.ingresos))}%</span>` : ''}
+      </div>
+      <div class="comp-item">
+        <div class="comp-label">Gastos</div>
+        <div class="comp-row"><span class="comp-mes">${nombreMes(mes)}</span><span class="comp-val" style="color:var(--coral)">${fmt(actual.gastos)}</span></div>
+        <div class="comp-row"><span class="comp-mes">${nombreMes(mesAnt)}</span><span class="comp-val" style="color:var(--text2)">${fmt(anterior.gastos)}</span></div>
+        ${anterior.gastos ? `<span class="comp-diff ${actual.gastos <= anterior.gastos ? 'mejor' : 'peor'}">${actual.gastos <= anterior.gastos ? '▼ menos' : '▲ más'} ${Math.abs(diffPct(actual.gastos, anterior.gastos))}%</span>` : ''}
+      </div>
+      <div class="comp-item">
+        <div class="comp-label">Ahorro</div>
+        <div class="comp-row"><span class="comp-mes">${nombreMes(mes)}</span><span class="comp-val" style="color:${actual.ahorro >= 0 ? 'var(--lime)' : 'var(--coral)'}">${fmt(actual.ahorro)}</span></div>
+        <div class="comp-row"><span class="comp-mes">${nombreMes(mesAnt)}</span><span class="comp-val" style="color:var(--text2)">${fmt(anterior.ahorro)}</span></div>
+        ${anterior.ahorro ? `<span class="comp-diff ${actual.ahorro >= anterior.ahorro ? 'mejor' : 'peor'}">${actual.ahorro >= anterior.ahorro ? '▲ mejor' : '▼ peor'}</span>` : ''}
+      </div>
+    </div>
+
+    <!-- GRÁFICOS -->
+    <div class="section-title">Análisis visual</div>
+    <div class="charts-grid">
+      <div class="card">
+        <div class="section-title" style="margin-bottom:12px">Gastos por categoría</div>
+        <div class="chart-wrap"><canvas id="chart-cat"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="section-title" style="margin-bottom:12px">Medio de pago</div>
+        <div class="chart-wrap"><canvas id="chart-medio"></canvas></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="section-title" style="margin-bottom:12px">Evolución acumulada del mes</div>
+      <div class="chart-wrap-full"><canvas id="chart-evol"></canvas></div>
+    </div>
+
+    <!-- TRANSACCIONES -->
+    <div class="page-break"></div>
+    <div class="section-title" style="margin-top:8px">Todas las transacciones · ${nombreMes(mes)}</div>
+    <div class="card" style="padding:0;overflow:hidden;">
+      <table class="tx-table">
+        <thead>
+          <tr>
+            <th>Fecha</th>
+            <th>Descripción</th>
+            <th>Categoría</th>
+            <th>Medio</th>
+            <th style="text-align:right">Importe</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${txsMes.map(t => `
+            <tr>
+              <td style="color:var(--text3);white-space:nowrap">${fmtFecha(t.fecha)}</td>
+              <td>${t.descripcion}</td>
+              <td>${t.categoria || '—'}</td>
+              <td style="color:var(--text3)">${t.medio === 'efectivo' ? '💵' : t.medio === 'tarjeta' ? '💳' : t.medio === 'bizum' ? '📱' : '🏦'} ${t.medio || 'transferencia'}</td>
+              <td style="text-align:right" class="${t.tipo === 'gasto' ? 'amount-neg' : t.tipo === 'liquidacion_tarjeta' ? 'amount-liq' : 'amount-pos'}">
+                ${t.tipo === 'gasto' ? '−' : t.tipo === 'liquidacion_tarjeta' ? '≈' : '+'}${fmt(t.importe)}
+              </td>
+            </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+
+  document.getElementById('contenido').innerHTML = html;
+
+  // Colores para categorías
+  const COLORS = ['#c8f135','#4a9eff','#ff6b4a','#f59e0b','#a78bfa','#34d399','#fb7185','#60a5fa','#fbbf24','#818cf8','#f472b6','#2dd4bf'];
+
+  // Gráfico categorías (dona)
+  chartInstances['cat'] = new Chart(document.getElementById('chart-cat'), {
+    type: 'doughnut',
+    data: {
+      labels: catsSorted.map(([c]) => c),
+      datasets: [{ data: catsSorted.map(([,v]) => v), backgroundColor: COLORS, borderWidth: 0 }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'right', labels: { color: '#bbb', font: { size: 11 }, boxWidth: 12, padding: 8 } },
+        tooltip: { callbacks: { label: (c) => ` ${c.label}: ${Math.round(c.parsed).toLocaleString('es-ES')} €` } }
+      }
+    }
+  });
+
+  // Gráfico medio de pago (dona)
+  const mediosLabels = ['💵 Efectivo', '💳 Tarjeta', '📱 Bizum', '🏦 Transferencia'];
+  const mediosVals = [porMedio.efectivo, porMedio.tarjeta, porMedio.bizum, porMedio.transferencia];
+  chartInstances['medio'] = new Chart(document.getElementById('chart-medio'), {
+    type: 'doughnut',
+    data: {
+      labels: mediosLabels,
+      datasets: [{ data: mediosVals, backgroundColor: ['#c8f135','#4a9eff','#f59e0b','#a78bfa'], borderWidth: 0 }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'right', labels: { color: '#bbb', font: { size: 11 }, boxWidth: 12, padding: 8 } },
+        tooltip: { callbacks: { label: (c) => ` ${c.label}: ${Math.round(c.parsed).toLocaleString('es-ES')} €` } }
+      }
+    }
+  });
+
+  // Gráfico evolución acumulada
+  const labels = Object.keys(diasDelMes).map(d => parseInt(d.split('-')[2]));
+  chartInstances['evol'] = new Chart(document.getElementById('chart-evol'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Saldo acumulado',
+        data: acumData,
+        borderColor: '#c8f135',
+        backgroundColor: 'rgba(200,241,53,0.08)',
+        fill: true,
+        tension: 0.3,
+        pointRadius: 2,
+        borderWidth: 2
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { color: '#888', font: { size: 10 } }, grid: { color: '#2a2a2a' } },
+        y: { ticks: { color: '#888', font: { size: 10 }, callback: v => Math.round(v).toLocaleString('es-ES') + ' €' }, grid: { color: '#2a2a2a' } }
+      }
+    }
+  });
+}
+
+// Inicializar
+document.addEventListener('DOMContentLoaded', async () => {
+  // Obtener mes del parámetro URL si viene de la app
+  const params = new URLSearchParams(window.location.search);
+  const mesPar = params.get('mes');
+  if (mesPar) document.getElementById('sel-mes').value = mesPar;
+
+  const { data: { session } } = await sb.auth.getSession();
+  if (!session) {
+    document.getElementById('contenido').innerHTML = '<div class="loading">Debes estar conectado para ver el informe. <a href="app.html" style="color:var(--lime)">Ir a la app →</a></div>';
+    return;
+  }
+  userId = session.user.id;
+  cargarInforme();
+});
+</script>
+</body>
+</html>

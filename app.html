@@ -321,6 +321,7 @@ input[type=file] { display: none; }
     </div>
     <div class="header-user">
       <span id="header-name"></span>
+      <button onclick="abrirInforme()" style="background:var(--lime-glow);border:1px solid rgba(200,241,53,0.2);border-radius:100px;padding:4px 12px;color:var(--lime);font-size:11px;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .2s;">📊 Informe</button>
       <button class="btn-logout" onclick="logout()">Salir</button>
     </div>
   </div>
@@ -394,9 +395,15 @@ input[type=file] { display: none; }
             <span>Tarjeta de crédito</span>
             <span style="font-size:10px;color:var(--text3)">XLS</span>
           </label>
+          <label class="btn-import" onclick="document.getElementById('file-efectivo').click()">
+            <span class="icon">💵</span>
+            <span>Efectivo / Manual</span>
+            <span style="font-size:10px;color:var(--text3)">XLSX</span>
+          </label>
         </div>
         <input type="file" id="file-cuenta" accept=".xlsx,.xls" onchange="importarCuenta(this)">
         <input type="file" id="file-tarjeta" accept=".xlsx,.xls" onchange="importarTarjeta(this)">
+        <input type="file" id="file-efectivo" accept=".xlsx,.xls" onchange="importarEfectivo(this)">
         <div id="import-msg" class="import-msg"></div>
       </div>
       <div class="add-tx-form">
@@ -817,6 +824,11 @@ async function register() {
   msg.textContent = 'Cuenta creada. Revisa tu email para confirmar.';
 }
 
+function abrirInforme() {
+  const mes = document.getElementById('inicio-mes')?.value || mesActual();
+  window.open(`informe.html?mes=${mes}`, '_blank');
+}
+
 async function logout() {
   if (isDemo) { salirDemo(); return; }
   await sb.auth.signOut();
@@ -991,26 +1003,31 @@ function renderInicio(txs) {
   document.getElementById('kpi-txs').textContent = mesTxs.length;
 
   // Semáforo
-  const ratio = ingresos > 0 ? gastos / ingresos : 0;
+  const tasaAhorro = ingresos > 0 ? (ingresos - gastos) / ingresos : 0;
   const sc = document.getElementById('semaforo-card');
   const circle = document.getElementById('sem-circle');
   sc.className = 'semaforo-card';
   circle.className = 'sem-circle';
-  if (ratio < 0.7 || ingresos === 0) {
+  if (ingresos === 0) {
     sc.classList.add('verde'); circle.classList.add('verde');
     document.getElementById('sem-emoji').textContent = '🟢';
-    document.getElementById('sem-titulo').textContent = 'Vas bien';
-    document.getElementById('sem-sub').textContent = 'Buen ritmo este mes';
-  } else if (ratio < 0.9) {
+    document.getElementById('sem-titulo').textContent = 'Sin datos';
+    document.getElementById('sem-sub').textContent = 'Añade tus ingresos y gastos';
+  } else if (tasaAhorro > 0.20) {
+    sc.classList.add('verde'); circle.classList.add('verde');
+    document.getElementById('sem-emoji').textContent = '🟢';
+    document.getElementById('sem-titulo').textContent = 'Excelente';
+    document.getElementById('sem-sub').textContent = `Ahorras el ${Math.round(tasaAhorro*100)}% de tus ingresos`;
+  } else if (tasaAhorro >= 0) {
     sc.classList.add('naranja'); circle.classList.add('naranja');
     document.getElementById('sem-emoji').textContent = '🟡';
-    document.getElementById('sem-titulo').textContent = 'Cuidado';
-    document.getElementById('sem-sub').textContent = 'Gastas bastante respecto a lo que ingresas';
+    document.getElementById('sem-titulo').textContent = 'Puedes mejorar';
+    document.getElementById('sem-sub').textContent = `Ahorras el ${Math.round(tasaAhorro*100)}% — intenta llegar al 20%`;
   } else {
     sc.classList.add('rojo'); circle.classList.add('rojo');
     document.getElementById('sem-emoji').textContent = '🔴';
     document.getElementById('sem-titulo').textContent = 'En rojo';
-    document.getElementById('sem-sub').textContent = 'Estás gastando más de lo que ingresas';
+    document.getElementById('sem-sub').textContent = `Gastas ${fmt(Math.abs(saldo))} más de lo que ingresas`;
   }
 
   // Últimas 5 transacciones
@@ -1484,6 +1501,63 @@ function categoriaConAprendizaje(descripcion) {
     if (clave.includes(k) || k.includes(clave)) return v;
   }
   return categoriaAutomatica(descripcion);
+}
+
+// ─── PARSER EFECTIVO / MANUAL ───
+// Acepta cualquier Excel con columnas: Fecha, Descripción/Concepto, Importe, Categoría (opcional)
+async function importarEfectivo(input) {
+  const file = input.files[0]; if (!file) return;
+  setImportMsg('Leyendo archivo de efectivo...');
+  try {
+    const buf = await file.arrayBuffer();
+    const wb = XLSX.read(buf, { type: 'array', cellDates: false });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+
+    // Buscar cabecera flexible
+    let startRow = -1, colFecha = -1, colDesc = -1, colImporte = -1, colCat = -1, colTipo = -1;
+    for (let i = 0; i < Math.min(rows.length, 10); i++) {
+      const r = rows[i].map(c => String(c).toLowerCase().trim());
+      const fIdx = r.findIndex(c => c.includes('fecha'));
+      const dIdx = r.findIndex(c => c.includes('descripci') || c.includes('concepto') || c.includes('comercio'));
+      const iIdx = r.findIndex(c => c.includes('importe') || c.includes('cantidad') || c.includes('monto'));
+      if (fIdx >= 0 && dIdx >= 0 && iIdx >= 0) {
+        startRow = i + 1;
+        colFecha = fIdx; colDesc = dIdx; colImporte = iIdx;
+        colCat = r.findIndex(c => c.includes('categor'));
+        colTipo = r.findIndex(c => c.includes('tipo'));
+        break;
+      }
+    }
+
+    if (startRow < 0) {
+      setImportMsg('No se encontró la cabecera. Necesita columnas: Fecha, Descripción, Importe', 'err');
+      return;
+    }
+
+    const txsNuevas = [];
+    for (let i = startRow; i < rows.length; i++) {
+      const r = rows[i];
+      const fecha = parsearFecha(r[colFecha]);
+      const descripcion = String(r[colDesc] || '').trim();
+      const importeRaw = parseFloat(String(r[colImporte] || '').replace(',', '.').replace(/[^\d\.\-]/g, ''));
+      if (!fecha || !descripcion || isNaN(importeRaw) || importeRaw === 0) continue;
+
+      const tipo = colTipo >= 0 ? (String(r[colTipo]).toLowerCase().includes('ingreso') ? 'ingreso' : 'gasto') : (importeRaw < 0 ? 'gasto' : 'ingreso');
+      const importe = Math.abs(importeRaw);
+      const categoria = colCat >= 0 && r[colCat] ? String(r[colCat]).trim() : categoriaConAprendizaje(descripcion);
+      const desc = descripcion.startsWith('[Efectivo]') ? descripcion : '[Efectivo] ' + descripcion;
+      txsNuevas.push({ fecha, descripcion: desc, importe, tipo, categoria, medio: 'efectivo' });
+    }
+
+    if (!txsNuevas.length) { setImportMsg('No se encontraron movimientos', 'err'); return; }
+    await guardarImportacion(txsNuevas);
+    setImportMsg(`✓ ${txsNuevas.length} movimientos de efectivo importados`, 'ok');
+    input.value = '';
+  } catch(e) {
+    console.error(e);
+    setImportMsg('Error al leer el archivo', 'err');
+  }
 }
 
 // ─── PALABRAS CLAVE LIQUIDACIÓN TARJETA ───

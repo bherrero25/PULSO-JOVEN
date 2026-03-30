@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script>
+window.onload = function() {
+  const datos = [
+    ['Fecha', 'Concepto', 'Categoria', 'Clase', 'Medio de pago', 'Importe'],
+    ['29/03/2026', 'Café con amigos', 'Ocio', 'Gasto', 'Efectivo', -3.50],
+    ['28/03/2026', 'Venta segunda mano', 'Otros', 'Ingreso', 'Efectivo', 20],
+    ['27/03/2026', 'Taxi', 'Transporte', 'Gasto', 'Efectivo', -12],
+  ];
+  const ws = XLSX.utils.aoa_to_sheet(datos);
+  ws['!cols'] = [{wch:14},{wch:30},{wch:20},{wch:10},{wch:15},{wch:10}];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Efectivo');
+  XLSX.writeFile(wb, 'plantilla-efectivo-pulso.xlsx');
+  document.body.innerHTML = '<p style="font-family:sans-serif;padding:20px">✅ Plantilla descargada. Puedes cerrar esta ventana.</p>';
+};
+</script>
+</head>
+<body><p style="font-family:sans-serif;padding:20px">Generando plantilla...</p></body>
+</html>

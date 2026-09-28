@@ -474,6 +474,7 @@ input[type=file] { display: none; }
               <option value="🎉 Ocio">🎉 Ocio</option>
               <option value="🚇 Transporte">🚇 Transporte</option>
               <option value="⛽ Gasolina">⛽ Gasolina</option>
+              <option value="🚗 Coche">🚗 Coche</option>
               <option value="📦 Suscripciones">📦 Suscripciones</option>
               <option value="👕 Ropa">👕 Ropa</option>
               <option value="📚 Estudios">📚 Estudios</option>
@@ -640,6 +641,7 @@ input[type=file] { display: none; }
               <option value="🎉 Ocio">
               <option value="🚇 Transporte">
               <option value="⛽ Gasolina">
+              <option value="🚗 Coche">
               <option value="📦 Suscripciones">
               <option value="👕 Ropa">
               <option value="📚 Estudios">
@@ -831,6 +833,7 @@ input[type=file] { display: none; }
             <option value="🎉 Ocio">🎉 Ocio</option>
             <option value="🚇 Transporte">🚇 Transporte</option>
               <option value="⛽ Gasolina">⛽ Gasolina</option>
+              <option value="🚗 Coche">🚗 Coche</option>
             <option value="👕 Ropa">👕 Ropa</option>
             <option value="📚 Estudios">📚 Estudios</option>
             <option value="💊 Salud">💊 Salud</option>
@@ -1301,7 +1304,7 @@ function renderListaTxs(txs) {
     document.getElementById('total-count').textContent = txs.length;
   }
   if (!txs.length) { el.innerHTML = '<div class="empty-state"><div class="empty-icon">📋</div><div class="empty-text">No hay transacciones</div></div>'; return; }
-  const CATS_BASE = ['🍔 Comida','🏠 Alquiler','🎉 Ocio','🚇 Transporte','⛽ Gasolina','📦 Suscripciones','👕 Ropa','📚 Estudios','💊 Salud','💰 Nómina',CAT_MENSUALIDAD,'💰 Ingresos',CAT_REENVIO,'📱 Bizum enviado','📱 Bizum recibido','🎁 Regalo','✈️ Viaje','📱 Tecnología','🏋️ Deporte','💳 Liquidación tarjeta','🔧 Otros'];
+  const CATS_BASE = ['🍔 Comida','🏠 Alquiler','🎉 Ocio','🚇 Transporte','⛽ Gasolina','🚗 Coche','📦 Suscripciones','👕 Ropa','📚 Estudios','💊 Salud','💰 Nómina',CAT_MENSUALIDAD,'💰 Ingresos',CAT_REENVIO,'📱 Bizum enviado','📱 Bizum recibido','🎁 Regalo','✈️ Viaje','📱 Tecnología','🏋️ Deporte','💳 Liquidación tarjeta','🔧 Otros'];
   const catsExtra = getCatsPersonalizadas().filter(c => !CATS_BASE.includes(c));
   const CATS = [...CATS_BASE, ...catsExtra, '✏️ Otra...'];
   el.innerHTML = txs.map(t => `
@@ -1992,7 +1995,8 @@ function categoriaAutomatica(descripcion, tipo) {
   if (/^e ?s |^e\.s\. |estacion(es)? de servicio/.test(d)) return '⛽ Gasolina';
   if (/mercadona|carrefour|lidl|aldi|supermercado|simply|market|fruteria|panaderia|alcampo|dia |eroski|consum|hipercor/.test(d)) return '🍔 Comida';
   if (/netflix|spotify|amazon prime|disney|hbo|apple|google play|playstation|steam/.test(d)) return '📦 Suscripciones';
-  if (/renfe|iryo|ouigo|alsa|autobus|nextbike|metro|bus |uber|cabify|blablacar|taxi|parking|norauto/.test(d)) return '🚇 Transporte';
+  if (/renfe|iryo|ouigo|alsa|autobus|nextbike|metro|bus |uber|cabify|blablacar|taxi|parking/.test(d)) return '🚇 Transporte';
+  if (/taller|norauto|midas|feu vert|neumatic|itv |recambios|lavadero/.test(d)) return '🚗 Coche';
   if (/gasolinera|estacion(es)? de servicio|petroprix|plenergy|repsol|bp |cepsa|galp|shell|ballenoil|plenoil/.test(d)) return '⛽ Gasolina';
   if (/winamax|bet365|codere|sportium|pokerstars|loteria|apuesta/.test(d)) return '🎲 Apuestas';
   if (/alquiler|arrendamiento|comunidad|hipoteca/.test(d)) return '🏠 Alquiler';

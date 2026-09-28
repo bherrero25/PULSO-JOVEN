@@ -912,6 +912,15 @@ const sumar = arr => arr.reduce((s, t) => s + parseFloat(t.importe), 0);
 // Ingresos y gastos "generales" dejan fuera el dinero de familia (Mensualidad y Reenviado), que va aparte
 const esMensualidad = t => t.tipo === 'ingreso' && t.categoria === CAT_MENSUALIDAD;
 const totalIngresos = txs => sumar(txs.filter(t => t.tipo === 'ingreso' && !esMensualidad(t)));
+// El dinero de familia que llega o sale en los últimos 3 días del mes cuenta para el mes siguiente
+// (p. ej. la transferencia del 31 de agosto es la de septiembre)
+function mesEfectivo(t) {
+  const mes = t.fecha.slice(0, 7);
+  if (!esMensualidad(t) && !esReenvio(t)) return mes;
+  const [y, m, d] = t.fecha.split('-').map(Number);
+  if (d <= new Date(y, m, 0).getDate() - 3) return mes;
+  return m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, '0')}`;
+}
 const netoFamilia = txs => sumar(txs.filter(esMensualidad)) - sumar(txs.filter(esReenvio));
 const totalGastos = txs => sumar(txs.filter(esGasto));
 function fmt(n) { return Math.abs(n).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €'; }
@@ -1172,7 +1181,7 @@ function renderResumen() {
 
   // Ingresos del mes. El dinero de familia (Mensualidad − Reenviado) va en un bloque aparte
   // para no mezclarlo con los Bizum de amigos y el resto de ingresos.
-  const txsMes = todasTxs.filter(t => t.fecha.slice(0, 7) === mes);
+  const txsMes = todasTxs.filter(t => mesEfectivo(t) === mes);
   const fila = (txt, v, color) => `<div class="res-det-row"><span>${txt}</span><span style="color:${color}">${v < 0 ? '−' : '+'}${fmt(v)}</span></div>`;
   const subtitulo = txt => `<div class="pres-pct" style="text-transform:uppercase;letter-spacing:1px;margin:4px 0 2px">${txt}</div>`;
   const totalFila = (txt, v) => `<div class="res-det-row" style="border-top:1px solid var(--border);margin-top:4px;padding-top:8px;font-weight:600"><span>${txt}</span><span>${v < 0 ? '−' : '+'}${fmt(v)}</span></div>`;
@@ -1330,7 +1339,7 @@ function renderListaTxs(txs) {
 function renderInicio(txs) {
   const mesSel = document.getElementById('inicio-mes')?.value || mesActual();
   const cuentaSel = document.getElementById('inicio-cuenta')?.value || '';
-  let mesTxs = mesSel === 'todo' ? txs : txs.filter(t => t.fecha.slice(0, 7) === mesSel);
+  let mesTxs = mesSel === 'todo' ? txs : txs.filter(t => mesEfectivo(t) === mesSel);
   if (cuentaSel) mesTxs = mesTxs.filter(t => (t.cuenta || 'principal') === cuentaSel);
   const ingresos = totalIngresos(mesTxs);
   const gastos = totalGastos(mesTxs);

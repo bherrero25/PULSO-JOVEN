@@ -197,8 +197,15 @@ async function cargarInforme() {
   }
 
   const mesAnt = mesAnterior(mes);
-  let txsMes = txs.filter(t => t.fecha.slice(0,7) === mes);
-  let txsAnt = txs.filter(t => t.fecha.slice(0,7) === mesAnt);
+  // Igual que en la app: el dinero de familia de los últimos 3 días del mes cuenta para el siguiente
+  const esFamilia = t => (t.tipo === 'ingreso' && t.categoria === '💰 Mensualidad') || (t.tipo === 'gasto' && t.categoria === '↩️ Reenviado');
+  const mesEfectivo = t => {
+    const [yy, mm, dd] = t.fecha.split('-').map(Number);
+    if (!esFamilia(t) || dd <= new Date(yy, mm, 0).getDate() - 3) return t.fecha.slice(0,7);
+    return mm === 12 ? `${yy + 1}-01` : `${yy}-${String(mm + 1).padStart(2, '0')}`;
+  };
+  let txsMes = txs.filter(t => mesEfectivo(t) === mes);
+  let txsAnt = txs.filter(t => mesEfectivo(t) === mesAnt);
   if (cuenta) {
     txsMes = txsMes.filter(t => (t.cuenta || 'principal') === cuenta);
     txsAnt = txsAnt.filter(t => (t.cuenta || 'principal') === cuenta);

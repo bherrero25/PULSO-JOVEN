@@ -1405,12 +1405,18 @@ async function cambiarCategoria(id, nuevaCat) {
   // Guardar regla de aprendizaje en Supabase
   const t = todasTxs.find(x => x.id === id);
   if (t) await guardarRegla(t.descripcion, nuevaCat);
-  if (isDemo) {
-    if (t) t.categoria = nuevaCat;
-    return;
+  // Los movimientos del mismo comercio que seguían en "Otros" cambian también
+  const clave = t ? claveConcepto(t.descripcion) : null;
+  const iguales = t ? todasTxs.filter(x => x.id !== id && x.categoria === '🔧 Otros' && claveConcepto(x.descripcion) === clave) : [];
+  if (!isDemo) {
+    await sb.from('pj_transacciones').update({ categoria: nuevaCat }).eq('id', id);
+    if (iguales.length) await sb.from('pj_transacciones').update({ categoria: nuevaCat }).in('id', iguales.map(x => x.id));
   }
-  await sb.from('pj_transacciones').update({ categoria: nuevaCat }).eq('id', id);
   if (t) t.categoria = nuevaCat;
+  iguales.forEach(x => x.categoria = nuevaCat);
+  if (iguales.length) filtrarTxs();
+  renderInicio(todasTxs);
+  renderResumen();
 }
 
 async function deleteTx(id) {
@@ -1774,7 +1780,7 @@ async function cargarReglas() {
 
 async function guardarRegla(concepto, categoria) {
   if (isDemo) return;
-  const clave = concepto.toLowerCase().trim();
+  const clave = claveConcepto(concepto);
   reglasCache[clave] = categoria;
   try {
     await sb.from('pj_reglas_categoria').upsert(
@@ -1790,10 +1796,18 @@ function getCatsPersonalizadas() {
   return cats;
 }
 
+// Concepto sin tildes, espacios repetidos ni la fecha que Bankinter añade al final ("BAR PEPE 25/09/26")
+function claveConcepto(s) {
+  return String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+\d{1,2}\/\d{1,2}\/\d{2,4}\s*$/, '').replace(/\s+/g, ' ').trim();
+}
+
 function categoriaConAprendizaje(descripcion, tipo) {
-  const clave = descripcion.toLowerCase().trim();
-  if (reglasCache[clave]) return reglasCache[clave];
-  for (const [k, v] of Object.entries(reglasCache)) {
+  const clave = claveConcepto(descripcion);
+  const reglas = Object.entries(reglasCache).map(([k, v]) => [claveConcepto(k), v]);
+  const exacta = reglas.find(([k]) => k === clave);
+  if (exacta) return exacta[1];
+  for (const [k, v] of reglas) {
     if (clave.includes(k) || k.includes(clave)) return v;
   }
   return categoriaAutomatica(descripcion, tipo);

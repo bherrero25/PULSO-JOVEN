@@ -118,23 +118,7 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
 <div class="wrapper">
   <div class="mes-selector no-print">
     <span style="font-size:13px;color:var(--text2);">Ver informe de:</span>
-    <select id="sel-mes" onchange="cargarInforme()">
-      <option value="2026-03">Marzo 2026</option>
-      <option value="2026-02">Febrero 2026</option>
-      <option value="2026-01">Enero 2026</option>
-      <option value="2025-12">Diciembre 2025</option>
-      <option value="2025-11">Noviembre 2025</option>
-      <option value="2025-10">Octubre 2025</option>
-      <option value="2025-09">Septiembre 2025</option>
-      <option value="2025-08">Agosto 2025</option>
-      <option value="2025-07">Julio 2025</option>
-      <option value="2025-06">Junio 2025</option>
-      <option value="2025-05">Mayo 2025</option>
-      <option value="2025-04">Abril 2025</option>
-      <option value="2025-03">Marzo 2025</option>
-      <option value="2025-02">Febrero 2025</option>
-      <option value="2025-01">Enero 2025</option>
-    </select>
+    <select id="sel-mes" onchange="cargarInforme()"></select>
     <select id="sel-cuenta" onchange="cargarInforme()">
       <option value="">Todas las cuentas</option>
       <option value="bankinter">🏦 Bankinter</option>
@@ -161,7 +145,7 @@ const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 let userId = null;
 let chartInstances = {};
 
-function fmt(n) { return Math.abs(n).toLocaleString('es-ES', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) + ' €'; }
+function fmt(n) { return Math.abs(n).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €'; }
 function fmtFecha(f) { return new Date(f + 'T12:00:00').toLocaleDateString('es-ES', { day: 'numeric', month: 'short' }); }
 
 function mesAnterior(mes) {
@@ -436,7 +420,17 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Obtener mes del parámetro URL si viene de la app
   const params = new URLSearchParams(window.location.search);
   const mesPar = params.get('mes');
-  if (mesPar) document.getElementById('sel-mes').value = mesPar;
+  // Últimos 24 meses hasta el actual (y el que venga de la app, si es más antiguo)
+  const selMes = document.getElementById('sel-mes');
+  const hoyD = new Date();
+  const meses = [];
+  for (let i = 0; i < 24; i++) {
+    const d = new Date(hoyD.getFullYear(), hoyD.getMonth() - i, 1);
+    meses.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+  }
+  if (mesPar && /^\d{4}-\d{2}$/.test(mesPar) && !meses.includes(mesPar)) meses.push(mesPar);
+  selMes.innerHTML = meses.map(m => `<option value="${m}">${nombreMes(m)}</option>`).join('');
+  selMes.value = mesPar && meses.includes(mesPar) ? mesPar : meses[0];
 
   const { data: { session } } = await sb.auth.getSession();
   if (!session) {

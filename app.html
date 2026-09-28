@@ -370,33 +370,7 @@ input[type=file] { display: none; }
             <option value="n26">🏦 N26</option>
             <option value="efectivo">💵 Efectivo</option>
           </select>
-          <select id="inicio-mes" class="form-input" style="width:160px;" onchange="cargarTransacciones()">
-          <option value="todo">📅 Todo el año</option>
-          <option value="2026-01">Enero 2026</option>
-          <option value="2026-02">Febrero 2026</option>
-          <option value="2026-03">Marzo 2026</option>
-          <option value="2026-04">Abril 2026</option>
-          <option value="2026-05">Mayo 2026</option>
-          <option value="2026-06">Junio 2026</option>
-          <option value="2026-07">Julio 2026</option>
-          <option value="2026-08">Agosto 2026</option>
-          <option value="2026-09">Septiembre 2026</option>
-          <option value="2026-10">Octubre 2026</option>
-          <option value="2026-11">Noviembre 2026</option>
-          <option value="2026-12">Diciembre 2026</option>
-          <option value="2025-01">Enero 2025</option>
-          <option value="2025-02">Febrero 2025</option>
-          <option value="2025-03">Marzo 2025</option>
-          <option value="2025-04">Abril 2025</option>
-          <option value="2025-05">Mayo 2025</option>
-          <option value="2025-06">Junio 2025</option>
-          <option value="2025-07">Julio 2025</option>
-          <option value="2025-08">Agosto 2025</option>
-          <option value="2025-09">Septiembre 2025</option>
-          <option value="2025-10">Octubre 2025</option>
-          <option value="2025-11">Noviembre 2025</option>
-          <option value="2025-12">Diciembre 2025</option>
-        </select>
+          <select id="inicio-mes" class="form-input" style="width:160px;" onchange="cargarTransacciones()"></select>
         </div>
       </div>
       <div id="semaforo-card" class="semaforo-card verde">
@@ -2317,8 +2291,22 @@ async function guardarImportacion(txs) {
   await cargarTransacciones(); await cargarPresupuestos();
 }
 
+// Selector de mes de Inicio: todos los meses + los últimos 24 hasta el actual
+function llenarSelectorMeses() {
+  const sel = document.getElementById('inicio-mes');
+  const h = new Date();
+  let html = '<option value="todo">📅 Todos los meses</option>';
+  for (let i = 0; i < 24; i++) {
+    const d = new Date(h.getFullYear(), h.getMonth() - i, 1);
+    const m = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    html += `<option value="${m}">${nombreMes(m)}</option>`;
+  }
+  sel.innerHTML = html;
+}
+
 // ─── INIT ───
 document.addEventListener('DOMContentLoaded', async () => {
+  llenarSelectorMeses();
   document.getElementById('tx-fecha').value = hoy();
   document.getElementById('inicio-mes').value = mesActual();
   const { data: { session } } = await sb.auth.getSession();

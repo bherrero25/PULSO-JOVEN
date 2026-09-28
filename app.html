@@ -172,6 +172,20 @@ html, body { height: 100%; font-family: 'DM Sans', sans-serif; background: var(-
 .pres-fill.warn { background: var(--amber); }
 .pres-fill.over { background: var(--coral); }
 .pres-pct { font-size: 11px; color: var(--text3); }
+/* ─── RESUMEN ─── */
+.res-total { font-size: 28px; font-weight: 600; color: var(--coral); margin: 14px 0 4px; }
+.res-sub { font-size: 12px; color: var(--text3); margin-bottom: 18px; }
+.res-cat { margin-bottom: 14px; }
+.res-cat summary { list-style: none; cursor: pointer; }
+.res-cat summary::-webkit-details-marker { display: none; }
+.res-cat summary .pres-nums::after { content: ' ▾'; color: var(--text3); }
+.res-cat[open] summary .pres-nums::after { content: ' ▴'; }
+.res-det { margin: 8px 0 4px; padding: 4px 12px; border-left: 2px solid var(--border); }
+.res-det-row { display: flex; justify-content: space-between; gap: 10px; font-size: 12px; padding: 5px 0; color: var(--text2); }
+.res-det-row span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.res-det-row span:last-child { flex-shrink: 0; color: var(--text); }
+.res-mes-row { display: grid; grid-template-columns: 90px 1fr auto; align-items: center; gap: 10px; font-size: 13px; margin-bottom: 10px; }
+.res-mes-row .pres-track { margin: 0; }
 
 .add-pres-form { background: var(--bg2); border: 1px solid var(--border); border-radius: 16px; padding: 20px; margin-bottom: 14px; }
 .btn-sm { background: var(--surface); border: 1px solid var(--border); border-radius: 100px; padding: 8px 16px; color: var(--text2); font-size: 12px; font-weight: 500; font-family: 'DM Sans', sans-serif; cursor: pointer; transition: all .2s; }
@@ -574,6 +588,22 @@ input[type=file] { display: none; }
       </div>
     </div>
 
+    <!-- RESUMEN -->
+    <div id="tab-resumen" class="tab-content">
+      <div class="card">
+        <div class="card-title">Gastos del mes por categoría</div>
+        <select id="res-mes" class="form-input" onchange="renderResumen()"></select>
+        <div class="res-total" id="res-total">0,00 €</div>
+        <div class="res-sub" id="res-sub"></div>
+        <div id="res-cats"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Mes a mes</div>
+        <select id="res-cat" class="form-input" onchange="renderResumen()" style="margin-bottom:16px"></select>
+        <div id="res-meses"></div>
+      </div>
+    </div>
+
     <!-- PRESUPUESTO -->
     <div id="tab-presupuesto" class="tab-content">
       <div class="add-pres-form">
@@ -719,6 +749,7 @@ input[type=file] { display: none; }
   <nav class="tabs-nav">
     <button class="tab-btn active" onclick="showTab('inicio', this)"><div class="tab-icon">🏠</div>Inicio</button>
     <button class="tab-btn" onclick="showTab('gastos', this)"><div class="tab-icon">💸</div>Gastos</button>
+    <button class="tab-btn" onclick="showTab('resumen', this)"><div class="tab-icon">🗓️</div>Resumen</button>
     <button class="tab-btn" onclick="showTab('presupuesto', this)"><div class="tab-icon">📊</div>Presupuesto</button>
     <button class="tab-btn" onclick="showTab('metas', this)"><div class="tab-icon">🎯</div>Metas</button>
     <button class="tab-btn" onclick="showTab('inversiones', this)"><div class="tab-icon">📈</div>Inversión</button>
@@ -848,7 +879,7 @@ function hoy(offset = 0) {
   return d.toISOString().split('T')[0];
 }
 function mesActual() { return new Date().toISOString().slice(0, 7); }
-function fmt(n) { return Math.abs(n).toLocaleString('es-ES', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) + ' €'; }
+function fmt(n) { return Math.abs(n).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €'; }
 function fmtFecha(f) { return new Date(f + 'T12:00:00').toLocaleDateString('es-ES', { day: 'numeric', month: 'short' }); }
 
 // ─── AUTH ───
@@ -942,6 +973,80 @@ async function cargarTransacciones() {
   const txs = await getTransacciones();
   renderTxs(txs);
   renderInicio(txs);
+  renderResumen();
+}
+
+// ─── RESUMEN MENSUAL ───
+const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+function nombreMes(ym) { const [y, m] = ym.split('-'); return `${MESES[+m - 1]} ${y}`; }
+function esc(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+
+function renderResumen() {
+  const selMes = document.getElementById('res-mes');
+  const selCat = document.getElementById('res-cat');
+  if (!selMes) return;
+  // Solo gastos reales: las liquidaciones de tarjeta ya están en los movimientos de tarjeta
+  const gastos = todasTxs.filter(t => t.tipo === 'gasto');
+  const meses = [...new Set(gastos.map(t => t.fecha.slice(0, 7)))].sort().reverse();
+
+  if (!meses.length) {
+    selMes.innerHTML = '';
+    document.getElementById('res-total').textContent = fmt(0);
+    document.getElementById('res-sub').textContent = '';
+    document.getElementById('res-cats').innerHTML = '<div class="empty-state"><div class="empty-icon">🗓️</div><div class="empty-text">Aún no hay gastos</div></div>';
+    selCat.innerHTML = '';
+    document.getElementById('res-meses').innerHTML = '';
+    return;
+  }
+
+  const mesPrevio = selMes.value;
+  const mes = meses.includes(mesPrevio) ? mesPrevio : (meses.includes(mesActual()) ? mesActual() : meses[0]);
+  selMes.innerHTML = meses.map(m => `<option value="${m}" ${m === mes ? 'selected' : ''}>${nombreMes(m)}</option>`).join('');
+
+  // Gastos del mes agrupados por categoría, con sus movimientos
+  const delMes = gastos.filter(t => t.fecha.slice(0, 7) === mes);
+  const total = delMes.reduce((s, t) => s + parseFloat(t.importe), 0);
+  const porCat = {};
+  delMes.forEach(t => {
+    const c = t.categoria || '🔧 Otros';
+    (porCat[c] ||= { total: 0, txs: [] });
+    porCat[c].total += parseFloat(t.importe);
+    porCat[c].txs.push(t);
+  });
+  const cats = Object.entries(porCat).sort((a, b) => b[1].total - a[1].total);
+  document.getElementById('res-total').textContent = '−' + fmt(total);
+  document.getElementById('res-sub').textContent = `${delMes.length} gastos en ${cats.length} categorías · toca una para ver el detalle`;
+  document.getElementById('res-cats').innerHTML = cats.map(([c, d]) => {
+    const pct = total ? d.total / total * 100 : 0;
+    const filas = d.txs.sort((a, b) => b.fecha.localeCompare(a.fecha))
+      .map(t => `<div class="res-det-row"><span>${fmtFecha(t.fecha)} · ${esc(t.descripcion)}</span><span>−${fmt(t.importe)}</span></div>`).join('');
+    return `<details class="res-cat">
+      <summary>
+        <div class="pres-header"><div class="pres-cat">${esc(c)}</div><div class="pres-nums">${fmt(d.total)}</div></div>
+        <div class="pres-track"><div class="pres-fill ok" style="width:${pct}%"></div></div>
+        <div class="pres-pct">${pct.toLocaleString('es-ES', { maximumFractionDigits: 1 })}% del mes · ${d.txs.length} ${d.txs.length === 1 ? 'gasto' : 'gastos'}</div>
+      </summary>
+      <div class="res-det">${filas}</div>
+    </details>`;
+  }).join('');
+
+  // Evolución mes a mes (todos los gastos o una categoría)
+  const todasCats = [...new Set(gastos.map(t => t.categoria || '🔧 Otros'))].sort();
+  const catPrevia = selCat.value;
+  const cat = todasCats.includes(catPrevia) ? catPrevia : '';
+  selCat.innerHTML = '<option value="">Todos los gastos</option>' + todasCats.map(c => `<option value="${esc(c)}" ${c === cat ? 'selected' : ''}>${esc(c)}</option>`).join('');
+  const ultimos = meses.slice(0, 12);
+  const importes = ultimos.map(m => gastos
+    .filter(t => t.fecha.slice(0, 7) === m && (!cat || (t.categoria || '🔧 Otros') === cat))
+    .reduce((s, t) => s + parseFloat(t.importe), 0));
+  const max = Math.max(...importes, 1);
+  const media = importes.reduce((s, n) => s + n, 0) / importes.length;
+  document.getElementById('res-meses').innerHTML = ultimos.map((m, i) => `
+    <div class="res-mes-row">
+      <span style="color:${m === mes ? 'var(--lime)' : 'var(--text2)'}">${nombreMes(m)}</span>
+      <div class="pres-track"><div class="pres-fill ${importes[i] > media * 1.2 ? 'warn' : 'ok'}" style="width:${importes[i] / max * 100}%"></div></div>
+      <span>${fmt(importes[i])}</span>
+    </div>`).join('') + `<div class="pres-pct" style="margin-top:6px">Media mensual: ${fmt(media)} · en naranja, los meses un 20% por encima de la media</div>`;
 }
 
 let todasTxs = [];
@@ -1017,7 +1122,7 @@ function renderListaTxs(txs) {
     document.getElementById('total-count').textContent = txs.length;
   }
   if (!txs.length) { el.innerHTML = '<div class="empty-state"><div class="empty-icon">📋</div><div class="empty-text">No hay transacciones</div></div>'; return; }
-  const CATS_BASE = ['🍔 Comida','🏠 Alquiler','🎉 Ocio','🚇 Transporte','📦 Suscripciones','👕 Ropa','📚 Estudios','💊 Salud','💰 Nómina','🎁 Regalo','✈️ Viaje','📱 Tecnología','🏋️ Deporte','💳 Liquidación tarjeta','🔧 Otros'];
+  const CATS_BASE = ['🍔 Comida','🏠 Alquiler','🎉 Ocio','🚇 Transporte','📦 Suscripciones','👕 Ropa','📚 Estudios','💊 Salud','💰 Nómina','📱 Bizum enviado','📱 Bizum recibido','🎁 Regalo','✈️ Viaje','📱 Tecnología','🏋️ Deporte','💳 Liquidación tarjeta','🔧 Otros'];
   const catsExtra = getCatsPersonalizadas().filter(c => !CATS_BASE.includes(c));
   const CATS = [...CATS_BASE, ...catsExtra, '✏️ Otra...'];
   el.innerHTML = txs.map(t => `
@@ -1214,7 +1319,7 @@ async function cargarPresupuestos() {
     return `<div class="pres-row">
       <div class="pres-header">
         <div class="pres-cat">${p.categoria}</div>
-        <div class="pres-nums">${Math.round(gastado)} € / ${p.limite} €</div>
+        <div class="pres-nums">${fmt(gastado)} / ${fmt(p.limite)}</div>
       </div>
       <div class="pres-track"><div class="pres-fill ${estado}" style="width:${pct}%"></div></div>
       <div class="pres-pct">${Math.round(pct)}% — ${etiqueta}</div>
@@ -1259,7 +1364,7 @@ async function cargarMetas() {
         ${diasRestantes !== null ? `<div class="meta-date">Faltan ${diasRestantes} días</div>` : ''}
       </div>
       <div class="meta-track"><div class="meta-fill" style="width:${pct}%"></div></div>
-      <div class="meta-nums"><span>${Math.round(m.ahorrado)} € ahorrados</span><span>Meta: ${fmt(m.objetivo)}</span></div>
+      <div class="meta-nums"><span>${fmt(m.ahorrado)} ahorrados</span><span>Meta: ${fmt(m.objetivo)}</span></div>
       <div class="meta-actions">
         <button class="btn-aporte" onclick="aportarMeta('${m.id}', ${m.ahorrado}, ${m.objetivo})">+ Añadir ahorro</button>
         ${!isDemo ? `<button class="btn-del-meta" onclick="deleteMeta('${m.id}')">Eliminar</button>` : ''}
@@ -1561,13 +1666,13 @@ function getCatsPersonalizadas() {
   return cats;
 }
 
-function categoriaConAprendizaje(descripcion) {
+function categoriaConAprendizaje(descripcion, tipo) {
   const clave = descripcion.toLowerCase().trim();
   if (reglasCache[clave]) return reglasCache[clave];
   for (const [k, v] of Object.entries(reglasCache)) {
     if (clave.includes(k) || k.includes(clave)) return v;
   }
-  return categoriaAutomatica(descripcion);
+  return categoriaAutomatica(descripcion, tipo);
 }
 
 // ─── PARSER EFECTIVO / MANUAL ───
@@ -1630,7 +1735,7 @@ async function importarEfectivo(input) {
       }
 
       const importe = Math.abs(importeRaw);
-      const categoria = colCat >= 0 && r[colCat] ? String(r[colCat]).trim() : categoriaConAprendizaje(descripcion);
+      const categoria = colCat >= 0 && r[colCat] ? String(r[colCat]).trim() : categoriaConAprendizaje(descripcion, tipo);
       const desc = descripcion.startsWith('[Efectivo]') ? descripcion : '[Efectivo] ' + descripcion;
 
       // Leer banco de la columna Banco
@@ -1677,8 +1782,9 @@ function esLiquidacionTarjeta(descripcion) {
   return KEYWORDS_LIQ.some(k => d.includes(k.normalize('NFD').replace(/[\u0300-\u036f]/g, '')));
 }
 
-function categoriaAutomatica(descripcion) {
+function categoriaAutomatica(descripcion, tipo) {
   const d = (descripcion || '').toLowerCase();
+  if (/bizum/.test(d)) return tipo === 'ingreso' ? '📱 Bizum recibido' : '📱 Bizum enviado';
   if (/mercadona|carrefour|lidl|aldi|supermercado|fruteria|panaderia|alcampo|dia |eroski/.test(d)) return '🍔 Comida';
   if (/netflix|spotify|amazon prime|disney|hbo|apple|google play|playstation|steam/.test(d)) return '📦 Suscripciones';
   if (/renfe|metro|bus |uber|cabify|gasolinera|repsol|bp |cepsa|blablacar/.test(d)) return '🚇 Transporte';
@@ -1688,7 +1794,7 @@ function categoriaAutomatica(descripcion) {
   if (/universidad|academia|libro|formacion|udemy/.test(d)) return '📚 Estudios';
   if (/gym|gimnasio|sport|decathlon|fitness/.test(d)) return '🏋️ Deporte';
   if (/nomina|salario|sueldo|haberes/.test(d)) return '💰 Nómina';
-  if (/transferencia|bizum|recibido/.test(d)) return '💰 Nómina';
+  if (/transferencia|recibido/.test(d) && tipo === 'ingreso') return '💰 Nómina';
   if (/restaurante|bar |cafeteria|mcdonalds|burger|pizza|kebab|sushi/.test(d)) return '🍔 Comida';
   return '🔧 Otros';
 }
@@ -1860,7 +1966,7 @@ async function importarCuenta(input) {
       const esLiq = esLiquidacionTarjeta(descripcion);
       const tipo = esLiq ? 'liquidacion_tarjeta' : (importeRaw < 0 ? 'gasto' : 'ingreso');
       const importe = Math.abs(importeRaw);
-      const categoria = esLiq ? '💳 Liquidación tarjeta' : categoriaConAprendizaje(descripcion);
+      const categoria = esLiq ? '💳 Liquidación tarjeta' : categoriaConAprendizaje(descripcion, tipo);
       const medio = medioAutomatico(descripcion);
       txsNuevas.push({ fecha, descripcion, importe, tipo, categoria, medio, cuenta: banco });
     }
@@ -1941,7 +2047,7 @@ async function importarTarjeta(input) {
 
       const tipo = importeRaw < 0 ? 'gasto' : 'ingreso';
       const importe = Math.abs(importeRaw);
-      const categoria = categoriaConAprendizaje(descripcion);
+      const categoria = categoriaConAprendizaje(descripcion, tipo);
       txsNuevas.push({ fecha, descripcion, importe, tipo, categoria, medio: 'tarjeta', cuenta: banco + '_tarjeta' });
     }
 

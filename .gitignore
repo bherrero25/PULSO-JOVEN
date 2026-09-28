@@ -3,3 +3,10 @@
 node_modules/
 dist/
 .DS_Store
+
+# Extractos bancarios y datos personales: nunca subir
+datos/
+*.xls
+*.xlsx
+*.csv
+!plantilla-efectivo-pulso.xlsx

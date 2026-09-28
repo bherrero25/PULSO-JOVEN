@@ -36,7 +36,7 @@ Seguros, leasing, bonus anual, hipoteca, hijos ni patrimonio complejo.
 
 - **Supabase**: proyecto "Pulso Joven", transferido el 28/9/2026 a la organización **Sportmatchapp.es** (plan Pro, +10 $/mes) desde una organización Free propia donde estaba pausado.
 - `project-ref`: `tqjukdleqgbpseaipfel` (en el panel el proyecto se llama "Pulso", no confundir con la organización Pulso de la app adulta). URL: `https://tqjukdleqgbpseaipfel.supabase.co`
-- Se puede reanudar desde el panel hasta el **22/6/2027**; después solo se pueden descargar las copias de seguridad.
+- Reactivado el 28/9/2026. Tablas: `pj_transacciones`, `pj_metas`, `pj_presupuestos`, `pj_reglas_categoria`.
 - Código: HTML estático (`index.html` = login, `app.html` = app, `informe.html`) con supabase-js y la clave pública `sb_publishable_…`. Se despliega con GitHub Pages desde `main`.
 
 ## Pendiente de definir

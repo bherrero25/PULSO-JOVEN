@@ -1925,18 +1925,19 @@ async function importarCuenta(input) {
       rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
     }
 
-    // Buscar fila de cabecera
+    // Buscar fila de cabecera. Bankinter pone antes un bloque de "Movimientos pendientes"
+    // con otra cabecera (Fecha | Descripción | Importe | Divisa): se prefiere la cabecera
+    // de un banco reconocido y se ignora ese bloque, porque esos movimientos aún no están cerrados.
     let startRow = -1, cabecera = [], banco = 'generico';
-    for (let i = 0; i < Math.min(rows.length, 15); i++) {
+    for (let i = 0; i < Math.min(rows.length, 40); i++) {
       const r = rows[i];
       const rLow = r.map(c => String(c).toLowerCase());
       if (rLow.some(c => c.includes('fecha') || c.includes('date') || c.includes('data')) &&
           (rLow.some(c => c.includes('importe') || c.includes('amount') || c.includes('import')) ||
            rLow.some(c => c.includes('concepto') || c.includes('descripci') || c.includes('payee')))) {
-        startRow = i + 1;
-        cabecera = r;
-        banco = detectarBanco(r);
-        break;
+        const b = detectarBanco(r);
+        if (startRow < 0 || b !== 'generico') { startRow = i + 1; cabecera = r; banco = b; }
+        if (b !== 'generico') break;
       }
     }
 

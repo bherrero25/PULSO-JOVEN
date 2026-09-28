@@ -410,6 +410,7 @@ input[type=file] { display: none; }
         <div class="kpi"><div class="kpi-label">Gastos</div><div class="kpi-value neg" id="kpi-gastos">0 €</div></div>
         <div class="kpi"><div class="kpi-label">Saldo neto</div><div class="kpi-value neu" id="kpi-saldo">0 €</div></div>
         <div class="kpi"><div class="kpi-label">Transacciones</div><div class="kpi-value neu" id="kpi-txs">0</div></div>
+        <div class="kpi" id="kpi-familia-box" style="grid-column:1/-1;display:none"><div class="kpi-label">👨‍👩‍👦 Familia · aparte</div><div class="kpi-value neu" id="kpi-familia">0 €</div><div class="pres-pct" id="kpi-familia-sub" style="margin-top:4px"></div></div>
       </div>
       <div class="card">
         <div class="card-title">Últimos movimientos</div>
@@ -908,7 +909,10 @@ const CAT_MENSUALIDAD = '💰 Mensualidad';
 const esReenvio = t => t.tipo === 'gasto' && t.categoria === CAT_REENVIO;
 const esGasto = t => t.tipo === 'gasto' && t.categoria !== CAT_REENVIO;
 const sumar = arr => arr.reduce((s, t) => s + parseFloat(t.importe), 0);
-const totalIngresos = txs => sumar(txs.filter(t => t.tipo === 'ingreso')) - sumar(txs.filter(esReenvio));
+// Ingresos y gastos "generales" dejan fuera el dinero de familia (Mensualidad y Reenviado), que va aparte
+const esMensualidad = t => t.tipo === 'ingreso' && t.categoria === CAT_MENSUALIDAD;
+const totalIngresos = txs => sumar(txs.filter(t => t.tipo === 'ingreso' && !esMensualidad(t)));
+const netoFamilia = txs => sumar(txs.filter(esMensualidad)) - sumar(txs.filter(esReenvio));
 const totalGastos = txs => sumar(txs.filter(esGasto));
 function fmt(n) { return Math.abs(n).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €'; }
 function fmtFecha(f) { return new Date(f + 'T12:00:00').toLocaleDateString('es-ES', { day: 'numeric', month: 'short' }); }
@@ -1191,9 +1195,9 @@ function renderResumen() {
   if (otros.length) {
     html += `<div style="height:14px"></div>` + subtitulo('Otros ingresos');
     html += otros.map(([c, v]) => fila(esc(c), v, 'var(--lime)')).join('');
-    html += totalFila('Total otros ingresos', otros.reduce((s, [, v]) => s + v, 0));
+    html += totalFila('Ingresos del mes (sin familia)', otros.reduce((s, [, v]) => s + v, 0));
   }
-  if (html) html += `<div style="height:14px"></div>` + totalFila('Ingresos netos del mes', totalIngresos(txsMes));
+
   document.getElementById('res-ingresos').innerHTML = html || '<div class="pres-pct">Sin ingresos este mes</div>';
 
   // Evolución mes a mes (todos los gastos o una categoría)
@@ -1276,7 +1280,7 @@ function renderListaTxs(txs) {
   // Totales
   const gastos = totalGastos(txs);
   const ingresos = totalIngresos(txs);
-  const neto = ingresos - gastos;
+  const neto = ingresos + netoFamilia(txs) - gastos;
   const totDiv = document.getElementById('txs-totales');
   if (totDiv) {
     totDiv.style.display = txs.length ? 'flex' : 'none';
@@ -1330,8 +1334,15 @@ function renderInicio(txs) {
   if (cuentaSel) mesTxs = mesTxs.filter(t => (t.cuenta || 'principal') === cuentaSel);
   const ingresos = totalIngresos(mesTxs);
   const gastos = totalGastos(mesTxs);
-  // Las liquidaciones de tarjeta NO se suman a gastos (ya están en los movimientos de tarjeta)
-  const saldo = ingresos - gastos;
+  const familia = netoFamilia(mesTxs);
+  // Las liquidaciones de tarjeta NO se suman a gastos (ya están en los movimientos de tarjeta).
+  // El saldo sí incluye el neto de familia, para que cuadre con lo que de verdad entra y sale.
+  const saldo = ingresos + familia - gastos;
+
+  const mens = sumar(mesTxs.filter(esMensualidad)), reen = sumar(mesTxs.filter(esReenvio));
+  document.getElementById('kpi-familia-box').style.display = (mens || reen) ? 'block' : 'none';
+  document.getElementById('kpi-familia').textContent = (familia >= 0 ? '+' : '−') + fmt(familia);
+  document.getElementById('kpi-familia-sub').textContent = `Mensualidad +${fmt(mens)} · Reenviado −${fmt(reen)}`;
 
   document.getElementById('kpi-ingresos').textContent = fmt(ingresos);
   document.getElementById('kpi-gastos').textContent = fmt(gastos);
@@ -1340,12 +1351,13 @@ function renderInicio(txs) {
   document.getElementById('kpi-txs').textContent = mesTxs.length;
 
   // Semáforo
-  const tasaAhorro = ingresos > 0 ? (ingresos - gastos) / ingresos : 0;
+  const disponible = ingresos + Math.max(familia, 0);
+  const tasaAhorro = disponible > 0 ? (disponible - gastos) / disponible : 0;
   const sc = document.getElementById('semaforo-card');
   const circle = document.getElementById('sem-circle');
   sc.className = 'semaforo-card';
   circle.className = 'sem-circle';
-  if (ingresos === 0) {
+  if (disponible === 0) {
     sc.classList.add('verde'); circle.classList.add('verde');
     document.getElementById('sem-emoji').textContent = '🟢';
     document.getElementById('sem-titulo').textContent = 'Sin datos';

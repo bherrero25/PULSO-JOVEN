@@ -207,17 +207,20 @@ async function cargarInforme() {
   // "↩️ Reenviado" no es gasto: se descuenta de los ingresos (igual que en la app)
   const esReenvio = t => t.tipo === 'gasto' && t.categoria === '↩️ Reenviado';
   const esGasto = t => t.tipo === 'gasto' && !esReenvio(t);
+  const esMensualidad = t => t.tipo === 'ingreso' && t.categoria === '💰 Mensualidad';
   const sumar = a => a.reduce((s,t) => s + parseFloat(t.importe), 0);
   const calc = (arr) => ({
-    ingresos: sumar(arr.filter(t => t.tipo === 'ingreso')) - sumar(arr.filter(esReenvio)),
+    // Ingresos generales sin el dinero de familia, que va aparte (neto: mensualidad − reenviado)
+    ingresos: sumar(arr.filter(t => t.tipo === 'ingreso' && !esMensualidad(t))),
+    familia: sumar(arr.filter(esMensualidad)) - sumar(arr.filter(esReenvio)),
     gastos: sumar(arr.filter(esGasto)),
     count: arr.filter(t => t.tipo !== 'liquidacion_tarjeta').length
   });
 
   const actual = calc(txsMes);
   const anterior = calc(txsAnt);
-  actual.ahorro = actual.ingresos - actual.gastos;
-  anterior.ahorro = anterior.ingresos - anterior.gastos;
+  actual.ahorro = actual.ingresos + actual.familia - actual.gastos;
+  anterior.ahorro = anterior.ingresos + anterior.familia - anterior.gastos;
 
   // Gastos por categoría
   const porCat = {};
@@ -242,7 +245,7 @@ async function cargarInforme() {
   }
   txsMes.filter(t => t.tipo !== 'liquidacion_tarjeta').forEach(t => {
     if (diasDelMes[t.fecha]) {
-      if (esReenvio(t)) diasDelMes[t.fecha].ingresos -= parseFloat(t.importe);
+      if (esReenvio(t) || esMensualidad(t)) return;
       else if (t.tipo === 'gasto') diasDelMes[t.fecha].gastos += parseFloat(t.importe);
       else diasDelMes[t.fecha].ingresos += parseFloat(t.importe);
     }

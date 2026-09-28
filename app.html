@@ -1860,10 +1860,10 @@ function getCatsPersonalizadas() {
   return cats;
 }
 
-// Concepto sin tildes, espacios repetidos ni la fecha que Bankinter añade al final ("BAR PEPE 25/09/26")
+// Concepto sin tildes, espacios repetidos, símbolos de relleno (#, $) ni la fecha que Bankinter añade al final ("BAR PEPE 25/09/26")
 function claveConcepto(s) {
   return String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-    .replace(/\s+\d{1,2}\/\d{1,2}\/\d{2,4}\s*$/, '').replace(/\s+/g, ' ').trim();
+    .replace(/\s+\d{1,2}\/\d{1,2}\/\d{2,4}\s*$/, '').replace(/[#$*]+/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
 function categoriaConAprendizaje(descripcion, tipo) {

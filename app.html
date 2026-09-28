@@ -1988,6 +1988,8 @@ function categoriaAutomatica(descripcion, tipo) {
   const d = (descripcion || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
   if (/bizum/.test(d)) return tipo === 'ingreso' ? '📱 Bizum recibido' : '📱 Bizum enviado';
   if (/recobro|recibo visa|visa clasica|liquidacion tarjeta/.test(d)) return '💳 Cargo tarjeta';
+  // "E S ..." = estación de servicio (p. ej. "E S ALCAMPO"): va antes que el súper del mismo nombre
+  if (/^e ?s |^e\.s\. |estacion(es)? de servicio/.test(d)) return '⛽ Gasolina';
   if (/mercadona|carrefour|lidl|aldi|supermercado|simply|market|fruteria|panaderia|alcampo|dia |eroski|consum|hipercor/.test(d)) return '🍔 Comida';
   if (/netflix|spotify|amazon prime|disney|hbo|apple|google play|playstation|steam/.test(d)) return '📦 Suscripciones';
   if (/renfe|iryo|ouigo|alsa|autobus|nextbike|metro|bus |uber|cabify|blablacar|taxi|parking|norauto/.test(d)) return '🚇 Transporte';

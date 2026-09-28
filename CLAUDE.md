@@ -39,6 +39,22 @@ Seguros, leasing, bonus anual, hipoteca, hijos ni patrimonio complejo.
 - Reactivado el 28/9/2026. Tablas: `pj_transacciones`, `pj_metas`, `pj_presupuestos`, `pj_reglas_categoria`.
 - Código: HTML estático (`index.html` = login, `app.html` = app, `informe.html`) con supabase-js y la clave pública `sb_publishable_…`. Se despliega con GitHub Pages desde `main`.
 
+## Funcionamiento clave (sep. 2026)
+
+- Importación del Excel de Bankinter (`importarCuenta`): ignora el bloque de "movimientos pendientes" del principio.
+- Categorías automáticas en `categoriaAutomatica` + reglas aprendidas por usuario en `pj_reglas_categoria` (clave normalizada con `claveConcepto`, sin la fecha final de Bankinter).
+- Familia: `💰 Mensualidad` (ingreso) y `↩️ Reenviado` (gasto que no es gasto) quedan fuera de ingresos/gastos generales y se muestran aparte; lo de los últimos 3 días del mes cuenta para el siguiente (`mesEfectivo`). Las reglas con nombres reales viven solo en la base de datos, nunca en el código (repo público).
+- Los extractos reales van en `datos/` (ignorado por git).
+
+## Pendiente antes de venderla
+
+- [ ] Revisar a fondo RLS (cada usuario solo ve lo suyo)
+- [ ] Probar importación con otros bancos (solo probado Bankinter)
+- [ ] Cobro del plan Pro (la portada lo anuncia, no existe)
+- [ ] Política de privacidad y condiciones (RGPD)
+- [ ] Nombre propio (ahora "Pulso", igual que la app adulta)
+- [ ] Repo privado + despliegue en Vercel
+
 ## Pendiente de definir
 
 - [ ] Nombre de marca

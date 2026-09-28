@@ -187,7 +187,7 @@ html, body { height: 100%; font-family: 'DM Sans', sans-serif; background: var(-
 .res-mes-row { display: grid; grid-template-columns: 90px 1fr auto; align-items: center; gap: 10px; font-size: 13px; margin-bottom: 10px; }
 .res-mes-row .pres-track { margin: 0; }
 .res-graf { position: relative; }
-.res-graf { max-width: 420px; }
+.res-graf { max-width: 360px; }
 .res-graf svg { display: block; width: 100%; height: auto; overflow: visible; }
 .res-graf .seg { cursor: pointer; }
 .res-graf .seg:hover, .res-graf .seg.on { stroke: var(--text); stroke-width: 1.5; }
@@ -1067,7 +1067,7 @@ function renderGraficoMeses(gastos, meses, mesSel) {
   const paso = [10, 20, 25, 50, 100, 200, 250, 500, 1000, 2000, 2500, 5000].find(p => maxTotal / p <= 4) || 10000;
   const tope = Math.ceil(maxTotal / paso) * paso;
 
-  const W = 320, H = 190, izq = 40, der = 4, arr = 8, abj = 22;
+  const W = 320, H = 165, izq = 40, der = 4, arr = 8, abj = 22;
   const anchoPlot = W - izq - der, altoPlot = H - arr - abj;
   const hueco = anchoPlot / ms.length;
   const anchoBarra = Math.min(28, hueco * 0.62);

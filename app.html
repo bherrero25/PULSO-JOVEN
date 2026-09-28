@@ -462,6 +462,7 @@ input[type=file] { display: none; }
               <option value="🏠 Alquiler">🏠 Alquiler</option>
               <option value="🎉 Ocio">🎉 Ocio</option>
               <option value="🚇 Transporte">🚇 Transporte</option>
+              <option value="⛽ Gasolina">⛽ Gasolina</option>
               <option value="📦 Suscripciones">📦 Suscripciones</option>
               <option value="👕 Ropa">👕 Ropa</option>
               <option value="📚 Estudios">📚 Estudios</option>
@@ -617,6 +618,7 @@ input[type=file] { display: none; }
               <option value="🏠 Alquiler">
               <option value="🎉 Ocio">
               <option value="🚇 Transporte">
+              <option value="⛽ Gasolina">
               <option value="📦 Suscripciones">
               <option value="👕 Ropa">
               <option value="📚 Estudios">
@@ -807,6 +809,7 @@ input[type=file] { display: none; }
             <option value="🍔 Comida">🍔 Comida</option>
             <option value="🎉 Ocio">🎉 Ocio</option>
             <option value="🚇 Transporte">🚇 Transporte</option>
+              <option value="⛽ Gasolina">⛽ Gasolina</option>
             <option value="👕 Ropa">👕 Ropa</option>
             <option value="📚 Estudios">📚 Estudios</option>
             <option value="💊 Salud">💊 Salud</option>
@@ -1122,7 +1125,7 @@ function renderListaTxs(txs) {
     document.getElementById('total-count').textContent = txs.length;
   }
   if (!txs.length) { el.innerHTML = '<div class="empty-state"><div class="empty-icon">📋</div><div class="empty-text">No hay transacciones</div></div>'; return; }
-  const CATS_BASE = ['🍔 Comida','🏠 Alquiler','🎉 Ocio','🚇 Transporte','📦 Suscripciones','👕 Ropa','📚 Estudios','💊 Salud','💰 Nómina','📱 Bizum enviado','📱 Bizum recibido','🎁 Regalo','✈️ Viaje','📱 Tecnología','🏋️ Deporte','💳 Liquidación tarjeta','🔧 Otros'];
+  const CATS_BASE = ['🍔 Comida','🏠 Alquiler','🎉 Ocio','🚇 Transporte','⛽ Gasolina','📦 Suscripciones','👕 Ropa','📚 Estudios','💊 Salud','💰 Nómina','💰 Ingresos','📱 Bizum enviado','📱 Bizum recibido','🎁 Regalo','✈️ Viaje','📱 Tecnología','🏋️ Deporte','💳 Liquidación tarjeta','🔧 Otros'];
   const catsExtra = getCatsPersonalizadas().filter(c => !CATS_BASE.includes(c));
   const CATS = [...CATS_BASE, ...catsExtra, '✏️ Otra...'];
   el.innerHTML = txs.map(t => `
@@ -1783,19 +1786,22 @@ function esLiquidacionTarjeta(descripcion) {
 }
 
 function categoriaAutomatica(descripcion, tipo) {
-  const d = (descripcion || '').toLowerCase();
+  const d = (descripcion || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
   if (/bizum/.test(d)) return tipo === 'ingreso' ? '📱 Bizum recibido' : '📱 Bizum enviado';
-  if (/mercadona|carrefour|lidl|aldi|supermercado|fruteria|panaderia|alcampo|dia |eroski/.test(d)) return '🍔 Comida';
+  if (/mercadona|carrefour|lidl|aldi|supermercado|simply|market|fruteria|panaderia|alcampo|dia |eroski|consum|hipercor/.test(d)) return '🍔 Comida';
   if (/netflix|spotify|amazon prime|disney|hbo|apple|google play|playstation|steam/.test(d)) return '📦 Suscripciones';
-  if (/renfe|metro|bus |uber|cabify|gasolinera|repsol|bp |cepsa|blablacar/.test(d)) return '🚇 Transporte';
+  if (/renfe|iryo|ouigo|alsa|autobus|nextbike|metro|bus |uber|cabify|blablacar|taxi|parking|norauto/.test(d)) return '🚇 Transporte';
+  if (/gasolinera|estacion(es)? de servicio|petroprix|plenergy|repsol|bp |cepsa|galp|shell|ballenoil|plenoil/.test(d)) return '⛽ Gasolina';
+  if (/winamax|bet365|codere|sportium|pokerstars|loteria|apuesta/.test(d)) return '🎲 Apuestas';
   if (/alquiler|arrendamiento|comunidad|hipoteca/.test(d)) return '🏠 Alquiler';
   if (/zara|mango|h&m|primark|stradivarius|pull|bershka|nike|adidas/.test(d)) return '👕 Ropa';
   if (/farmacia|medico|clinica|hospital|dentista|salud/.test(d)) return '💊 Salud';
   if (/universidad|academia|libro|formacion|udemy/.test(d)) return '📚 Estudios';
-  if (/gym|gimnasio|sport|decathlon|fitness/.test(d)) return '🏋️ Deporte';
+  if (/boulder|escalada|rocodromo|gym|gimnasio|(?<!tran)sport|decathlon|fitness/.test(d)) return '🏋️ Deporte';
+  if (/sala suite|discoteca|pub |cines?|teatro|concierto|entradas|fourvenues|ticketmaster|savage garden/.test(d)) return '🎉 Ocio';
   if (/nomina|salario|sueldo|haberes/.test(d)) return '💰 Nómina';
-  if (/transferencia|recibido/.test(d) && tipo === 'ingreso') return '💰 Nómina';
-  if (/restaurante|bar |cafeteria|mcdonalds|burger|pizza|kebab|sushi/.test(d)) return '🍔 Comida';
+  if (/transferencia|trans inm|transf|trans \/|paypal|recibido/.test(d) && tipo === 'ingreso') return '💰 Ingresos';
+  if (/restaurante|bar |cafeteria|mc ?donald|cafe |burger|pizz|kebab|sushi|montaditos|to go|telepizza|foster|goiko|kfc/.test(d)) return '🍔 Comida';
   return '🔧 Otros';
 }
 

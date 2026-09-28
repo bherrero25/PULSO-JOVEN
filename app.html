@@ -615,6 +615,10 @@ input[type=file] { display: none; }
         <div id="res-cats"></div>
       </div>
       <div class="card">
+        <div class="card-title">Ingresos del mes</div>
+        <div id="res-ingresos"></div>
+      </div>
+      <div class="card">
         <div class="card-title">Mes a mes</div>
         <select id="res-cat" class="form-input" onchange="renderResumen()" style="margin-bottom:16px"></select>
         <div id="res-meses"></div>
@@ -898,6 +902,13 @@ function hoy(offset = 0) {
   return d.toISOString().split('T')[0];
 }
 function mesActual() { return new Date().toISOString().slice(0, 7); }
+// "↩️ Reenviado": dinero que llega y se pasa a otra persona. No es gasto: se descuenta de los ingresos.
+const CAT_REENVIO = '↩️ Reenviado';
+const esReenvio = t => t.tipo === 'gasto' && t.categoria === CAT_REENVIO;
+const esGasto = t => t.tipo === 'gasto' && t.categoria !== CAT_REENVIO;
+const sumar = arr => arr.reduce((s, t) => s + parseFloat(t.importe), 0);
+const totalIngresos = txs => sumar(txs.filter(t => t.tipo === 'ingreso')) - sumar(txs.filter(esReenvio));
+const totalGastos = txs => sumar(txs.filter(esGasto));
 function fmt(n) { return Math.abs(n).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €'; }
 function fmtFecha(f) { return new Date(f + 'T12:00:00').toLocaleDateString('es-ES', { day: 'numeric', month: 'short' }); }
 
@@ -1108,7 +1119,7 @@ function renderResumen() {
   const selCat = document.getElementById('res-cat');
   if (!selMes) return;
   // Solo gastos reales: las liquidaciones de tarjeta ya están en los movimientos de tarjeta
-  const gastos = todasTxs.filter(t => t.tipo === 'gasto');
+  const gastos = todasTxs.filter(esGasto);
   const meses = [...new Set(gastos.map(t => t.fecha.slice(0, 7)))].sort().reverse();
 
   if (!meses.length) {
@@ -1153,6 +1164,22 @@ function renderResumen() {
   }).join('');
 
   renderGraficoMeses(gastos, meses, mes);
+
+  // Ingresos del mes por categoría; lo reenviado a otra persona se resta aparte
+  const txsMes = todasTxs.filter(t => t.fecha.slice(0, 7) === mes);
+  const ingCat = {};
+  txsMes.filter(t => t.tipo === 'ingreso').forEach(t => {
+    const c = t.categoria || '🔧 Otros';
+    ingCat[c] = (ingCat[c] || 0) + parseFloat(t.importe);
+  });
+  const reenviado = sumar(txsMes.filter(esReenvio));
+  const filasIng = Object.entries(ingCat).sort((a, b) => b[1] - a[1])
+    .map(([c, v]) => `<div class="res-det-row"><span>${esc(c)}</span><span style="color:var(--lime)">+${fmt(v)}</span></div>`);
+  if (reenviado) filasIng.push(`<div class="res-det-row"><span>${CAT_REENVIO} <span style="color:var(--text3)">(no es gasto)</span></span><span style="color:var(--amber)">−${fmt(reenviado)}</span></div>`);
+  const netoIng = totalIngresos(txsMes);
+  document.getElementById('res-ingresos').innerHTML = filasIng.length
+    ? filasIng.join('') + `<div class="res-det-row" style="border-top:1px solid var(--border);margin-top:6px;padding-top:10px;font-weight:600"><span>Ingresos netos</span><span>${netoIng < 0 ? '−' : '+'}${fmt(netoIng)}</span></div>`
+    : '<div class="pres-pct">Sin ingresos este mes</div>';
 
   // Evolución mes a mes (todos los gastos o una categoría)
   const todasCats = [...new Set(gastos.map(t => t.categoria || '🔧 Otros'))].sort();
@@ -1232,8 +1259,8 @@ function renderListaTxs(txs) {
   const el = document.getElementById('lista-txs');
 
   // Totales
-  const gastos = txs.filter(t => t.tipo === 'gasto').reduce((s, t) => s + parseFloat(t.importe), 0);
-  const ingresos = txs.filter(t => t.tipo === 'ingreso').reduce((s, t) => s + parseFloat(t.importe), 0);
+  const gastos = totalGastos(txs);
+  const ingresos = totalIngresos(txs);
   const neto = ingresos - gastos;
   const totDiv = document.getElementById('txs-totales');
   if (totDiv) {
@@ -1246,7 +1273,7 @@ function renderListaTxs(txs) {
     document.getElementById('total-count').textContent = txs.length;
   }
   if (!txs.length) { el.innerHTML = '<div class="empty-state"><div class="empty-icon">📋</div><div class="empty-text">No hay transacciones</div></div>'; return; }
-  const CATS_BASE = ['🍔 Comida','🏠 Alquiler','🎉 Ocio','🚇 Transporte','⛽ Gasolina','📦 Suscripciones','👕 Ropa','📚 Estudios','💊 Salud','💰 Nómina','💰 Ingresos','📱 Bizum enviado','📱 Bizum recibido','🎁 Regalo','✈️ Viaje','📱 Tecnología','🏋️ Deporte','💳 Liquidación tarjeta','🔧 Otros'];
+  const CATS_BASE = ['🍔 Comida','🏠 Alquiler','🎉 Ocio','🚇 Transporte','⛽ Gasolina','📦 Suscripciones','👕 Ropa','📚 Estudios','💊 Salud','💰 Nómina','💰 Mensualidad','💰 Ingresos',CAT_REENVIO,'📱 Bizum enviado','📱 Bizum recibido','🎁 Regalo','✈️ Viaje','📱 Tecnología','🏋️ Deporte','💳 Liquidación tarjeta','🔧 Otros'];
   const catsExtra = getCatsPersonalizadas().filter(c => !CATS_BASE.includes(c));
   const CATS = [...CATS_BASE, ...catsExtra, '✏️ Otra...'];
   el.innerHTML = txs.map(t => `
@@ -1275,7 +1302,7 @@ function renderListaTxs(txs) {
         </div>
       </div>
       <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
-        <div class="tx-amount ${t.tipo === 'gasto' ? 'neg' : t.tipo === 'liquidacion_tarjeta' ? '' : 'pos'}" style="${t.tipo === 'liquidacion_tarjeta' ? 'color:var(--amber)' : ''}">${t.tipo === 'gasto' ? '−' : t.tipo === 'liquidacion_tarjeta' ? '≈' : '+'}${fmt(t.importe)}</div>
+        <div class="tx-amount ${esGasto(t) ? 'neg' : t.tipo === 'ingreso' ? 'pos' : ''}" style="${t.tipo === 'liquidacion_tarjeta' || esReenvio(t) ? 'color:var(--amber)' : ''}" title="${esReenvio(t) ? 'Reenviado: se descuenta de los ingresos, no es gasto' : ''}">${esReenvio(t) ? '↩ ' : esGasto(t) ? '−' : t.tipo === 'liquidacion_tarjeta' ? '≈' : '+'}${fmt(t.importe)}</div>
         ${!isDemo ? `<button class="tx-delete" onclick="deleteTx('${t.id}')">×</button>` : ''}
       </div>
     </div>`).join('');
@@ -1286,8 +1313,8 @@ function renderInicio(txs) {
   const cuentaSel = document.getElementById('inicio-cuenta')?.value || '';
   let mesTxs = mesSel === 'todo' ? txs : txs.filter(t => t.fecha.slice(0, 7) === mesSel);
   if (cuentaSel) mesTxs = mesTxs.filter(t => (t.cuenta || 'principal') === cuentaSel);
-  const ingresos = mesTxs.filter(t => t.tipo === 'ingreso').reduce((s, t) => s + parseFloat(t.importe), 0);
-  const gastos = mesTxs.filter(t => t.tipo === 'gasto').reduce((s, t) => s + parseFloat(t.importe), 0);
+  const ingresos = totalIngresos(mesTxs);
+  const gastos = totalGastos(mesTxs);
   // Las liquidaciones de tarjeta NO se suman a gastos (ya están en los movimientos de tarjeta)
   const saldo = ingresos - gastos;
 
@@ -1405,9 +1432,10 @@ async function cambiarCategoria(id, nuevaCat) {
   // Guardar regla de aprendizaje en Supabase
   const t = todasTxs.find(x => x.id === id);
   if (t) await guardarRegla(t.descripcion, nuevaCat);
-  // Los movimientos del mismo comercio que seguían en "Otros" cambian también
+  // Los movimientos del mismo concepto que seguían en "Otros" o en la misma categoría cambian también
   const clave = t ? claveConcepto(t.descripcion) : null;
-  const iguales = t ? todasTxs.filter(x => x.id !== id && x.categoria === '🔧 Otros' && claveConcepto(x.descripcion) === clave) : [];
+  const catAnterior = t?.categoria;
+  const iguales = t ? todasTxs.filter(x => x.id !== id && x.tipo === t.tipo && (x.categoria === '🔧 Otros' || x.categoria === catAnterior) && claveConcepto(x.descripcion) === clave) : [];
   if (!isDemo) {
     await sb.from('pj_transacciones').update({ categoria: nuevaCat }).eq('id', id);
     if (iguales.length) await sb.from('pj_transacciones').update({ categoria: nuevaCat }).in('id', iguales.map(x => x.id));
@@ -1435,7 +1463,7 @@ async function cargarPresupuestos() {
   const [pres, txs] = await Promise.all([getPresupuestos(), getTransacciones()]);
   const mes = mesActual();
   const gastosPorCat = {};
-  txs.filter(t => t.fecha.slice(0, 7) === mes && t.tipo === 'gasto').forEach(t => {
+  txs.filter(t => t.fecha.slice(0, 7) === mes && esGasto(t)).forEach(t => {
     gastosPorCat[t.categoria] = (gastosPorCat[t.categoria] || 0) + parseFloat(t.importe);
   });
 

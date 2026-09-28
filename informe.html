@@ -204,9 +204,13 @@ async function cargarInforme() {
     txsAnt = txsAnt.filter(t => (t.cuenta || 'principal') === cuenta);
   }
 
+  // "↩️ Reenviado" no es gasto: se descuenta de los ingresos (igual que en la app)
+  const esReenvio = t => t.tipo === 'gasto' && t.categoria === '↩️ Reenviado';
+  const esGasto = t => t.tipo === 'gasto' && !esReenvio(t);
+  const sumar = a => a.reduce((s,t) => s + parseFloat(t.importe), 0);
   const calc = (arr) => ({
-    ingresos: arr.filter(t => t.tipo === 'ingreso').reduce((s,t) => s + parseFloat(t.importe), 0),
-    gastos: arr.filter(t => t.tipo === 'gasto').reduce((s,t) => s + parseFloat(t.importe), 0),
+    ingresos: sumar(arr.filter(t => t.tipo === 'ingreso')) - sumar(arr.filter(esReenvio)),
+    gastos: sumar(arr.filter(esGasto)),
     count: arr.filter(t => t.tipo !== 'liquidacion_tarjeta').length
   });
 
@@ -217,14 +221,14 @@ async function cargarInforme() {
 
   // Gastos por categoría
   const porCat = {};
-  txsMes.filter(t => t.tipo === 'gasto').forEach(t => {
+  txsMes.filter(esGasto).forEach(t => {
     porCat[t.categoria] = (porCat[t.categoria] || 0) + parseFloat(t.importe);
   });
   const catsSorted = Object.entries(porCat).sort((a,b) => b[1]-a[1]);
 
   // Gastos por medio
   const porMedio = { efectivo: 0, tarjeta: 0, bizum: 0, transferencia: 0 };
-  txsMes.filter(t => t.tipo === 'gasto').forEach(t => {
+  txsMes.filter(esGasto).forEach(t => {
     const m = t.medio || 'transferencia';
     porMedio[m] = (porMedio[m] || 0) + parseFloat(t.importe);
   });
@@ -238,7 +242,8 @@ async function cargarInforme() {
   }
   txsMes.filter(t => t.tipo !== 'liquidacion_tarjeta').forEach(t => {
     if (diasDelMes[t.fecha]) {
-      if (t.tipo === 'gasto') diasDelMes[t.fecha].gastos += parseFloat(t.importe);
+      if (esReenvio(t)) diasDelMes[t.fecha].ingresos -= parseFloat(t.importe);
+      else if (t.tipo === 'gasto') diasDelMes[t.fecha].gastos += parseFloat(t.importe);
       else diasDelMes[t.fecha].ingresos += parseFloat(t.importe);
     }
   });
@@ -265,7 +270,7 @@ async function cargarInforme() {
       <div class="kpi">
         <div class="kpi-label">Gastos</div>
         <div class="kpi-value neg">${fmt(actual.gastos)}</div>
-        <div class="kpi-sub">${txsMes.filter(t=>t.tipo==='gasto').length} transacciones</div>
+        <div class="kpi-sub">${txsMes.filter(esGasto).length} transacciones</div>
       </div>
       <div class="kpi">
         <div class="kpi-label">Ahorro neto</div>

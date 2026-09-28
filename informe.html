@@ -420,15 +420,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Obtener mes del parámetro URL si viene de la app
   const params = new URLSearchParams(window.location.search);
   const mesPar = params.get('mes');
-  // Últimos 24 meses hasta el actual (y el que venga de la app, si es más antiguo)
+  // Meses del año en curso, del actual hacia atrás
   const selMes = document.getElementById('sel-mes');
   const hoyD = new Date();
   const meses = [];
-  for (let i = 0; i < 24; i++) {
-    const d = new Date(hoyD.getFullYear(), hoyD.getMonth() - i, 1);
-    meses.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
-  }
-  if (mesPar && /^\d{4}-\d{2}$/.test(mesPar) && !meses.includes(mesPar)) meses.push(mesPar);
+  for (let m = hoyD.getMonth() + 1; m >= 1; m--) meses.push(`${hoyD.getFullYear()}-${String(m).padStart(2, '0')}`);
   selMes.innerHTML = meses.map(m => `<option value="${m}">${nombreMes(m)}</option>`).join('');
   selMes.value = mesPar && meses.includes(mesPar) ? mesPar : meses[0];
 

@@ -2291,17 +2291,15 @@ async function guardarImportacion(txs) {
   await cargarTransacciones(); await cargarPresupuestos();
 }
 
-// Selector de mes de Inicio: todos los meses + los últimos 24 hasta el actual
+// Selector de mes de Inicio: los meses del año en curso, del actual hacia atrás
 function llenarSelectorMeses() {
-  const sel = document.getElementById('inicio-mes');
   const h = new Date();
-  let html = '<option value="todo">📅 Todos los meses</option>';
-  for (let i = 0; i < 24; i++) {
-    const d = new Date(h.getFullYear(), h.getMonth() - i, 1);
-    const m = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-    html += `<option value="${m}">${nombreMes(m)}</option>`;
+  let html = '';
+  for (let m = h.getMonth() + 1; m >= 1; m--) {
+    const ym = `${h.getFullYear()}-${String(m).padStart(2, '0')}`;
+    html += `<option value="${ym}">${nombreMes(ym)}</option>`;
   }
-  sel.innerHTML = html;
+  document.getElementById('inicio-mes').innerHTML = html;
 }
 
 // ─── INIT ───

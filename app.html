@@ -618,6 +618,7 @@ input[type=file] { display: none; }
       </div>
       <div class="card">
         <div class="card-title">Ingresos del mes</div>
+        <div class="pres-pct" style="margin:-6px 0 10px">Toca una línea para ver de dónde viene</div>
         <div id="res-ingresos"></div>
       </div>
       <div class="card">
@@ -1189,24 +1190,28 @@ function renderResumen() {
   const subtitulo = txt => `<div class="pres-pct" style="text-transform:uppercase;letter-spacing:1px;margin:4px 0 2px">${txt}</div>`;
   const totalFila = (txt, v) => `<div class="res-det-row" style="border-top:1px solid var(--border);margin-top:4px;padding-top:8px;font-weight:600"><span>${txt}</span><span>${v < 0 ? '−' : '+'}${fmt(v)}</span></div>`;
 
-  const mensualidad = sumar(txsMes.filter(t => t.tipo === 'ingreso' && t.categoria === CAT_MENSUALIDAD));
-  const reenviado = sumar(txsMes.filter(esReenvio));
+  // Cada línea se puede desplegar para ver sus movimientos, igual que los gastos
+  const filaDet = (txt, v, color, txs) => `<details class="res-cat" style="margin-bottom:2px"><summary>${fila(txt + ' <span style="color:var(--text3)">▾</span>', v, color)}</summary><div class="res-det">${
+    txs.sort((a, b) => b.fecha.localeCompare(a.fecha)).map(t => `<div class="res-det-row"><span>${fmtFecha(t.fecha)} · ${esc(t.descripcion)}</span><span>${fmt(t.importe)}</span></div>`).join('')}</div></details>`;
+  const txsMens = txsMes.filter(esMensualidad), txsReen = txsMes.filter(esReenvio);
+  const mensualidad = sumar(txsMens);
+  const reenviado = sumar(txsReen);
   const otrosIng = {};
   txsMes.filter(t => t.tipo === 'ingreso' && t.categoria !== CAT_MENSUALIDAD).forEach(t => {
     const c = t.categoria || '🔧 Otros';
-    otrosIng[c] = (otrosIng[c] || 0) + parseFloat(t.importe);
+    (otrosIng[c] ||= []).push(t);
   });
   let html = '';
   if (mensualidad || reenviado) {
     html += subtitulo('👨‍👩‍👦 Familia');
-    if (mensualidad) html += fila(CAT_MENSUALIDAD, mensualidad, 'var(--lime)');
-    if (reenviado) html += fila(`${CAT_REENVIO} <span style="color:var(--text3)">(se resta)</span>`, -reenviado, 'var(--amber)');
+    if (mensualidad) html += filaDet(CAT_MENSUALIDAD, mensualidad, 'var(--lime)', txsMens);
+    if (reenviado) html += filaDet(`${CAT_REENVIO} <span style="color:var(--text3)">(se resta)</span>`, -reenviado, 'var(--amber)', txsReen);
     html += totalFila('Neto familia', mensualidad - reenviado);
   }
-  const otros = Object.entries(otrosIng).sort((a, b) => b[1] - a[1]);
+  const otros = Object.entries(otrosIng).map(([c, txs]) => [c, sumar(txs), txs]).sort((a, b) => b[1] - a[1]);
   if (otros.length) {
     html += `<div style="height:14px"></div>` + subtitulo('Otros ingresos');
-    html += otros.map(([c, v]) => fila(esc(c), v, 'var(--lime)')).join('');
+    html += otros.map(([c, v, txs]) => filaDet(esc(c), v, 'var(--lime)', txs)).join('');
     html += totalFila('Ingresos del mes (sin familia)', otros.reduce((s, [, v]) => s + v, 0));
   }
 

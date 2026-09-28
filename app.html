@@ -1923,6 +1923,7 @@ function esLiquidacionTarjeta(descripcion) {
 function categoriaAutomatica(descripcion, tipo) {
   const d = (descripcion || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
   if (/bizum/.test(d)) return tipo === 'ingreso' ? '📱 Bizum recibido' : '📱 Bizum enviado';
+  if (/recobro|recibo visa|visa clasica|liquidacion tarjeta/.test(d)) return '💳 Cargo tarjeta';
   if (/mercadona|carrefour|lidl|aldi|supermercado|simply|market|fruteria|panaderia|alcampo|dia |eroski|consum|hipercor/.test(d)) return '🍔 Comida';
   if (/netflix|spotify|amazon prime|disney|hbo|apple|google play|playstation|steam/.test(d)) return '📦 Suscripciones';
   if (/renfe|iryo|ouigo|alsa|autobus|nextbike|metro|bus |uber|cabify|blablacar|taxi|parking|norauto/.test(d)) return '🚇 Transporte';
@@ -2094,6 +2095,10 @@ async function importarCuenta(input) {
 
     setImportMsg(`✓ Banco detectado: ${banco.toUpperCase()} — procesando...`);
 
+    // Solo se compensa el cargo agrupado de la tarjeta si se importan también sus compras
+    // (extracto de tarjeta de crédito). Si no, ese cargo es el único rastro del gasto y cuenta.
+    const hayExtractoTarjeta = todasTxs.some(t => String(t.cuenta || '').endsWith('_tarjeta'));
+
     const txsNuevas = [];
     for (let i = startRow; i < rows.length; i++) {
       const r = rows[i];
@@ -2105,7 +2110,8 @@ async function importarCuenta(input) {
       // Revolut: saltar transacciones pendientes
       if (banco === 'revolut' && String(r[8] || '').toLowerCase() !== 'completed') continue;
 
-      const esLiq = esLiquidacionTarjeta(descripcion);
+      // Un "recobro" es un cargo que el banco no pudo cobrar antes (p. ej. sin saldo): siempre es gasto
+      const esLiq = hayExtractoTarjeta && esLiquidacionTarjeta(descripcion) && !/recobro/i.test(descripcion);
       const tipo = esLiq ? 'liquidacion_tarjeta' : (importeRaw < 0 ? 'gasto' : 'ingreso');
       const importe = Math.abs(importeRaw);
       const categoria = esLiq ? '💳 Liquidación tarjeta' : categoriaConAprendizaje(descripcion, tipo);

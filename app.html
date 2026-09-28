@@ -904,6 +904,7 @@ function hoy(offset = 0) {
 function mesActual() { return new Date().toISOString().slice(0, 7); }
 // "↩️ Reenviado": dinero que llega y se pasa a otra persona. No es gasto: se descuenta de los ingresos.
 const CAT_REENVIO = '↩️ Reenviado';
+const CAT_MENSUALIDAD = '💰 Mensualidad';
 const esReenvio = t => t.tipo === 'gasto' && t.categoria === CAT_REENVIO;
 const esGasto = t => t.tipo === 'gasto' && t.categoria !== CAT_REENVIO;
 const sumar = arr => arr.reduce((s, t) => s + parseFloat(t.importe), 0);
@@ -1165,21 +1166,35 @@ function renderResumen() {
 
   renderGraficoMeses(gastos, meses, mes);
 
-  // Ingresos del mes por categoría; lo reenviado a otra persona se resta aparte
+  // Ingresos del mes. El dinero de familia (Mensualidad − Reenviado) va en un bloque aparte
+  // para no mezclarlo con los Bizum de amigos y el resto de ingresos.
   const txsMes = todasTxs.filter(t => t.fecha.slice(0, 7) === mes);
-  const ingCat = {};
-  txsMes.filter(t => t.tipo === 'ingreso').forEach(t => {
-    const c = t.categoria || '🔧 Otros';
-    ingCat[c] = (ingCat[c] || 0) + parseFloat(t.importe);
-  });
+  const fila = (txt, v, color) => `<div class="res-det-row"><span>${txt}</span><span style="color:${color}">${v < 0 ? '−' : '+'}${fmt(v)}</span></div>`;
+  const subtitulo = txt => `<div class="pres-pct" style="text-transform:uppercase;letter-spacing:1px;margin:4px 0 2px">${txt}</div>`;
+  const totalFila = (txt, v) => `<div class="res-det-row" style="border-top:1px solid var(--border);margin-top:4px;padding-top:8px;font-weight:600"><span>${txt}</span><span>${v < 0 ? '−' : '+'}${fmt(v)}</span></div>`;
+
+  const mensualidad = sumar(txsMes.filter(t => t.tipo === 'ingreso' && t.categoria === CAT_MENSUALIDAD));
   const reenviado = sumar(txsMes.filter(esReenvio));
-  const filasIng = Object.entries(ingCat).sort((a, b) => b[1] - a[1])
-    .map(([c, v]) => `<div class="res-det-row"><span>${esc(c)}</span><span style="color:var(--lime)">+${fmt(v)}</span></div>`);
-  if (reenviado) filasIng.push(`<div class="res-det-row"><span>${CAT_REENVIO} <span style="color:var(--text3)">(no es gasto)</span></span><span style="color:var(--amber)">−${fmt(reenviado)}</span></div>`);
-  const netoIng = totalIngresos(txsMes);
-  document.getElementById('res-ingresos').innerHTML = filasIng.length
-    ? filasIng.join('') + `<div class="res-det-row" style="border-top:1px solid var(--border);margin-top:6px;padding-top:10px;font-weight:600"><span>Ingresos netos</span><span>${netoIng < 0 ? '−' : '+'}${fmt(netoIng)}</span></div>`
-    : '<div class="pres-pct">Sin ingresos este mes</div>';
+  const otrosIng = {};
+  txsMes.filter(t => t.tipo === 'ingreso' && t.categoria !== CAT_MENSUALIDAD).forEach(t => {
+    const c = t.categoria || '🔧 Otros';
+    otrosIng[c] = (otrosIng[c] || 0) + parseFloat(t.importe);
+  });
+  let html = '';
+  if (mensualidad || reenviado) {
+    html += subtitulo('👨‍👩‍👦 Familia');
+    if (mensualidad) html += fila(CAT_MENSUALIDAD, mensualidad, 'var(--lime)');
+    if (reenviado) html += fila(`${CAT_REENVIO} <span style="color:var(--text3)">(se resta)</span>`, -reenviado, 'var(--amber)');
+    html += totalFila('Neto familia', mensualidad - reenviado);
+  }
+  const otros = Object.entries(otrosIng).sort((a, b) => b[1] - a[1]);
+  if (otros.length) {
+    html += `<div style="height:14px"></div>` + subtitulo('Otros ingresos');
+    html += otros.map(([c, v]) => fila(esc(c), v, 'var(--lime)')).join('');
+    html += totalFila('Total otros ingresos', otros.reduce((s, [, v]) => s + v, 0));
+  }
+  if (html) html += `<div style="height:14px"></div>` + totalFila('Ingresos netos del mes', totalIngresos(txsMes));
+  document.getElementById('res-ingresos').innerHTML = html || '<div class="pres-pct">Sin ingresos este mes</div>';
 
   // Evolución mes a mes (todos los gastos o una categoría)
   const todasCats = [...new Set(gastos.map(t => t.categoria || '🔧 Otros'))].sort();
@@ -1273,7 +1288,7 @@ function renderListaTxs(txs) {
     document.getElementById('total-count').textContent = txs.length;
   }
   if (!txs.length) { el.innerHTML = '<div class="empty-state"><div class="empty-icon">📋</div><div class="empty-text">No hay transacciones</div></div>'; return; }
-  const CATS_BASE = ['🍔 Comida','🏠 Alquiler','🎉 Ocio','🚇 Transporte','⛽ Gasolina','📦 Suscripciones','👕 Ropa','📚 Estudios','💊 Salud','💰 Nómina','💰 Mensualidad','💰 Ingresos',CAT_REENVIO,'📱 Bizum enviado','📱 Bizum recibido','🎁 Regalo','✈️ Viaje','📱 Tecnología','🏋️ Deporte','💳 Liquidación tarjeta','🔧 Otros'];
+  const CATS_BASE = ['🍔 Comida','🏠 Alquiler','🎉 Ocio','🚇 Transporte','⛽ Gasolina','📦 Suscripciones','👕 Ropa','📚 Estudios','💊 Salud','💰 Nómina',CAT_MENSUALIDAD,'💰 Ingresos',CAT_REENVIO,'📱 Bizum enviado','📱 Bizum recibido','🎁 Regalo','✈️ Viaje','📱 Tecnología','🏋️ Deporte','💳 Liquidación tarjeta','🔧 Otros'];
   const catsExtra = getCatsPersonalizadas().filter(c => !CATS_BASE.includes(c));
   const CATS = [...CATS_BASE, ...catsExtra, '✏️ Otra...'];
   el.innerHTML = txs.map(t => `

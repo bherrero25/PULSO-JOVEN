@@ -47,9 +47,23 @@ export async function entrar(email, password) {
   const { data, error } = await sb.auth.signInWithPassword({ email, password });
   return { usuario: data?.user, error };
 }
+// Si Supabase no pide confirmar el correo, devuelve ya la sesión y se puede entrar directamente.
+// El enlace del correo de confirmación vuelve a esta misma página (debe estar en Redirect URLs de Supabase).
 export async function registrarse(nombre, email, password) {
-  const { error } = await sb.auth.signUp({ email, password, options: { data: { name: nombre } } });
-  return { error };
+  const { data, error } = await sb.auth.signUp({ email, password, options: { data: { name: nombre }, emailRedirectTo: location.origin + location.pathname } });
+  return { error, sesion: data?.session, usuario: data?.user };
+}
+
+// Mensajes de Supabase (en inglés) traducidos para la pantalla de entrar
+export function mensajeCuenta(error) {
+  const m = String(error?.message || '');
+  if (/already registered|already exists/i.test(m)) return 'Ya hay una cuenta con ese email. Entra con tu contraseña.';
+  if (/at least 6|password should/i.test(m)) return 'La contraseña tiene que tener al menos 6 caracteres.';
+  if (/invalid.*email|email.*invalid|unable to validate email/i.test(m)) return 'Ese email no parece válido.';
+  if (/not authorized/i.test(m)) return 'Ahora mismo no podemos enviar el correo de confirmación a ese email. Inténtalo más tarde.';
+  if (/rate limit|too many/i.test(m)) return 'Demasiados intentos seguidos. Espera unos minutos y vuelve a probar.';
+  if (/not confirmed/i.test(m)) return 'Falta confirmar tu email: abre el correo que te enviamos (mira también en spam).';
+  return 'No se ha podido completar. Inténtalo de nuevo.';
 }
 export async function salir() { if (!demo) await sb.auth.signOut(); }
 

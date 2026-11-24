@@ -84,15 +84,16 @@ async function enviarEntrar() {
     const nombre = document.getElementById('acc-nombre').value.trim();
     if (!nombre) { msg.textContent = 'Pon tu nombre'; return; }
     msg.textContent = 'Creando la cuenta…';
-    const { error } = await D.registrarse(nombre, email, pass);
-    if (error) { msg.textContent = error.message; return; }
+    const { error, sesion, usuario } = await D.registrarse(nombre, email, pass);
+    if (error) { msg.textContent = D.mensajeCuenta(error); return; }
+    if (sesion) { await empezar(usuario); return; }
     msg.className = 'mensaje ok';
-    msg.textContent = 'Cuenta creada. Revisa tu email para confirmarla y después entra.';
+    msg.textContent = 'Cuenta creada. Te hemos enviado un correo para confirmarla (mira también en spam). Después, entra aquí.';
     return;
   }
   msg.textContent = 'Entrando…';
   const { usuario, error } = await D.entrar(email, pass);
-  if (error) { msg.textContent = 'Email o contraseña incorrectos'; return; }
+  if (error) { msg.textContent = /not confirmed/i.test(error.message || '') ? D.mensajeCuenta(error) : 'Email o contraseña incorrectos'; return; }
   await empezar(usuario);
 }
 

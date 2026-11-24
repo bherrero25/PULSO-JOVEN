@@ -1,0 +1,65 @@
+// Iconos de trazo (24×24) en un solo sprite SVG; se usan con ic('nombre')
+
+const SIMBOLOS = {
+  inicio: '<path d="M3.5 10.5 12 3.5l8.5 7V20a1 1 0 0 1-1 1H15v-6H9v6H4.5a1 1 0 0 1-1-1z"/>',
+  lista: '<path d="M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01"/>',
+  mas: '<path d="M12 5v14M5 12h14"/>',
+  menos: '<path d="M5 12h14"/>',
+  grafico: '<path d="M3 20.5h18M6.5 17v-5M12 17V6M17.5 17v-8"/>',
+  diana: '<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="0.8"/>',
+  quesito: '<path d="M12 3a9 9 0 1 0 9 9h-9z"/><path d="M15 3.5A9 9 0 0 1 20.5 9H15z"/>',
+  bandera: '<path d="M5 21V4M5 4h11l-2 4 2 4H5"/>',
+  izquierda: '<path d="m14.5 18-6-6 6-6"/>',
+  derecha: '<path d="m9.5 18 6-6-6-6"/>',
+  abajo: '<path d="m6 9.5 6 6 6-6"/>',
+  alerta: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5v5.5M12 16.5h.01"/>',
+  ok: '<path d="m5 12.5 4.5 4.5L19 7.5"/>',
+  cerrar: '<path d="M6 6l12 12M18 6 6 18"/>',
+  buscar: '<circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/>',
+  editar: '<path d="M4 20h4L19 9l-4-4L4 16z"/>',
+  papelera: '<path d="M4 7h16M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13"/>',
+  subir: '<path d="M12 15.5V4M7.5 8.5 12 4l4.5 4.5M4 15.5V19a1.5 1.5 0 0 0 1.5 1.5h13A1.5 1.5 0 0 0 20 19v-3.5"/>',
+  descargar: '<path d="M12 4v11.5M7.5 11 12 15.5 16.5 11M4 18.5h16"/>',
+  banco: '<path d="M3 9.5h18L12 4zM5.5 9.5v8M10 9.5v8M14 9.5v8M18.5 9.5v8M3 20.5h18"/>',
+  candado: '<rect x="5" y="10.5" width="14" height="10" rx="2"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5"/>',
+  borrar: '<path d="M21 5.5H9l-6 6.5 6 6.5h12a1 1 0 0 0 1-1v-11a1 1 0 0 0-1-1zM12.5 9l6 6M18.5 9l-6 6"/>',
+  calendario: '<rect x="3.5" y="5" width="17" height="15.5" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4"/>',
+  cartera: '<rect x="3" y="6.5" width="18" height="13.5" rx="2"/><path d="M3 10h18M16 15h2"/>',
+  correo: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3.5 6.5 8.5 6.5 8.5-6.5"/>',
+  campana: '<path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 2h-15zM10 20.5a2 2 0 0 0 4 0"/>',
+  tendencia: '<path d="M3 17l6-6 4 4 8-8M15 7h6v6"/>',
+  info: '<circle cx="12" cy="12" r="8.5"/><path d="M12 11v5.5M12 7.5h.01"/>',
+  paso: '<path d="M4 12h14M13 6l6 6-6 6"/>',
+  chispa: '<path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M18 6l-2.5 2.5M8.5 15.5 6 18"/>',
+  salir: '<path d="M14 4h5a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-5M10 16l-4-4 4-4M6 12h10"/>',
+  informe: '<path d="M7 3.5h7l4 4V20.5H7z"/><path d="M14 3.5v4h4M10 12h5M10 16h5"/>',
+  // Categorías
+  comida: '<circle cx="9" cy="20" r="1.3"/><circle cx="17.5" cy="20" r="1.3"/><path d="M2.5 3.5h2.8l2.5 11.6a1.5 1.5 0 0 0 1.5 1.2h8.4a1.5 1.5 0 0 0 1.5-1.1L21 7.5H6.1"/>',
+  ocio: '<path d="M3 7h18v3.2a1.8 1.8 0 0 0 0 3.6V17H3v-3.2a1.8 1.8 0 0 0 0-3.6z"/><path d="M14.5 7.5v1.5M14.5 11.2v1.6M14.5 15v1.5"/>',
+  transporte: '<rect x="5" y="3" width="14" height="14" rx="3"/><path d="M5 10.5h14M8.5 21l1.5-4M15.5 21 14 17M8.5 13.8h.01M15.5 13.8h.01"/>',
+  gasolina: '<path d="M4.5 20.5V5a1.5 1.5 0 0 1 1.5-1.5h6A1.5 1.5 0 0 1 13.5 5v15.5M3 20.5h12M4.5 10h9M13.5 8h2a1.8 1.8 0 0 1 1.8 1.8v5.4a1.6 1.6 0 0 0 3.2 0V8.5L18 6"/>',
+  ropa: '<path d="M8.5 3.5 4 5.5 2 9.5l3 1.8v9.2h14v-9.2l3-1.8-2-4-4.5-2a3.5 3.5 0 0 1-7 0z"/>',
+  deporte: '<path d="M6.5 7v10M17.5 7v10M3.5 9.5v5M20.5 9.5v5M6.5 12h11"/>',
+  suscripciones: '<path d="M17 3l3 3-3 3M4 11V9.5A3.5 3.5 0 0 1 7.5 6H20M7 21l-3-3 3-3M20 13v1.5a3.5 3.5 0 0 1-3.5 3.5H4"/>',
+  otros: '<circle cx="5.5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="18.5" cy="12" r="1.2"/>',
+  familia: '<circle cx="9" cy="8" r="3.3"/><path d="M2.8 20a6.2 6.2 0 0 1 12.4 0M15.8 4.8a3.3 3.3 0 0 1 0 6.4M17.8 14a6 6 0 0 1 3.4 6"/>',
+  trabajo: '<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M9 7V5.5A1.5 1.5 0 0 1 10.5 4h3A1.5 1.5 0 0 1 15 5.5V7M3 12.5h18"/>',
+  movil: '<rect x="6.5" y="2.5" width="11" height="19" rx="2.5"/><path d="M10.5 18.5h3"/>',
+  salud: '<path d="M20.5 8.8a4.8 4.8 0 0 0-8.5-3 4.8 4.8 0 0 0-8.5 3c0 5.2 8.5 11 8.5 11s8.5-5.8 8.5-11z"/>',
+  coche: '<path d="M3.5 16.5V12l2-5h13l2 5v4.5zM6.5 19.5v-3M17.5 19.5v-3M3.5 12h17"/><circle cx="7.5" cy="14.3" r=".8"/><circle cx="16.5" cy="14.3" r=".8"/>',
+  casa: '<path d="M3.5 10.5 12 3.5l8.5 7V20.5h-17zM9.5 20.5v-6h5v6"/>',
+  estudios: '<path d="M4 5.5A1.5 1.5 0 0 1 5.5 4H20v14H5.5A1.5 1.5 0 0 0 4 19.5zM4 19.5A1.5 1.5 0 0 0 5.5 21H20"/>',
+  viaje: '<path d="M21 3 10.5 13.5M21 3l-6.5 18-4-7.5L3 9.5z"/>',
+  portatil: '<rect x="4" y="5" width="16" height="10.5" rx="1.5"/><path d="M2 19h20"/>',
+  regalo: '<rect x="3.5" y="8" width="17" height="4" rx="1"/><path d="M5 12v8.5h14V12M12 8v12.5M12 8c-1.5-3-5-3.5-5-1s3 1 5 1c2 0 5 1.5 5-1s-3.5-2-5 1"/>',
+  dado: '<rect x="4" y="4" width="16" height="16" rx="3"/><circle cx="9" cy="9" r=".9"/><circle cx="15" cy="15" r=".9"/><circle cx="15" cy="9" r=".9"/><circle cx="9" cy="15" r=".9"/>',
+  tarjeta: '<rect x="3" y="5.5" width="18" height="13" rx="2"/><path d="M3 10h18M7 15h3"/>',
+  escudo: '<path d="M12 3 4.5 6v5.5c0 4.8 3.2 8 7.5 9.5 4.3-1.5 7.5-4.7 7.5-9.5V6z"/>',
+  ingreso: '<path d="M17 7 7 17M7 9v8h8"/>'
+};
+
+export const SPRITE = '<svg aria-hidden="true" style="position:absolute;width:0;height:0;overflow:hidden"><defs>' +
+  Object.entries(SIMBOLOS).map(([n, d]) => `<symbol id="i-${n}" viewBox="0 0 24 24">${d}</symbol>`).join('') +
+  '</defs></svg>';
+
+export const ic = (nombre, clase = '') => `<svg class="ic ${clase}" aria-hidden="true"><use href="#i-${nombre}"></use></svg>`;

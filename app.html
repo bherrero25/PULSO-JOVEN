@@ -956,9 +956,21 @@ async function login() {
   const msg = document.getElementById('auth-msg');
   msg.textContent = 'Entrando...'; msg.className = 'auth-msg';
   const { data, error } = await sb.auth.signInWithPassword({ email, password: pass });
-  if (error) { msg.textContent = 'Email o contraseña incorrectos'; return; }
+  if (error) { msg.textContent = /not confirmed/i.test(error.message || '') ? mensajeCuenta(error) : 'Email o contraseña incorrectos'; return; }
   currentUser = data.user;
   entrarApp(email.split('@')[0]);
+}
+
+// Mensajes de Supabase (en inglés) traducidos para la pantalla de entrar
+function mensajeCuenta(error) {
+  const m = String(error?.message || '');
+  if (/already registered|already exists/i.test(m)) return 'Ya hay una cuenta con ese email. Entra con tu contraseña.';
+  if (/at least 6|password should/i.test(m)) return 'La contraseña tiene que tener al menos 6 caracteres.';
+  if (/invalid.*email|email.*invalid|unable to validate email/i.test(m)) return 'Ese email no parece válido.';
+  if (/not authorized/i.test(m)) return 'Ahora mismo no podemos enviar el correo de confirmación a ese email. Inténtalo más tarde.';
+  if (/rate limit|too many/i.test(m)) return 'Demasiados intentos seguidos. Espera unos minutos y vuelve a probar.';
+  if (/not confirmed/i.test(m)) return 'Falta confirmar tu email: abre el correo que te enviamos (mira también en spam).';
+  return 'No se ha podido completar. Inténtalo de nuevo.';
 }
 
 async function register() {
@@ -968,10 +980,12 @@ async function register() {
   const msg = document.getElementById('auth-msg');
   if (!name) { msg.textContent = 'Pon tu nombre'; return; }
   msg.textContent = 'Creando cuenta...'; msg.className = 'auth-msg';
-  const { data, error } = await sb.auth.signUp({ email, password: pass, options: { data: { name } } });
-  if (error) { msg.textContent = error.message; return; }
+  const { data, error } = await sb.auth.signUp({ email, password: pass, options: { data: { name }, emailRedirectTo: location.origin + location.pathname } });
+  if (error) { msg.textContent = mensajeCuenta(error); return; }
+  // Si Supabase no pide confirmar el correo, ya hay sesión: se entra directamente
+  if (data.session) { currentUser = data.user; entrarApp(name); return; }
   msg.className = 'auth-msg ok';
-  msg.textContent = 'Cuenta creada. Revisa tu email para confirmar.';
+  msg.textContent = 'Cuenta creada. Te hemos enviado un correo para confirmarla (mira también en spam). Después, entra aquí.';
 }
 
 function abrirInforme() {

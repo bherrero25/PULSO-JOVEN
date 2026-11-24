@@ -2,8 +2,8 @@
 
 import { SPRITE, ic } from './iconos.js';
 import * as D from './datos.js';
-import { esc, mesActual, sumarMeses, mesesDisponibles, porRevisar, resumenMes } from './logica.js';
-import { abrirHoja, cerrarHoja, cabeceraHoja } from './ui.js';
+import { esc, mesActual, sumarMeses, mesesDisponibles, porRevisar, resumenMes, clasificarPagosAtajo } from './logica.js';
+import { abrirHoja, cerrarHoja, cabeceraHoja, hojaAbierta } from './ui.js';
 import { barraInferior, menuLateral, marca, inicial } from './componentes.js';
 import * as inicio from './pantallas/inicio.js';
 import * as movimientos from './pantallas/movimientos.js';
@@ -107,8 +107,34 @@ async function empezar(usuario) {
     return;
   }
   Object.assign(E, datos, { cargado: true });
+  ultimaCarga = Date.now();
   irA();
+  clasificarAtajo();
 }
+
+// Los pagos del atajo de Apple Pay llegan sin categoría: se clasifican con lo aprendido o las reglas automáticas
+async function clasificarAtajo() {
+  const cambios = Object.entries(clasificarPagosAtajo(E.txs, E.reglas));
+  for (const [categoria, ids] of cambios) {
+    if (await D.actualizarMovimientos(ids, { categoria }, 'clasificar los pagos de Apple Pay')) {
+      E.txs.forEach(t => { if (ids.includes(t.id)) t.categoria = categoria; });
+    }
+  }
+  if (cambios.length) pintar();
+}
+
+// Al volver a la app (por ejemplo, después de pagar con el móvil) se recargan los datos para ver lo nuevo
+let ultimaCarga = 0;
+document.addEventListener('visibilitychange', async () => {
+  if (document.visibilityState !== 'visible' || !E.cargado || D.enDemo() || E.pantalla === 'anadir' || hojaAbierta()) return;
+  if (Date.now() - ultimaCarga < 30000) return;
+  ultimaCarga = Date.now();
+  const datos = await D.cargarTodo(E.usuario);
+  if (!datos || hojaAbierta()) return;
+  Object.assign(E, datos);
+  pintar();
+  clasificarAtajo();
+});
 
 function empezarDemo() {
   D.activarDemo();

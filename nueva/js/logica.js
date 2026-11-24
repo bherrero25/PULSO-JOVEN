@@ -228,7 +228,32 @@ export function medioAutomatico(descripcion) {
 }
 
 export const MEDIOS = { tarjeta: 'Tarjeta', transferencia: 'Transferencia', bizum: 'Bizum', efectivo: 'Efectivo' };
-const NOMBRES_CUENTA = { bankinter: 'Bankinter', bbva: 'BBVA', santander: 'Santander', caixabank: 'CaixaBank', ing: 'ING', revolut: 'Revolut', n26: 'N26', efectivo: 'Efectivo', generico: 'Otro banco' };
+const NOMBRES_CUENTA = { bankinter: 'Bankinter', bbva: 'BBVA', santander: 'Santander', caixabank: 'CaixaBank', ing: 'ING', revolut: 'Revolut', n26: 'N26', efectivo: 'Efectivo', generico: 'Otro banco', apple_pay: 'Apple Pay' };
+export const formaDePago = t => t.cuenta === 'apple_pay' ? 'Apple Pay' : MEDIOS[t.medio] || 'Transferencia';
+
+// Pagos que llegan del atajo de Apple Pay sin clasificar: se les pone la categoría aprendida o la automática.
+// Devuelve { categoría: [ids] } con los que hay que cambiar.
+export function clasificarPagosAtajo(txs, reglas) {
+  const cambios = {};
+  txs.filter(t => t.cuenta === 'apple_pay' && t.categoria === BD.OTROS).forEach(t => {
+    const cat = categoriaConAprendizaje(t.descripcion, 'gasto', reglas);
+    if (cat !== BD.OTROS) (cambios[cat] ||= []).push(t.id);
+  });
+  return cambios;
+}
+
+// Movimientos de un extracto que ya entraron por Apple Pay: mismo importe y fecha del banco entre 0 y 4 días después.
+// Cada pago de Apple Pay se empareja como mucho con un movimiento del extracto.
+export function separarYaApuntados(nuevos, txs) {
+  const libres = txs.filter(t => t.cuenta === 'apple_pay');
+  const dias = (a, b) => Math.round((new Date(a + 'T12:00:00') - new Date(b + 'T12:00:00')) / 86400000);
+  const quedan = [], repetidos = [];
+  nuevos.forEach(n => {
+    const i = n.tipo === 'gasto' ? libres.findIndex(a => Math.abs(+a.importe - +n.importe) < 0.005 && dias(n.fecha, a.fecha) >= 0 && dias(n.fecha, a.fecha) <= 4) : -1;
+    if (i >= 0) { repetidos.push(n); libres.splice(i, 1); } else quedan.push(n);
+  });
+  return { quedan, repetidos };
+}
 export function nombreCuenta(c) {
   if (!c || c === 'principal') return 'Cuenta';
   if (c.endsWith('_tarjeta')) return (NOMBRES_CUENTA[c.slice(0, -8)] || c.slice(0, -8)) + ' · tarjeta';

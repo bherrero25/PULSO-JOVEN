@@ -5,8 +5,8 @@ import { mostrarAviso } from './ui.js';
 import { claveConcepto } from './logica.js';
 import { datosDemo } from './demo.js';
 
-const SUPABASE_URL = 'https://tqjukdleqgbpseaipfel.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_8tXAzCiTvfbcrD3rlj5I-w_zF4gXpcN';
+export const SUPABASE_URL = 'https://tqjukdleqgbpseaipfel.supabase.co';
+export const SUPABASE_KEY = 'sb_publishable_8tXAzCiTvfbcrD3rlj5I-w_zF4gXpcN';
 export const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 let demo = false;
@@ -151,6 +151,25 @@ export async function actualizarMeta(id, cambios) {
   if (demo) return true;
   const { error } = await sb.from('pj_metas').update(cambios).eq('id', id);
   return !avisarError(error, 'guardar la meta');
+}
+
+// ─── ATAJO DE APPLE PAY ───
+// Código personal con el que el atajo del iPhone apunta pagos (ver sql/2026-11-atajo-apple-pay.sql).
+// Devuelve { codigo }, { falta: true } si aún no se ha preparado la base de datos, o null si falló.
+const faltaTabla = error => error && (error.code === '42P01' || error.code === 'PGRST205' || /does not exist|could not find/i.test(error.message || ''));
+export async function codigoAtajo() {
+  if (demo) return { codigo: 'disponible-al-entrar-con-tu-cuenta' };
+  const { data, error } = await sb.from('pj_codigos_atajo').select('codigo').eq('user_id', uid).limit(1);
+  if (faltaTabla(error)) return { falta: true };
+  if (avisarError(error, 'obtener tu código')) return null;
+  if (data.length) return { codigo: data[0].codigo };
+  const nuevo = await sb.from('pj_codigos_atajo').insert({ user_id: uid }).select('codigo').single();
+  return avisarError(nuevo.error, 'crear tu código') ? null : { codigo: nuevo.data.codigo };
+}
+export async function cambiarCodigoAtajo() {
+  if (demo) return null;
+  const { data, error } = await sb.from('pj_codigos_atajo').update({ codigo: crypto.randomUUID() }).eq('user_id', uid).select('codigo').single();
+  return avisarError(error, 'cambiar tu código') ? null : data.codigo;
 }
 
 export async function borrarMeta(id) {

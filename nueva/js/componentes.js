@@ -1,7 +1,7 @@
 // Piezas que se repiten en varias pantallas
 
 import { ic } from './iconos.js';
-import { esc, fmt, infoCategoria, tinteCategoria, porRevisar, esPaso, MEDIOS, nombreMes, mesActual } from './logica.js';
+import { esc, fmt, infoCategoria, tinteCategoria, porRevisar, esPaso, formaDePago, nombreMes, mesActual } from './logica.js';
 
 const ENLACES = [
   ['inicio', 'Inicio', 'inicio'],
@@ -68,7 +68,7 @@ export function filaMovimiento(t, E, detalle) {
   return `<button type="button" class="fila" data-accion="editar-mov" data-id="${esc(t.id)}">
     ${rev ? `<span class="ficha revisar">${ic('alerta')}</span>` : ficha(cat)}
     <span class="cuerpo"><span class="concepto">${esc(conceptoVisible(t))}</span>
-      <span class="detalle${rev ? ' revisar' : ''}">${rev ? 'Sin categoría · toca para elegir' : esc(detalle ?? `${cat.nombre} · ${MEDIOS[t.medio] || 'Transferencia'}`)}</span></span>
+      <span class="detalle${rev ? ' revisar' : ''}">${rev ? 'Sin categoría · toca para elegir' : esc(detalle ?? `${cat.nombre} · ${formaDePago(t)}`)}</span></span>
     <span class="importe num ${imp.clase}">${imp.texto}</span>
   </button>`;
 }

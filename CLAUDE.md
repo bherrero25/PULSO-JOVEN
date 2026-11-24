@@ -49,6 +49,12 @@ Seguros, leasing, bonus anual, hipoteca, hijos ni patrimonio complejo.
 - Presupuestos: cada límite vale desde el mes en que se guarda hasta que se cambie (`getPresupuestos` coge el más reciente de cada categoría).
 - Toda llamada a Supabase comprueba `error` y avisa con `avisarError()`; nada debe fallar en silencio.
 
+## App nueva (`nueva/`, nov. 2026)
+
+- Rediseño «Tinta y lima» según el croquis, publicado aparte en `…/PULSO-JOVEN/nueva/` mientras `app.html` sigue en uso. Misma base de datos y mismo formato de datos (categorías con emoji, `↩️ Reenviado` = «dinero de paso»).
+- Sin compilación: módulos ES en `nueva/js/` → `logica.js` (cálculos puros), `datos.js` (Supabase y modo demo), `importar.js` (extractos), `pantallas/*.js` (una por pantalla) y `app.js` (estado, rutas `#/…` y acciones con `data-accion`, `data-entrada`, `data-cambio`). Modo demo con `?demo`.
+- Atajo de Apple Pay: `sql/2026-11-atajo-apple-pay.sql` crea `pj_codigos_atajo` y la función `pj_apuntar_pago(codigo, importe, comercio)`, que el atajo de iPhone llama por REST. Los pagos entran con `cuenta = 'apple_pay'` y en «🔧 Otros»; la app los clasifica al abrirse y, al importar un extracto, descarta los que coinciden en importe con fecha 0–4 días después.
+
 ## Pendiente antes de venderla
 
 - [ ] Revisar a fondo RLS (cada usuario solo ve lo suyo)

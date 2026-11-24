@@ -1,9 +1,9 @@
 // Añadir: a mano con teclado, subiendo el extracto del banco o (más adelante) de forma automática
 
 import { ic } from '../iconos.js';
-import { esc, fmt, hoyISO, fechaCorta, RAPIDAS_GASTO, RAPIDAS_INGRESO, categoriaPorId, MEDIOS, nombreCuenta, infoCategoria } from '../logica.js';
+import { esc, fmt, hoyISO, fechaCorta, RAPIDAS_GASTO, RAPIDAS_INGRESO, categoriaPorId, MEDIOS, nombreCuenta, infoCategoria, separarYaApuntados } from '../logica.js';
 import { ficha } from '../componentes.js';
-import { toast } from '../ui.js';
+import { toast, abrirHoja, cabeceraHoja, confirmar } from '../ui.js';
 import * as D from '../datos.js';
 import { leerFilas, analizarExtracto } from '../importar.js';
 
@@ -58,6 +58,7 @@ function extracto(E) {
           <div class="dato"><small style="color:var(--texto-3)">Nuevos</small><b class="num">${imp.nuevas.length}</b></div>
           <div class="dato"><small style="color:var(--texto-3)">Ya estaban</small><b class="num">${imp.txs.length - imp.nuevas.length}</b></div>
         </div>
+        ${imp.deApplePay ? `<p class="nota">De los que ya estaban, ${imp.deApplePay} ${imp.deApplePay === 1 ? 'entró' : 'entraron'} con Apple Pay (mismo importe y fecha cercana), así que no se repiten.</p>` : ''}
         ${imp.nuevas.length ? `<div>${imp.nuevas.slice(0, 6).map(t => { const c = infoCategoria(t.categoria); return `<div class="fila">${ficha(c, 'peq')}<span class="cuerpo"><span class="concepto" style="font-size:14px">${esc(t.descripcion)}</span><span class="detalle">${fechaCorta(t.fecha)} · ${esc(c.nombre)}</span></span><span class="importe num${t.tipo === 'ingreso' ? ' positivo' : ''}" style="font-size:14px">${fmt(t.tipo === 'ingreso' ? +t.importe : -t.importe, true)}</span></div>`; }).join('')}
           ${imp.nuevas.length > 6 ? `<p class="nota" style="padding-top:8px">y ${imp.nuevas.length - 6} más</p>` : ''}</div>` : '<p class="nota">Todos los movimientos de este archivo ya estaban guardados.</p>'}
       </section>
@@ -85,9 +86,14 @@ function automatico() {
   const opcion = (icono, titulo, plataforma, texto) => `<div class="opcion futura">
     <div class="cab"><span class="ficha">${ic(icono)}</span><b>${titulo}</b><span class="pastilla gris">PRÓXIMAMENTE</span></div>
     <p>${texto}</p><span class="nota">${plataforma}</span></div>`;
-  return `<p class="texto-2" style="font-size:14px;line-height:1.45">Estamos preparando formas de que tus movimientos lleguen solos. Pulso Joven nunca te pedirá las claves de tu banco.</p>
+  return `<p class="texto-2" style="font-size:14px;line-height:1.45">Formas de que tus movimientos lleguen solos. Pulso Joven nunca te pedirá las claves de tu banco.</p>
+    <div class="opcion">
+      <div class="cab"><span class="ficha" style="background:var(--tinta);color:var(--lima)">${ic('movil')}</span><b>Pagos con Apple Pay</b><span class="nota">iPhone</span></div>
+      <p>Configura un atajo una vez y cada pago con el iPhone o el Apple Watch en una tienda se apuntará solo, sin abrir nada.</p>
+      <span class="nota">No capta compras por internet, pagos con la tarjeta física ni Bizum.</span>
+      <button type="button" class="boton peq" data-accion="configurar-applepay">Configurar el atajo</button>
+    </div>
     ${opcion('correo', 'Reenvía los avisos de tu banco', 'Cualquier móvil', 'Activa en tu banco el aviso por email de cada pago y reenvíalo a tu dirección de Pulso Joven. Los apuntaremos solos.')}
-    ${opcion('movil', 'Pagos con Apple Pay', 'iPhone', 'Activa un atajo una vez y cada pago con el móvil en tienda se apuntará solo.')}
     ${opcion('campana', 'Avisos de tu banco', 'App de Android', 'Pulso Joven leerá el aviso de compra que te manda tu banco y lo apuntará.')}
     ${opcion('banco', 'Conectar tu banco', 'Plan Pro', 'Tus movimientos llegarán solos cada día, con una conexión regulada y de solo lectura: nunca podremos mover tu dinero.')}`;
 }
@@ -131,6 +137,25 @@ export const acciones = {
     location.hash = '#/inicio';
   },
   'cancelar-importacion': (ctx) => { ctx.E.importacion = null; ctx.pintar(); },
+  'configurar-applepay': async () => {
+    const r = await D.codigoAtajo();
+    if (!r) return;
+    if (r.falta) {
+      abrirHoja(`${cabeceraHoja('Falta un paso en la base de datos')}
+        <p class="texto-2" style="font-size:14px;line-height:1.5">Para usar el atajo hay que ejecutar una vez en Supabase el texto <b>sql/2026-11-atajo-apple-pay.sql</b> del proyecto. Cuando esté, vuelve aquí.</p>`, 'Falta un paso');
+      return;
+    }
+    hojaApplePay(r.codigo);
+  },
+  'copiar': async (ctx, el) => {
+    try { await navigator.clipboard.writeText(el.dataset.texto); toast(`${el.dataset.que} copiado`); }
+    catch { toast('No se ha podido copiar: mantén pulsado el texto para copiarlo'); }
+  },
+  'cambiar-codigo': async () => {
+    if (!await confirmar('¿Cambiar tu código?', 'El atajo dejará de funcionar hasta que pongas el código nuevo en él. Hazlo solo si crees que alguien más lo tiene.', 'Cambiar código')) return;
+    const codigo = await D.cambiarCodigoAtajo();
+    if (codigo) { hojaApplePay(codigo); toast('Código cambiado'); }
+  },
   'confirmar-importacion': async (ctx) => {
     const { E } = ctx, imp = E.importacion;
     imp.guardando = true; ctx.pintar();
@@ -171,7 +196,8 @@ export const cambios = {
       else if (!r.txs.length) E.importacion = { error: 'No hemos encontrado movimientos en este archivo.' };
       else {
         const guardadas = new Set(E.txs.map(D.claveMovimiento));
-        E.importacion = { ...r, nuevas: r.txs.filter(t => !guardadas.has(D.claveMovimiento(t))) };
+        const { quedan, repetidos } = separarYaApuntados(r.txs.filter(t => !guardadas.has(D.claveMovimiento(t))), E.txs);
+        E.importacion = { ...r, nuevas: quedan, deApplePay: repetidos.length };
       }
     } catch (e) {
       console.error(e);
@@ -180,6 +206,29 @@ export const cambios = {
     ctx.pintar();
   }
 };
+
+// Instrucciones para crear en la app Atajos la automatización que manda cada pago a Pulso Joven
+function hojaApplePay(codigo) {
+  const url = `${D.SUPABASE_URL}/rest/v1/rpc/pj_apuntar_pago`;
+  const dato = (titulo, valor, que) => `<div style="display:flex;flex-direction:column;gap:4px;margin:8px 0">
+    <span class="nota">${titulo}</span>
+    <div style="display:flex;align-items:center;gap:8px;background:var(--fondo);border-radius:12px;padding:6px 6px 6px 12px">
+      <code style="flex:1;min-width:0;font-size:12px;word-break:break-all;user-select:all">${esc(valor)}</code>
+      <button type="button" class="boton peq" style="height:36px;font-size:13px;padding:0 12px;flex-shrink:0" data-accion="copiar" data-texto="${esc(valor)}" data-que="${que}">Copiar</button>
+    </div></div>`;
+  const paso = (n, html) => `<div style="display:flex;gap:10px"><b class="num" style="width:24px;height:24px;border-radius:12px;background:var(--tinta);color:#fff;font-size:13px;display:flex;align-items:center;justify-content:center;flex-shrink:0">${n}</b><div style="font-size:14px;line-height:1.5;min-width:0;flex:1">${html}</div></div>`;
+  abrirHoja(`${cabeceraHoja('Atajo de Apple Pay', 'Se configura una sola vez · iOS 17 o posterior')}
+    ${paso(1, 'Abre la app <b>Atajos</b>, ve a la pestaña <b>Automatización</b> y pulsa <b>+</b> (Nueva automatización).')}
+    ${paso(2, 'Elige <b>Wallet</b> (en versiones anteriores, <b>Transacción</b>). Marca tus tarjetas, elige <b>Ejecutar inmediatamente</b> y pulsa <b>Siguiente</b>.')}
+    ${paso(3, 'Pulsa <b>Nuevo atajo en blanco</b> y añade la acción <b>Obtener contenido de URL</b>. Donde pone <b>URL</b>, pega esta dirección:' + dato('Dirección', url, 'Dirección'))}
+    ${paso(4, 'Toca la flecha de la acción para ver más opciones:<br>· <b>Método</b>: POST<br>· <b>Cabeceras</b>: añade una con clave <code>apikey</code> y este valor:' + dato('Valor de apikey', D.SUPABASE_KEY, 'Clave'))}
+    ${paso(5, '· <b>Cuerpo de la solicitud</b>: JSON. Añade tres campos de tipo <b>Texto</b>:<br>— <code>codigo</code> con tu código personal:' + dato('Tu código personal (no lo compartas)', codigo, 'Código') +
+      '— <code>importe</code>: toca el valor y elige la variable <b>Entrada del atajo</b>; después tócala otra vez y elige <b>Importe</b>.<br>— <code>comercio</code>: igual, pero eligiendo <b>Comercio</b>.')}
+    ${paso(6, 'Opcional: añade la acción <b>Mostrar notificación</b> con la variable <b>Contenido de la URL</b>. Así verás «Apuntado en Pulso Joven: 12,50 €» al pagar.')}
+    ${paso(7, 'Pulsa <b>OK</b>. Paga con Apple Pay en una tienda y el gasto aparecerá en Movimientos. La primera vez en cada comercio puede salir «Sin categoría»: dásela y la app la recordará.')}
+    <p class="nota">Si algún nombre no coincide en tu iPhone, haz una captura y pregunta. Tu código solo sirve para apuntar gastos en tu cuenta, no para ver nada.</p>
+    <button type="button" class="boton suave peq" data-accion="cambiar-codigo">Cambiar mi código</button>`, 'Atajo de Apple Pay');
+}
 
 // La cuenta que más aparece en los movimientos (para lo que se apunta a mano con tarjeta)
 function cuentaHabitual(txs) {

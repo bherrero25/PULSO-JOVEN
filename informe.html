@@ -142,6 +142,17 @@ const SUPABASE_URL = 'https://tqjukdleqgbpseaipfel.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_8tXAzCiTvfbcrD3rlj5I-w_zF4gXpcN';
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
+// Supabase devuelve como máximo 1.000 filas por consulta: se leen por páginas hasta tenerlas todas
+async function leerTodas(consulta) {
+  const PAGINA = 1000, filas = [];
+  for (let desde = 0; ; desde += PAGINA) {
+    const { data, error } = await consulta().range(desde, desde + PAGINA - 1);
+    if (error) throw error;
+    filas.push(...data);
+    if (data.length < PAGINA) return filas;
+  }
+}
+
 let userId = null;
 let chartInstances = {};
 
@@ -172,10 +183,17 @@ async function cargarInforme() {
   document.getElementById('header-subtitle').textContent = `Informe · ${nombreMes(mes)}${cuentaLabel}`;
   document.getElementById('contenido').innerHTML = '<div class="loading">Cargando datos...</div>';
 
-  const { data: txs } = await sb.from('pj_transacciones')
-    .select('*').eq('user_id', userId).order('fecha');
+  let txs;
+  try {
+    txs = await leerTodas(() => sb.from('pj_transacciones')
+      .select('*').eq('user_id', userId).order('fecha').order('id'));
+  } catch (error) {
+    console.error(error);
+    document.getElementById('contenido').innerHTML = '<div class="loading">No se ha podido cargar el informe. Comprueba la conexión o vuelve a entrar en la app.</div>';
+    return;
+  }
 
-  if (!txs || !txs.length) {
+  if (!txs.length) {
     document.getElementById('contenido').innerHTML = '<div class="loading">No hay datos para este mes.</div>';
     return;
   }

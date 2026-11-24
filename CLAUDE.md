@@ -45,6 +45,9 @@ Seguros, leasing, bonus anual, hipoteca, hijos ni patrimonio complejo.
 - Categorías automáticas en `categoriaAutomatica` + reglas aprendidas por usuario en `pj_reglas_categoria` (clave normalizada con `claveConcepto`, sin la fecha final de Bankinter).
 - Familia: `💰 Mensualidad` (ingreso) y `↩️ Reenviado` (gasto que no es gasto) quedan fuera de ingresos/gastos generales y se muestran aparte; lo de los últimos 3 días del mes cuenta para el siguiente (`mesEfectivo`). Las reglas con nombres reales viven solo en la base de datos, nunca en el código (repo público).
 - Los extractos reales van en `datos/` (ignorado por git).
+- Supabase devuelve como máximo 1.000 filas por consulta: las lecturas de listas usan `leerTodas()` (páginas de 1.000, con orden estable), también en `informe.html`.
+- Presupuestos: cada límite vale desde el mes en que se guarda hasta que se cambie (`getPresupuestos` coge el más reciente de cada categoría).
+- Toda llamada a Supabase comprueba `error` y avisa con `avisarError()`; nada debe fallar en silencio.
 
 ## Pendiente antes de venderla
 

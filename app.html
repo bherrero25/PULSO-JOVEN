@@ -276,6 +276,9 @@ input[type=file] { display: none; }
 @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
 .modal-title { font-size: 18px; font-weight: 600; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; }
 .modal-close { background: none; border: none; color: var(--text3); font-size: 22px; cursor: pointer; }
+
+/* ─── AVISO DE ERROR ─── */
+#aviso-error { display: none; position: fixed; left: 16px; right: 16px; bottom: calc(var(--tab-h) + 84px); z-index: 600; max-width: 480px; margin: 0 auto; background: #2a1410; border: 1px solid rgba(255,107,74,0.5); color: var(--text); border-radius: 14px; padding: 12px 14px; font-size: 13px; line-height: 1.45; box-shadow: 0 8px 24px rgba(0,0,0,0.5); cursor: pointer; }
 </style>
 </head>
 <body>
@@ -844,10 +847,43 @@ input[type=file] { display: none; }
   </div>
 </div>
 
+<div id="aviso-error" role="alert" onclick="this.style.display='none'"></div>
+
 <script>
 const SUPABASE_URL = 'https://tqjukdleqgbpseaipfel.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_8tXAzCiTvfbcrD3rlj5I-w_zF4gXpcN';
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// Supabase devuelve como máximo 1.000 filas por consulta: se leen por páginas hasta tenerlas todas.
+// `consulta` crea la consulta de nuevo en cada página y debe tener un orden estable.
+async function leerTodas(consulta) {
+  const PAGINA = 1000, filas = [];
+  for (let desde = 0; ; desde += PAGINA) {
+    const { data, error } = await consulta().range(desde, desde + PAGINA - 1);
+    if (error) throw error;
+    filas.push(...data);
+    if (data.length < PAGINA) return filas;
+  }
+}
+
+// Aviso visible cuando la base de datos no responde o rechaza un cambio. Devuelve true si hubo error.
+function avisarError(error, que) {
+  if (!error) return false;
+  console.error(`Error al ${que}`, error);
+  const caducada = error.code === 'PGRST301' || /jwt/i.test(error.message || '');
+  mostrarAviso(caducada
+    ? `No se ha podido ${que}: tu sesión ha caducado. Sal y vuelve a entrar.`
+    : `No se ha podido ${que}. Comprueba la conexión e inténtalo de nuevo.`);
+  return true;
+}
+
+function mostrarAviso(txt) {
+  const el = document.getElementById('aviso-error');
+  el.textContent = txt;
+  el.style.display = 'block';
+  clearTimeout(mostrarAviso.t);
+  mostrarAviso.t = setTimeout(() => { el.style.display = 'none'; }, 8000);
+}
 
 let currentUser = null;
 let isDemo = false;
@@ -988,8 +1024,13 @@ async function cargarTodo() {
 // ─── TRANSACCIONES ───
 async function getTransacciones() {
   if (isDemo) return demoData.transacciones;
-  const { data } = await sb.from('pj_transacciones').select('*').eq('user_id', currentUser.id).order('fecha', { ascending: false });
-  return data || [];
+  try {
+    return await leerTodas(() => sb.from('pj_transacciones').select('*').eq('user_id', currentUser.id)
+      .order('fecha', { ascending: false }).order('id', { ascending: false }));
+  } catch (error) {
+    avisarError(error, 'cargar tus movimientos');
+    return todasTxs; // se queda en pantalla lo que ya había, en vez de vaciarla
+  }
 }
 
 async function cargarTransacciones() {
@@ -1405,7 +1446,8 @@ async function addTransaccion() {
     document.getElementById('tx-desc').value = ''; document.getElementById('tx-importe').value = '';
     await cargarTransacciones(); await cargarPresupuestos(); return;
   }
-  await sb.from('pj_transacciones').insert({ user_id: currentUser.id, fecha, descripcion: desc, importe, tipo: tipoActual, categoria: cat, medio, cuenta });
+  const { error } = await sb.from('pj_transacciones').insert({ user_id: currentUser.id, fecha, descripcion: desc, importe, tipo: tipoActual, categoria: cat, medio, cuenta });
+  if (avisarError(error, 'guardar el movimiento')) return;
   document.getElementById('tx-desc').value = ''; document.getElementById('tx-importe').value = '';
   await cargarTransacciones(); await cargarPresupuestos();
 }
@@ -1430,7 +1472,8 @@ async function guardarCatCustom(id, valor) {
 
 async function cambiarMedio(id, nuevoMedio) {
   if (isDemo) { const t = todasTxs.find(x => x.id === id); if (t) t.medio = nuevoMedio; return; }
-  await sb.from('pj_transacciones').update({ medio: nuevoMedio }).eq('id', id);
+  const { error } = await sb.from('pj_transacciones').update({ medio: nuevoMedio }).eq('id', id);
+  if (avisarError(error, 'cambiar la forma de pago')) { filtrarTxs(); return; }
   const t = todasTxs.find(x => x.id === id);
   if (t) t.medio = nuevoMedio;
 }
@@ -1442,7 +1485,8 @@ async function cambiarFecha(id, nuevaFecha) {
     if (t) t.fecha = nuevaFecha;
     return;
   }
-  await sb.from('pj_transacciones').update({ fecha: nuevaFecha }).eq('id', id);
+  const { error } = await sb.from('pj_transacciones').update({ fecha: nuevaFecha }).eq('id', id);
+  if (avisarError(error, 'cambiar la fecha')) { filtrarTxs(); return; }
   const t = todasTxs.find(x => x.id === id);
   if (t) t.fecha = nuevaFecha;
 }
@@ -1456,8 +1500,8 @@ async function cambiarCategoria(id, nuevaCat) {
   const catAnterior = t?.categoria;
   const iguales = t ? todasTxs.filter(x => x.id !== id && x.tipo === t.tipo && (x.categoria === '🔧 Otros' || x.categoria === catAnterior) && claveConcepto(x.descripcion) === clave) : [];
   if (!isDemo) {
-    await sb.from('pj_transacciones').update({ categoria: nuevaCat }).eq('id', id);
-    if (iguales.length) await sb.from('pj_transacciones').update({ categoria: nuevaCat }).in('id', iguales.map(x => x.id));
+    const { error } = await sb.from('pj_transacciones').update({ categoria: nuevaCat }).in('id', [id, ...iguales.map(x => x.id)]);
+    if (avisarError(error, 'cambiar la categoría')) { filtrarTxs(); return; }
   }
   if (t) t.categoria = nuevaCat;
   iguales.forEach(x => x.categoria = nuevaCat);
@@ -1467,15 +1511,21 @@ async function cambiarCategoria(id, nuevaCat) {
 }
 
 async function deleteTx(id) {
-  await sb.from('pj_transacciones').delete().eq('id', id);
+  const { error } = await sb.from('pj_transacciones').delete().eq('id', id);
+  if (avisarError(error, 'borrar el movimiento')) return;
   await cargarTransacciones(); await cargarPresupuestos();
 }
 
 // ─── PRESUPUESTO ───
+// Cada límite vale desde el mes en que se guarda hasta que se cambie: de cada categoría se usa el más reciente
 async function getPresupuestos() {
   if (isDemo) return demoData.presupuestos;
-  const { data } = await sb.from('pj_presupuestos').select('*').eq('user_id', currentUser.id).eq('mes', mesActual());
-  return data || [];
+  const { data, error } = await sb.from('pj_presupuestos').select('*').eq('user_id', currentUser.id)
+    .lte('mes', mesActual()).order('mes', { ascending: false });
+  if (avisarError(error, 'cargar los presupuestos')) return [];
+  const porCategoria = new Map();
+  (data || []).forEach(p => { if (!porCategoria.has(p.categoria)) porCategoria.set(p.categoria, p); });
+  return [...porCategoria.values()];
 }
 
 async function cargarPresupuestos() {
@@ -1515,16 +1565,21 @@ async function addPresupuesto() {
     else demoData.presupuestos.push({ id: 'p' + Date.now(), categoria: cat, limite, mes: mesActual() });
     await cargarPresupuestos(); return;
   }
-  const existing = await sb.from('pj_presupuestos').select('id').eq('user_id', currentUser.id).eq('categoria', cat).eq('mes', mesActual()).single();
-  if (existing.data) await sb.from('pj_presupuestos').update({ limite }).eq('id', existing.data.id);
-  else await sb.from('pj_presupuestos').insert({ user_id: currentUser.id, categoria: cat, limite, mes: mesActual() });
+  // El nuevo límite se guarda para este mes; los meses anteriores conservan el suyo
+  const existente = await sb.from('pj_presupuestos').select('id').eq('user_id', currentUser.id).eq('categoria', cat).eq('mes', mesActual()).limit(1);
+  if (avisarError(existente.error, 'guardar el límite')) return;
+  const { error } = existente.data.length
+    ? await sb.from('pj_presupuestos').update({ limite }).eq('id', existente.data[0].id)
+    : await sb.from('pj_presupuestos').insert({ user_id: currentUser.id, categoria: cat, limite, mes: mesActual() });
+  if (avisarError(error, 'guardar el límite')) return;
   await cargarPresupuestos();
 }
 
 // ─── METAS ───
 async function getMetas() {
   if (isDemo) return demoData.metas;
-  const { data } = await sb.from('pj_metas').select('*').eq('user_id', currentUser.id).order('created_at');
+  const { data, error } = await sb.from('pj_metas').select('*').eq('user_id', currentUser.id).order('created_at');
+  if (avisarError(error, 'cargar las metas')) return [];
   return data || [];
 }
 
@@ -1557,7 +1612,8 @@ async function addMeta() {
   const fecha = document.getElementById('meta-fecha').value;
   if (!nombre || !objetivo) { alert('Pon nombre y objetivo'); return; }
   if (isDemo) { demoData.metas.push({ id: 'm' + Date.now(), nombre, emoji, objetivo, ahorrado: 0, fecha_limite: fecha || null }); await cargarMetas(); return; }
-  await sb.from('pj_metas').insert({ user_id: currentUser.id, nombre, emoji, objetivo, ahorrado: 0, fecha_limite: fecha || null });
+  const { error } = await sb.from('pj_metas').insert({ user_id: currentUser.id, nombre, emoji, objetivo, ahorrado: 0, fecha_limite: fecha || null });
+  if (avisarError(error, 'crear la meta')) return;
   document.getElementById('meta-nombre').value = ''; document.getElementById('meta-objetivo').value = ''; document.getElementById('meta-emoji').value = ''; document.getElementById('meta-fecha').value = '';
   await cargarMetas();
 }
@@ -1567,13 +1623,15 @@ async function aportarMeta(id, ahorrado, objetivo) {
   if (!n || n <= 0) return;
   const nuevo = Math.min(ahorrado + n, objetivo);
   if (isDemo) { const m = demoData.metas.find(x => x.id === id); if (m) m.ahorrado = nuevo; await cargarMetas(); return; }
-  await sb.from('pj_metas').update({ ahorrado: nuevo }).eq('id', id);
+  const { error } = await sb.from('pj_metas').update({ ahorrado: nuevo }).eq('id', id);
+  if (avisarError(error, 'añadir el ahorro')) return;
   await cargarMetas();
 }
 
 async function deleteMeta(id) {
   if (!confirm('¿Eliminar esta meta?')) return;
-  await sb.from('pj_metas').delete().eq('id', id);
+  const { error } = await sb.from('pj_metas').delete().eq('id', id);
+  if (avisarError(error, 'eliminar la meta')) return;
   await cargarMetas();
 }
 
@@ -1693,23 +1751,28 @@ async function borrarTodo() {
     demoData.transacciones = [];
     await cargarTransacciones(); await cargarPresupuestos(); return;
   }
-  await sb.from('pj_transacciones').delete().eq('user_id', currentUser.id);
+  const { error } = await sb.from('pj_transacciones').delete().eq('user_id', currentUser.id);
+  if (avisarError(error, 'borrar el historial')) return;
   await cargarTransacciones(); await cargarPresupuestos();
 }
 
 async function borrarMes() {
   const input = document.getElementById('borrar-mes-input');
   const mes = input.value || mesActual();
-  if (!confirm(`¿Borrar todas las transacciones de ${mes}? Esta acción no se puede deshacer.`)) return;
+  if (!confirm(`¿Borrar todas las transacciones de ${nombreMes(mes)}? Esta acción no se puede deshacer.`)) return;
   if (isDemo) {
     demoData.transacciones = demoData.transacciones.filter(t => t.fecha.slice(0, 7) !== mes);
     await cargarTransacciones(); await cargarPresupuestos(); return;
   }
-  await sb.from('pj_transacciones')
+  // Hasta el día 1 del mes siguiente, sin incluirlo: "hasta el 31" no es una fecha válida en meses de 30 días ni en febrero
+  const [y, m] = mes.split('-').map(Number);
+  const mesSiguiente = m === 12 ? `${y + 1}-01-01` : `${y}-${String(m + 1).padStart(2, '0')}-01`;
+  const { error } = await sb.from('pj_transacciones')
     .delete()
     .eq('user_id', currentUser.id)
     .gte('fecha', mes + '-01')
-    .lte('fecha', mes + '-31');
+    .lt('fecha', mesSiguiente);
+  if (avisarError(error, 'borrar el mes')) return;
   await cargarTransacciones(); await cargarPresupuestos();
 }
 
@@ -1802,7 +1865,11 @@ async function guardarEfectivo() {
   if (isDemo) {
     demoData.transacciones.unshift({ id: 'd' + Date.now(), ...tx });
   } else {
-    await sb.from('pj_transacciones').insert({ user_id: currentUser.id, ...tx });
+    const { error } = await sb.from('pj_transacciones').insert({ user_id: currentUser.id, ...tx });
+    if (avisarError(error, 'guardar el gasto en efectivo')) {
+      document.getElementById('ef-msg').textContent = 'No se ha guardado. Inténtalo de nuevo.';
+      return;
+    }
   }
 
   document.getElementById('ef-msg').textContent = '✓ Añadido como efectivo';
@@ -1819,22 +1886,21 @@ let reglasCache = {}; // cache local para no hacer queries en cada importación
 async function cargarReglas() {
   if (isDemo) return;
   try {
-    const { data } = await sb.from('pj_reglas_categoria').select('concepto, categoria').eq('user_id', currentUser.id);
+    const data = await leerTodas(() => sb.from('pj_reglas_categoria').select('concepto, categoria').eq('user_id', currentUser.id).order('concepto'));
     reglasCache = {};
-    (data || []).forEach(r => { reglasCache[r.concepto.toLowerCase().trim()] = r.categoria; });
-  } catch(e) { console.error('Error cargando reglas', e); }
+    data.forEach(r => { reglasCache[r.concepto.toLowerCase().trim()] = r.categoria; });
+  } catch (error) { avisarError(error, 'cargar tus categorías aprendidas'); }
 }
 
 async function guardarRegla(concepto, categoria) {
   if (isDemo) return;
   const clave = claveConcepto(concepto);
   reglasCache[clave] = categoria;
-  try {
-    await sb.from('pj_reglas_categoria').upsert(
-      { user_id: currentUser.id, concepto: clave, categoria },
-      { onConflict: 'user_id,concepto' }
-    );
-  } catch(e) { console.error('Error guardando regla', e); }
+  const { error } = await sb.from('pj_reglas_categoria').upsert(
+    { user_id: currentUser.id, concepto: clave, categoria },
+    { onConflict: 'user_id,concepto' }
+  );
+  avisarError(error, 'recordar esta categoría para la próxima vez');
 }
 
 function getCatsPersonalizadas() {
@@ -1942,9 +2008,9 @@ async function importarEfectivo(input) {
     }
 
     if (!txsNuevas.length) { setImportMsg('No se encontraron movimientos', 'err'); return; }
-    await guardarImportacion(txsNuevas);
-    setImportMsg(`✓ ${txsNuevas.length} movimientos importados`, 'ok');
+    const r = await guardarImportacion(txsNuevas);
     input.value = '';
+    if (r) setImportMsg(`✓ ${resumenImportacion(r)}`, r.guardadas ? 'ok' : '');
   } catch(e) {
     console.error(e);
     setImportMsg('Error al leer el archivo', 'err');
@@ -2170,9 +2236,10 @@ async function importarCuenta(input) {
     }
 
     if (!txsNuevas.length) { setImportMsg('No se encontraron movimientos válidos', 'err'); return; }
-    await guardarImportacion(txsNuevas);
-    setImportMsg(`✓ ${banco.toUpperCase()} · ${txsNuevas.length} movimientos importados (${txsNuevas.filter(t => t.tipo === 'liquidacion_tarjeta').length} liquidaciones compensadas)`, 'ok');
+    const r = await guardarImportacion(txsNuevas);
     input.value = '';
+    const liq = txsNuevas.filter(t => t.tipo === 'liquidacion_tarjeta').length;
+    if (r) setImportMsg(`✓ ${banco.toUpperCase()} · ${resumenImportacion(r)}${liq ? ` · ${liq} liquidaciones compensadas` : ''}`, r.guardadas ? 'ok' : '');
   } catch(e) {
     console.error(e);
     setImportMsg('Error al leer el archivo', 'err');
@@ -2250,45 +2317,62 @@ async function importarTarjeta(input) {
     }
 
     if (!txsNuevas.length) { setImportMsg('No se encontraron movimientos en la tarjeta', 'err'); return; }
-    await guardarImportacion(txsNuevas);
-    setImportMsg(`✓ ${banco.toUpperCase()} · ${txsNuevas.length} movimientos de tarjeta importados`, 'ok');
+    const r = await guardarImportacion(txsNuevas);
     input.value = '';
+    if (r) setImportMsg(`✓ ${banco.toUpperCase()} · tarjeta · ${resumenImportacion(r)}`, r.guardadas ? 'ok' : '');
   } catch(e) {
     console.error(e);
     setImportMsg('Error al leer el archivo de tarjeta', 'err');
   }
 }
 
+function resumenImportacion(r) {
+  if (!r.guardadas) return 'todos los movimientos ya estaban importados, no se añadió nada';
+  return `${r.guardadas} movimientos importados` + (r.omitidas ? ` · ${r.omitidas} ya existían (omitidos)` : '');
+}
+
+// Devuelve { guardadas, omitidas }, o null si algo falló (el aviso ya se ha mostrado)
 async function guardarImportacion(txs) {
   if (isDemo) {
     txs.forEach(t => demoData.transacciones.unshift({ id: 'd' + Date.now() + Math.random(), ...t }));
-    await cargarTransacciones(); await cargarPresupuestos(); return;
+    await cargarTransacciones(); await cargarPresupuestos();
+    return { guardadas: txs.length, omitidas: 0 };
   }
 
-  // Obtener transacciones existentes para detectar duplicados
-  const { data: existentes } = await sb.from('pj_transacciones')
-    .select('fecha, descripcion, importe')
-    .eq('user_id', currentUser.id);
+  // Todos los movimientos que ya hay (aunque sean más de 1.000), para no duplicar
+  let existentes;
+  try {
+    existentes = await leerTodas(() => sb.from('pj_transacciones')
+      .select('id, fecha, descripcion, importe')
+      .eq('user_id', currentUser.id)
+      .order('id'));
+  } catch (error) {
+    avisarError(error, 'comprobar qué movimientos tenías ya');
+    setImportMsg('No se ha importado nada. Inténtalo de nuevo.', 'err');
+    return null;
+  }
 
   const norm = (s) => String(s || '').trim().toLowerCase().replace(/\s+/g, ' ');
-  const claves = new Set((existentes || []).map(t => `${t.fecha}|${norm(t.descripcion)}|${parseFloat(t.importe)}`));
+  const claves = new Set(existentes.map(t => `${t.fecha}|${norm(t.descripcion)}|${parseFloat(t.importe)}`));
 
   // Filtrar duplicados
   const nuevas = txs.filter(t => !claves.has(`${t.fecha}|${norm(t.descripcion)}|${parseFloat(t.importe)}`));
 
-  if (!nuevas.length) {
-    setImportMsg('Todos los movimientos ya estaban importados — no se añadió nada', '');
-    await cargarTransacciones(); await cargarPresupuestos(); return;
-  }
-
   const rows = nuevas.map(t => ({ user_id: currentUser.id, ...t }));
+  let guardadas = 0;
   for (let i = 0; i < rows.length; i += 100) {
-    await sb.from('pj_transacciones').insert(rows.slice(i, i + 100));
+    const lote = rows.slice(i, i + 100);
+    const { error } = await sb.from('pj_transacciones').insert(lote);
+    if (avisarError(error, 'guardar todos los movimientos')) {
+      setImportMsg(`Solo se guardaron ${guardadas} de ${nuevas.length} movimientos. Vuelve a importar el archivo: los que ya se guardaron no se duplicarán.`, 'err');
+      await cargarTransacciones(); await cargarPresupuestos();
+      return null;
+    }
+    guardadas += lote.length;
   }
 
-  const omitidos = txs.length - nuevas.length;
-  if (omitidos > 0) setImportMsg(`✓ ${nuevas.length} importados · ${omitidos} ya existían (omitidos)`, 'ok');
   await cargarTransacciones(); await cargarPresupuestos();
+  return { guardadas, omitidas: txs.length - nuevas.length };
 }
 
 // Selector de mes de Inicio: los meses del año en curso, del actual hacia atrás

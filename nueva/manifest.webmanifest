@@ -9,9 +9,76 @@
   "background_color": "#F4F5F7",
   "theme_color": "#F4F5F7",
   "icons": [
-    { "src": "iconos/icono-192.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "iconos/icono-512.png", "sizes": "512x512", "type": "image/png" },
-    { "src": "iconos/icono-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
-    { "src": "iconos/icono.svg", "sizes": "any", "type": "image/svg+xml" }
+    {
+      "src": "iconos/icono-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "iconos/icono-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "iconos/icono-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "iconos/icono.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Apuntar gasto",
+      "short_name": "Gasto",
+      "url": "./#/anadir?tipo=gasto&medio=tarjeta",
+      "icons": [
+        {
+          "src": "iconos/icono-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Apuntar Bizum",
+      "short_name": "Bizum",
+      "url": "./#/anadir?tipo=gasto&medio=bizum",
+      "icons": [
+        {
+          "src": "iconos/icono-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Apuntar transferencia",
+      "short_name": "Transferencia",
+      "url": "./#/anadir?tipo=gasto&medio=transferencia",
+      "icons": [
+        {
+          "src": "iconos/icono-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Apuntar ingreso",
+      "short_name": "Ingreso",
+      "url": "./#/anadir?tipo=ingreso&medio=transferencia",
+      "icons": [
+        {
+          "src": "iconos/icono-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    }
   ]
 }

@@ -84,7 +84,8 @@ export async function cargarTodo(usuario) {
     filasReglas.forEach(r => { reglas[claveConcepto(r.concepto)] = r.categoria; });
     // Los retenidos necesitan la columna «pendiente» (sql/2026-11-retenidos.sql)
     const conRetenidos = txs.length ? 'pendiente' in txs[0] : !(await sb.from('pj_transacciones').select('pendiente').limit(1)).error;
-    return { txs, presupuestos, metas, reglas, cuentas: await cargarCuentas(), conRetenidos };
+    const [cuentas, fijos] = await Promise.all([cargarCuentas(), cargarFijos()]);
+    return { txs, presupuestos, metas, reglas, cuentas, fijos, conRetenidos };
   } catch (error) {
     avisarError(error, 'cargar tus datos');
     return null;
@@ -97,6 +98,16 @@ async function cargarCuentas() {
     return await leerTodas(() => sb.from('pj_cuentas').select('*').eq('user_id', uid).order('creada').order('id'));
   } catch (error) {
     if (!faltaTabla(error)) avisarError(error, 'cargar tus cuentas');
+    return null;
+  }
+}
+
+// null si aún no existe la tabla (sql/2026-11-fijos.sql sin ejecutar): la app sigue funcionando sin movimientos fijos
+async function cargarFijos() {
+  try {
+    return await leerTodas(() => sb.from('pj_fijos').select('*').eq('user_id', uid).order('creado').order('id'));
+  } catch (error) {
+    if (!faltaTabla(error)) avisarError(error, 'cargar tus movimientos fijos');
     return null;
   }
 }
@@ -220,6 +231,29 @@ export async function guardarSaldoBanco(clave, nombre, saldo, fecha_saldo) {
   const { data, error } = await sb.from('pj_cuentas')
     .upsert({ user_id: uid, clave, nombre, tipo: 'banco', saldo, fecha_saldo }, { onConflict: 'user_id,clave' }).select().single();
   return avisarError(error, 'guardar el saldo del banco') ? null : data;
+}
+
+// ─── MOVIMIENTOS FIJOS ───
+export async function guardarFijo({ id, nombre, tipo, categoria, importe, dia, medio, ultimo }) {
+  const fila = { nombre, tipo, categoria, importe, dia, medio, ultimo };
+  if (demo) return { ...fila, id: id || 'd' + idDemo++, activo: true };
+  const { data, error } = id
+    ? await sb.from('pj_fijos').update(fila).eq('id', id).select().single()
+    : await sb.from('pj_fijos').insert({ user_id: uid, ...fila }).select().single();
+  return avisarError(error, 'guardar el movimiento fijo') ? null : data;
+}
+
+// Apunta hasta qué fecha se han creado ya sus previstos
+export async function marcarFijo(id, ultimo) {
+  if (demo) return true;
+  const { error } = await sb.from('pj_fijos').update({ ultimo }).eq('id', id);
+  return !avisarError(error, 'actualizar el movimiento fijo');
+}
+
+export async function borrarFijo(id) {
+  if (demo) return true;
+  const { error } = await sb.from('pj_fijos').delete().eq('id', id);
+  return !avisarError(error, 'quitar el movimiento fijo');
 }
 
 export async function borrarCuenta(id) {

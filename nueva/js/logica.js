@@ -251,7 +251,7 @@ export const MEDIOS = { tarjeta: 'Tarjeta', transferencia: 'Transferencia', bizu
 // ─── TU DINERO (saldos de cuentas, aparte de los ingresos y gastos del mes) ───
 export const TIPOS_CUENTA = { efectivo: ['Efectivo', 'cartera'], ahorro: ['Ahorro', 'escudo'], banco: ['Banco', 'banco'], inversion: ['Inversión', 'tendencia'] };
 export const totalCuentas = (cuentas, txs = []) => cuentas.reduce((s, c) => s + saldoDisponible(c, txs).disponible, 0);
-const NOMBRES_CUENTA = { bankinter: 'Bankinter', bbva: 'BBVA', santander: 'Santander', caixabank: 'CaixaBank', ing: 'ING', revolut: 'Revolut', n26: 'N26', efectivo: 'Efectivo', generico: 'Otro banco', apple_pay: 'Apple Pay', manual: 'Apuntado a mano' };
+const NOMBRES_CUENTA = { bankinter: 'Bankinter', bbva: 'BBVA', santander: 'Santander', caixabank: 'CaixaBank', ing: 'ING', revolut: 'Revolut', n26: 'N26', efectivo: 'Efectivo', generico: 'Otro banco', apple_pay: 'Apple Pay', manual: 'Apuntado a mano', previsto: 'Previsto' };
 export const formaDePago = t => t.cuenta === 'apple_pay' ? 'Apple Pay' : MEDIOS[t.medio] || 'Transferencia';
 
 // Pagos que llegan del atajo de Apple Pay sin clasificar: se les pone la categoría aprendida o la automática.
@@ -317,6 +317,38 @@ export function separarYaApuntados(nuevos, txs) {
 // Al importar el extracto se junta con su movimiento del banco en vez de repetirse.
 export const CUENTA_MANUAL = 'manual';
 
+// ─── MOVIMIENTOS FIJOS (mensualidad, nómina, beca, alquiler…) ───
+// Cada persona apunta los suyos (tabla pj_fijos). El día que toca, la app crea un movimiento «previsto» (cuenta 'previsto')
+// que cuenta como uno más; al importar el extracto se junta con el real y toma su importe aunque haya cambiado.
+export const CUENTA_PREVISTO = 'previsto';
+// Fecha del fijo en un mes; si el mes tiene menos días, el último
+export const fechaFijo = (f, ym) => `${ym}-${String(Math.min(+f.dia, diasDelMes(ym))).padStart(2, '0')}`;
+// Última vez que tocaba hasta hoy (incluido): al crear un fijo se empieza a contar desde ahí, para no repetir lo que ya está
+export function ultimaFechaFijo(f, hoy = hoyISO()) {
+  const ym = hoy.slice(0, 7), este = fechaFijo(f, ym);
+  return este <= hoy ? este : fechaFijo(f, sumarMeses(ym, -1));
+}
+export function proximaFechaFijo(f, hoy = hoyISO()) {
+  const ym = hoy.slice(0, 7), este = fechaFijo(f, ym);
+  return este > hoy ? este : fechaFijo(f, sumarMeses(ym, 1));
+}
+// Previstos que faltan por crear: los que tocaban después de «ultimo» y hasta hoy (como mucho 6 por fijo)
+export function previstosPendientes(fijos, hoy = hoyISO()) {
+  const lista = [];
+  (fijos || []).filter(f => f.activo !== false).forEach(f => {
+    const desde = f.ultimo || ultimaFechaFijo(f, hoy);
+    const suyos = [];
+    for (let ym = desde.slice(0, 7), i = 0; i < 12; ym = sumarMeses(ym, 1), i++) {
+      const fecha = fechaFijo(f, ym);
+      if (fecha > hoy) break;
+      if (fecha > desde) suyos.push({ fijo: f, fecha });
+    }
+    lista.push(...suyos.slice(-6));
+  });
+  return lista;
+}
+export const movimientoPrevisto = (f, fecha) => ({ fecha, descripcion: f.nombre, importe: +f.importe, tipo: f.tipo, categoria: f.categoria, medio: f.medio || 'transferencia', cuenta: CUENTA_PREVISTO });
+
 // Empareja movimientos nuevos del extracto con lo que ya estaba apuntado: mismo tipo e importe y fecha del banco
 // entre 3 días antes y 7 después. Si hay varios posibles, gana la fecha más cercana, la misma forma de pago y alguna palabra en común.
 // - seguro: era un apuntado a mano (cuenta 'manual');
@@ -328,26 +360,36 @@ export function emparejarApuntados(nuevos, txs, extracto) {
   const cuentas = new Set(extracto.map(t => t.cuenta));
   const fechas = extracto.map(t => t.fecha).sort();
   const desde = fechas[0], hasta = fechas[fechas.length - 1];
-  const candidatos = txs.filter(t => (t.tipo === 'gasto' || t.tipo === 'ingreso') && !t.pendiente && (t.cuenta === CUENTA_MANUAL
+  const candidatos = txs.filter(t => (t.tipo === 'gasto' || t.tipo === 'ingreso') && !t.pendiente && (t.cuenta === CUENTA_MANUAL || t.cuenta === CUENTA_PREVISTO
     || (cuentas.has(t.cuenta) && t.fecha >= desde && t.fecha <= hasta && !enExtracto.has(claveMovimiento(t)))));
   const palabras = s => new Set(String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').split(/[^a-z0-9ñ]+/).filter(p => p.length >= 4));
   const posibles = [];
   nuevos.forEach((n, i) => {
     const pn = palabras(n.descripcion);
     candidatos.forEach((g, j) => {
-      if (g.tipo !== n.tipo || Math.abs(+g.importe - +n.importe) >= 0.005) return;
-      const d = diasEntre(g.fecha, n.fecha);
-      if (d < -3 || d > 7) return;
+      if (g.tipo !== n.tipo) return;
+      const d = diasEntre(g.fecha, n.fecha), mismoImporte = Math.abs(+g.importe - +n.importe) < 0.005;
       const comun = [...palabras(g.descripcion)].some(p => pn.has(p));
-      posibles.push({ i, j, puntos: Math.abs(d) + (g.medio && n.medio && g.medio !== n.medio ? 3 : 0) - (comun ? 3 : 0) + (g.cuenta === CUENTA_MANUAL ? 0 : 0.5) });
+      if (g.cuenta === CUENTA_PREVISTO) {
+        // Previsto: el real puede llegar unos días antes o después y con otro importe (hasta la mitad de diferencia).
+        // Seguro si coincide el importe, o la categoría con poca diferencia; si no, se pregunta.
+        if (d < -10 || d > 10) return;
+        const dif = Math.abs(+g.importe - +n.importe) / +g.importe, mismaCat = n.categoria === g.categoria;
+        const generica = SIN_CLASIFICAR.has(n.categoria) || n.categoria === '💰 Ingresos';
+        if (dif > 0.5 || !(mismoImporte || mismaCat || generica)) return;
+        posibles.push({ i, j, seguro: mismoImporte || (mismaCat && dif <= 0.2) || (generica && dif <= 0.1 && Math.abs(d) <= 5), puntos: Math.abs(d) / 3 + (mismoImporte ? 0 : 1 + dif * 4) - (mismaCat ? 3 : 0) - (comun ? 2 : 0) });
+        return;
+      }
+      if (!mismoImporte || d < -3 || d > 7) return;
+      posibles.push({ i, j, seguro: g.cuenta === CUENTA_MANUAL, puntos: Math.abs(d) + (g.medio && n.medio && g.medio !== n.medio ? 3 : 0) - (comun ? 3 : 0) + (g.cuenta === CUENTA_MANUAL ? 0 : 0.5) });
     });
   });
   posibles.sort((a, b) => a.puntos - b.puntos);
   const usadosN = new Set(), usadosG = new Set(), pares = [];
-  posibles.forEach(({ i, j }) => {
+  posibles.forEach(({ i, j, seguro }) => {
     if (usadosN.has(i) || usadosG.has(j)) return;
     usadosN.add(i); usadosG.add(j);
-    pares.push({ guardado: candidatos[j], banco: nuevos[i], seguro: candidatos[j].cuenta === CUENTA_MANUAL });
+    pares.push({ guardado: candidatos[j], banco: nuevos[i], seguro, previsto: candidatos[j].cuenta === CUENTA_PREVISTO });
   });
   pares.sort((a, b) => b.banco.fecha.localeCompare(a.banco.fecha));
   return { quedan: nuevos.filter((_, i) => !usadosN.has(i)), pares };

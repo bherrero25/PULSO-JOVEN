@@ -2,8 +2,8 @@
 
 import { SPRITE, ic } from './iconos.js';
 import * as D from './datos.js';
-import { esc, mesActual, sumarMeses, mesesDisponibles, porRevisar, resumenMes, clasificarPagosAtajo } from './logica.js';
-import { abrirHoja, cerrarHoja, cabeceraHoja, hojaAbierta } from './ui.js';
+import { esc, fmt, mesActual, sumarMeses, mesesDisponibles, porRevisar, resumenMes, clasificarPagosAtajo, previstosPendientes, movimientoPrevisto, claveMovimiento } from './logica.js';
+import { abrirHoja, cerrarHoja, cabeceraHoja, hojaAbierta, toast } from './ui.js';
 import { barraInferior, menuLateral, marca, inicial } from './componentes.js';
 import * as inicio from './pantallas/inicio.js';
 import * as movimientos from './pantallas/movimientos.js';
@@ -11,11 +11,12 @@ import * as anadir from './pantallas/anadir.js';
 import * as resumen from './pantallas/resumen.js';
 import * as planes from './pantallas/planes.js';
 import * as dinero from './pantallas/dinero.js';
+import * as fijos from './pantallas/fijos.js';
 
 // Estado de la app: datos de la persona y lo que tiene elegido en pantalla
 const E = {
   usuario: null, nombre: '', cargado: false,
-  txs: [], presupuestos: [], metas: [], reglas: {}, cuentas: null, conRetenidos: false,
+  txs: [], presupuestos: [], metas: [], reglas: {}, cuentas: null, fijos: null, conRetenidos: false,
   meses: [mesActual()], mes: mesActual(), pantalla: 'inicio',
   filtro: 'todos', q: '',
   tabAnadir: 'mano', nuevo: anadir.nuevoMovimiento(), importacion: null,
@@ -44,8 +45,15 @@ function pintar() {
 
 function irA() {
   const anterior = E.pantalla;
-  const p = location.hash.replace(/^#\/?/, '') || 'inicio';
+  const [p, consulta] = (location.hash.replace(/^#\/?/, '') || 'inicio').split('?');
   E.pantalla = PANTALLAS[p] ? p : 'inicio';
+  // «Apuntar rápido» (botones de Inicio y accesos del icono): #/anadir?tipo=gasto&medio=bizum abre el formulario ya preparado
+  if (p === 'anadir' && consulta) {
+    const q = new URLSearchParams(consulta);
+    E.nuevo = anadir.nuevoMovimiento({ tipo: q.get('tipo'), medio: q.get('medio') });
+    E.tabAnadir = 'mano';
+    history.replaceState(null, '', '#/anadir');
+  }
   if (anterior === 'anadir' && E.pantalla !== 'anadir') E.importacion = null;
   cerrarHoja();
   pintar();
@@ -111,7 +119,31 @@ async function empezar(usuario) {
   Object.assign(E, datos, { cargado: true });
   ultimaCarga = Date.now();
   irA();
+  await generarPrevistos();
   clasificarAtajo();
+}
+
+// Movimientos fijos: el día que toca se apunta el previsto, una sola vez («ultimo» guarda hasta dónde se han creado)
+async function generarPrevistos() {
+  const pendientes = previstosPendientes(E.fijos);
+  if (!pendientes.length) return;
+  const claves = new Set(E.txs.map(claveMovimiento));
+  const creados = [];
+  for (const { fijo, fecha } of pendientes) {
+    const tx = movimientoPrevisto(fijo, fecha);
+    if (!claves.has(claveMovimiento(tx))) {
+      const fila = await D.insertarMovimiento(tx);
+      if (!fila) break; // el aviso ya se ha mostrado; se reintentará la próxima vez que se abra la app
+      E.txs.push(fila);
+      creados.push(fila);
+    }
+    if (!await D.marcarFijo(fijo.id, fecha)) break;
+    fijo.ultimo = fecha;
+  }
+  if (!creados.length) return;
+  E.txs.sort((a, b) => b.fecha.localeCompare(a.fecha));
+  pintar();
+  toast(creados.length === 1 ? `Apuntado lo previsto: ${creados[0].descripcion}, ${fmt(creados[0].importe)}` : `Apuntados ${creados.length} movimientos fijos previstos`);
 }
 
 // Los pagos del atajo de Apple Pay llegan sin categoría: se clasifican con lo aprendido o las reglas automáticas
@@ -135,6 +167,7 @@ document.addEventListener('visibilitychange', async () => {
   if (!datos || hojaAbierta()) return;
   Object.assign(E, datos);
   pintar();
+  await generarPrevistos();
   clasificarAtajo();
 });
 
@@ -161,7 +194,7 @@ const generales = {
 };
 
 const ctx = { E, pintar };
-const ACCIONES = { ...generales, ...movimientos.acciones, ...anadir.acciones, ...resumen.acciones, ...planes.acciones, ...dinero.acciones };
+const ACCIONES = { ...generales, ...movimientos.acciones, ...anadir.acciones, ...resumen.acciones, ...planes.acciones, ...dinero.acciones, ...fijos.acciones };
 const ENTRADAS = { ...movimientos.entradas, ...anadir.entradas, ...planes.entradas };
 const CAMBIOS = { ...movimientos.cambios, ...anadir.cambios };
 

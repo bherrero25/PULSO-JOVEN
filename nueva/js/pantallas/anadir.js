@@ -1,14 +1,31 @@
 // Añadir: a mano con teclado, subiendo el extracto del banco o (más adelante) de forma automática
 
 import { ic } from '../iconos.js';
-import { esc, fmt, hoyISO, fechaCorta, RAPIDAS_GASTO, RAPIDAS_INGRESO, categoriaPorId, MEDIOS, nombreCuenta, infoCategoria, separarYaApuntados, conciliarRetenidos, porRevisar, emparejarApuntados, CUENTA_MANUAL } from '../logica.js';
+import { esc, fmt, hoyISO, fechaCorta, RAPIDAS_GASTO, RAPIDAS_INGRESO, categoriaPorId, MEDIOS, nombreCuenta, infoCategoria, separarYaApuntados, conciliarRetenidos, porRevisar, emparejarApuntados, CUENTA_MANUAL, BD } from '../logica.js';
 import { ficha, conceptoVisible } from '../componentes.js';
 import { toast, abrirHoja, cabeceraHoja, confirmar } from '../ui.js';
 import * as D from '../datos.js';
 import { leerFilas, analizarExtracto } from '../importar.js';
 import { preguntarTraspaso } from './dinero.js';
 
-export const nuevoMovimiento = () => ({ tipo: 'gasto', importe: '', cat: 'comida', fecha: hoyISO(), medio: 'tarjeta', concepto: '' });
+// ─── A MANO ───
+// La forma de pago se elige con botones; con Bizum o transferencia los textos hablan de enviar y recibir, y la categoría
+// se puede dejar para luego (queda «por revisar»). Se puede abrir ya preparado con #/anadir?tipo=gasto&medio=bizum.
+const LUEGO = 'luego';
+const FORMAS = [['tarjeta', 'Tarjeta'], ['efectivo', 'Efectivo'], ['bizum', 'Bizum'], ['transferencia', 'Transferencia']];
+const conPersona = medio => medio === 'bizum' || medio === 'transferencia';
+const catPorDefecto = (tipo, medio) => conPersona(medio) ? LUEGO : tipo === 'gasto' ? 'comida' : 'mensualidad';
+export function nuevoMovimiento({ tipo, medio } = {}) {
+  const t = tipo === 'ingreso' ? 'ingreso' : 'gasto';
+  const m = MEDIOS[medio] ? medio : t === 'gasto' ? 'tarjeta' : 'transferencia';
+  return { tipo: t, importe: '', cat: catPorDefecto(t, m), catElegida: false, fecha: hoyISO(), medio: m, concepto: '' };
+}
+function textosNuevo(n) {
+  const g = n.tipo === 'gasto';
+  if (n.medio === 'bizum') return { tipos: ['Enviado', 'Recibido'], concepto: g ? '¿A quién?' : '¿De quién?', guardar: g ? 'Guardar Bizum enviado' : 'Guardar Bizum recibido', nombre: g ? 'Bizum enviado' : 'Bizum recibido' };
+  if (n.medio === 'transferencia') return { tipos: ['Enviada', 'Recibida'], concepto: g ? '¿A quién o para qué?' : '¿De quién o de qué?', guardar: g ? 'Guardar transferencia' : 'Guardar transferencia recibida', nombre: g ? 'Transferencia enviada' : 'Transferencia recibida' };
+  return { tipos: ['Gasto', 'Ingreso'], concepto: '¿Qué es? (opcional)', guardar: g ? 'Guardar gasto' : 'Guardar ingreso', nombre: g ? 'Gasto' : 'Ingreso' };
+}
 
 export function render(E) {
   const tab = E.tabAnadir;
@@ -20,31 +37,32 @@ export function render(E) {
       <span style="width:44px"></span>
     </header>
     <div class="segmentado" role="tablist" aria-label="Cómo añadirlo" style="margin:0 16px">${pestaña('mano', 'A mano')}${pestaña('extracto', 'Extracto')}${pestaña('auto', 'Automático')}</div>
-    <div class="anadir-cuerpo">${tab === 'mano' ? aMano(E) : tab === 'extracto' ? extracto(E) : automatico()}</div>
+    <div class="anadir-cuerpo">${tab === 'mano' ? aMano(E) : tab === 'extracto' ? extracto(E) : automatico(E)}</div>
   </div>`;
 }
 
 function aMano(E) {
   const n = E.nuevo;
   const ids = n.tipo === 'gasto' ? RAPIDAS_GASTO : RAPIDAS_INGRESO;
+  const tx = textosNuevo(n);
   const boton = (k, t) => `<button type="button" data-accion="tipo-nuevo" data-valor="${k}" aria-pressed="${n.tipo === k}">${t}</button>`;
+  const luego = `<button type="button" class="cat-chip" data-accion="cat-nuevo" data-valor="${LUEGO}" aria-pressed="${n.cat === LUEGO}">${ficha({ icono: 'otros', tipo: 'gasto' }, 'peq')}Lo decido luego</button>`;
   return `
-    <div class="tipo" role="group" aria-label="Tipo">${boton('gasto', 'Gasto')}${boton('ingreso', 'Ingreso')}</div>
+    <div class="tipo" role="group" aria-label="Tipo">${boton('gasto', tx.tipos[0])}${boton('ingreso', tx.tipos[1])}</div>
+    <div class="formas" role="group" aria-label="Forma de pago">${FORMAS.map(([k, t]) => `<button type="button" data-accion="forma-nuevo" data-valor="${k}" aria-pressed="${n.medio === k}">${t}</button>`).join('')}</div>
     <div class="pantalla-importe num${n.importe ? '' : ' vacio-imp'}${n.tipo === 'ingreso' && n.importe ? ' positivo' : ''}" aria-live="polite">${n.importe ? (n.tipo === 'gasto' ? '−' : '+') + n.importe : '0'} €</div>
     <div class="chips sin-scroll" role="group" aria-label="Categoría">
-      ${ids.map(id => { const c = categoriaPorId(id); return `<button type="button" class="cat-chip" data-accion="cat-nuevo" data-valor="${id}" aria-pressed="${n.cat === id}">${ficha(c, 'peq')}${esc(c.nombre)}</button>`; }).join('')}
+      ${conPersona(n.medio) ? luego : ''}${ids.map(id => { const c = categoriaPorId(id); return `<button type="button" class="cat-chip" data-accion="cat-nuevo" data-valor="${id}" aria-pressed="${n.cat === id}">${ficha(c, 'peq')}${esc(c.nombre)}</button>`; }).join('')}${conPersona(n.medio) ? '' : luego}
     </div>
-    <div class="par">
+    <div class="par" style="grid-template-columns:minmax(0,1fr) 150px">
+      <label class="campo"><span class="solo-lector">Concepto</span><input type="text" placeholder="${tx.concepto}" value="${esc(n.concepto)}" data-entrada="concepto-nuevo" maxlength="80"></label>
       <label class="campo"><span class="solo-lector">Fecha</span><input type="date" value="${n.fecha}" max="${hoyISO()}" data-entrada="fecha-nuevo"></label>
-      <label class="campo"><span class="solo-lector">Forma de pago</span><select data-entrada="medio-nuevo">
-        ${Object.entries(MEDIOS).map(([k, v]) => `<option value="${k}"${n.medio === k ? ' selected' : ''}>${v}</option>`).join('')}</select></label>
     </div>
-    <label class="campo"><span class="solo-lector">Concepto</span><input type="text" placeholder="¿Qué es? (opcional)" value="${esc(n.concepto)}" data-entrada="concepto-nuevo" maxlength="80"></label>
     <div class="teclado" role="group" aria-label="Teclado">
       ${['1', '2', '3', '4', '5', '6', '7', '8', '9', ',', '0'].map(k => `<button type="button" class="num" data-accion="tecla" data-valor="${k}">${k}</button>`).join('')}
       <button type="button" data-accion="tecla" data-valor="borrar" aria-label="Borrar">${ic('borrar', 'ic-l')}</button>
     </div>
-    <button type="button" class="boton" data-accion="guardar-nuevo">${n.tipo === 'gasto' ? 'Guardar gasto' : 'Guardar ingreso'}</button>`;
+    <button type="button" class="boton" data-accion="guardar-nuevo">${tx.guardar}</button>`;
 }
 
 function extracto(E) {
@@ -80,7 +98,7 @@ function extracto(E) {
       </section>
       ${hayCambios ? `<button type="button" class="boton" data-accion="confirmar-importacion"${imp.guardando ? ' disabled' : ''}>${imp.guardando ? 'Guardando…'
         : aImportar.length ? `Importar ${aImportar.length} ${aImportar.length === 1 ? 'movimiento' : 'movimientos'}`
-        : unir.length ? `Juntar ${unir.length === 1 ? 'el movimiento' : `los ${unir.length} movimientos`} con lo que apuntaste`
+        : unir.length ? `Juntar ${unir.length === 1 ? 'el movimiento' : `los ${unir.length} movimientos`} con lo que ya tenías`
         : imp.cobrados.length || imp.caducados.length ? 'Actualizar los retenidos' : `Actualizar el saldo de ${esc(nombreCuenta(imp.banco))}`}</button>` : ''}
       <button type="button" class="boton suave" data-accion="cancelar-importacion">${hayCambios ? 'Cancelar' : 'Elegir otro archivo'}</button>
       <p class="nota">Después podrás cambiar la categoría de cualquiera; la app aprenderá de tus cambios.</p>`;
@@ -108,23 +126,29 @@ function bloquePares(pares, seguros) {
   if (!lista.length) return '';
   const n = lista.length;
   const intro = seguros
-    ? `<b>${n === 1 ? 'Ya lo habías apuntado tú' : `${n} ya los habías apuntado tú`}</b>: no se ${n === 1 ? 'repite' : 'repiten'}. ${n === 1 ? 'Se queda' : 'Se quedan'} con tu categoría y ${n === 1 ? 'toma' : 'toman'} la fecha y el concepto del banco.`
-    : `<b>${n === 1 ? '¿Ya lo tenías?' : `${n} posibles repetidos`}</b> Mismo importe y fecha parecida a algo que ya tenías guardado. ${n === 1 ? 'Márcalo si es' : 'Marca los que sean'} lo mismo y no se ${n === 1 ? 'repetirá' : 'repetirán'}; si no, ${n === 1 ? 'entra' : 'entran'} como ${n === 1 ? 'nuevo' : 'nuevos'}.`;
+    ? `<b>${n === 1 ? 'Ya lo tenías apuntado' : `${n} ya los tenías apuntados`}</b>: no se ${n === 1 ? 'repite' : 'repiten'}. ${n === 1 ? 'Se queda' : 'Se quedan'} con tu categoría y ${n === 1 ? 'toma' : 'toman'} la fecha, el concepto y el importe del banco.`
+    : `<b>${n === 1 ? '¿Ya lo tenías?' : `${n} posibles repetidos`}</b> Se ${n === 1 ? 'parece' : 'parecen'} a algo que ya tenías guardado (importe y fecha parecidos). ${n === 1 ? 'Márcalo si es' : 'Marca los que sean'} lo mismo y no se ${n === 1 ? 'repetirá' : 'repetirán'}; si no, ${n === 1 ? 'entra' : 'entran'} como ${n === 1 ? 'nuevo' : 'nuevos'}.`;
   return `<div style="background:var(--fondo);border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:4px;font-size:13px;line-height:1.45;color:#33393F">
     <span>${intro}</span>
-    ${lista.map(({ guardado: g, banco: b, unir, i }) => `<div style="border-top:1px solid var(--linea);margin-top:6px;padding-top:6px">
+    ${lista.map(x => { const { guardado: g, banco: b, unir, i } = x; return `<div style="border-top:1px solid var(--linea);margin-top:6px;padding-top:6px">
       <div class="fila" style="padding:4px 0">${ficha(infoCategoria(g.categoria), 'peq')}<span class="cuerpo"><span class="concepto" style="font-size:14px">${esc(b.descripcion)}</span><span class="detalle">${fechaCorta(b.fecha)} · en el banco${b.pendiente ? ' <span class="retenido">Retenido</span>' : ''}</span></span>
         <span class="importe num${b.tipo === 'ingreso' ? ' positivo' : ''}" style="font-size:14px">${fmt(b.tipo === 'ingreso' ? +b.importe : -b.importe, true)}</span></div>
-      <label class="casilla" style="min-height:36px;font-size:13px"><input type="checkbox" data-cambio="par-unir" data-i="${i}"${unir ? ' checked' : ''}> <span>Es «${esc(conceptoVisible(g))}», ${seguros ? 'que apuntaste' : 'que ya tenías,'} el ${fechaCorta(g.fecha)}</span></label>
-    </div>`).join('')}
+      <label class="casilla" style="min-height:36px;font-size:13px"><input type="checkbox" data-cambio="par-unir" data-i="${i}"${unir ? ' checked' : ''}> <span>${x.previsto ? `Es lo previsto el ${fechaCorta(g.fecha)}: «${esc(conceptoVisible(g))}»${Math.abs(g.importe - b.importe) >= 0.005 ? ` (${fmt(g.importe)}; se queda el importe del banco)` : ''}` : `Es «${esc(conceptoVisible(g))}», ${seguros ? 'que apuntaste' : 'que ya tenías,'} el ${fechaCorta(g.fecha)}`}</span></label>
+    </div>`; }).join('')}
   </div>`;
 }
 
-function automatico() {
+function automatico(E) {
   const opcion = (icono, titulo, plataforma, texto) => `<div class="opcion futura">
     <div class="cab"><span class="ficha">${ic(icono)}</span><b>${titulo}</b><span class="pastilla gris">PRÓXIMAMENTE</span></div>
     <p>${texto}</p><span class="nota">${plataforma}</span></div>`;
   return `<p class="texto-2" style="font-size:14px;line-height:1.45">Formas de que tus movimientos lleguen solos. Pulso Joven nunca te pedirá las claves de tu banco.</p>
+    <div class="opcion">
+      <div class="cab"><span class="ficha" style="background:var(--tinta);color:var(--lima)">${ic('calendario')}</span><b>Movimientos fijos</b><span class="nota">Cualquier móvil</span></div>
+      <p>La mensualidad, la nómina, una beca, el alquiler… Apúntalos una vez y cada mes aparecerán solos el día que tocan, como «previstos».</p>
+      <span class="nota">Al subir el extracto se juntan con el de verdad, aunque el importe cambie un poco.</span>
+      <button type="button" class="boton peq" data-accion="gestionar-fijos">${E.fijos?.length ? `Ver tus movimientos fijos (${E.fijos.length})` : 'Configurar'}</button>
+    </div>
     <div class="opcion">
       <div class="cab"><span class="ficha" style="background:var(--tinta);color:var(--lima)">${ic('movil')}</span><b>Pagos con Apple Pay</b><span class="nota">iPhone</span></div>
       <p>Configura un atajo una vez y cada pago con el iPhone o el Apple Watch en una tienda se apuntará solo, sin abrir nada.</p>
@@ -140,12 +164,20 @@ export const acciones = {
   'tab-anadir': (ctx, el) => { ctx.E.tabAnadir = el.dataset.valor; ctx.pintar(); },
   'tipo-nuevo': (ctx, el) => {
     const n = ctx.E.nuevo;
+    if (n.tipo === el.dataset.valor) return;
     n.tipo = el.dataset.valor;
-    n.cat = n.tipo === 'gasto' ? 'comida' : 'mensualidad';
-    n.medio = n.tipo === 'gasto' ? 'tarjeta' : 'transferencia';
+    if (n.tipo === 'ingreso' && n.medio === 'tarjeta') n.medio = 'transferencia';
+    // La categoría elegida no vale para el otro tipo (salvo «luego»): vuelve a la de por defecto
+    if (n.cat !== LUEGO || !n.catElegida) { n.cat = catPorDefecto(n.tipo, n.medio); n.catElegida = false; }
     ctx.pintar();
   },
-  'cat-nuevo': (ctx, el) => { ctx.E.nuevo.cat = el.dataset.valor; ctx.pintar(); },
+  'forma-nuevo': (ctx, el) => {
+    const n = ctx.E.nuevo;
+    n.medio = el.dataset.valor;
+    if (!n.catElegida) n.cat = catPorDefecto(n.tipo, n.medio);
+    ctx.pintar();
+  },
+  'cat-nuevo': (ctx, el) => { Object.assign(ctx.E.nuevo, { cat: el.dataset.valor, catElegida: true }); ctx.pintar(); },
   'tecla': (ctx, el) => {
     const n = ctx.E.nuevo, k = el.dataset.valor;
     let a = n.importe;
@@ -163,18 +195,21 @@ export const acciones = {
     const { E } = ctx, n = E.nuevo;
     const importe = parseFloat(n.importe.replace(',', '.'));
     if (!importe) { toast('Escribe el importe con el teclado'); return; }
-    const cat = categoriaPorId(n.cat);
+    // «Lo decido luego»: queda por revisar (los Bizum, como «Bizum enviado/recibido»)
+    const luego = n.cat === LUEGO, cat = luego ? null : categoriaPorId(n.cat), textos = textosNuevo(n);
+    const categoria = !luego ? cat.bd : n.medio === 'bizum' ? (n.tipo === 'gasto' ? '📱 Bizum enviado' : '📱 Bizum recibido') : BD.OTROS;
     // Lo pagado en efectivo no sale en el banco; lo demás (y meter efectivo en el banco) se juntará con el extracto
-    const cuenta = n.medio === 'efectivo' && cat.id !== 'traspaso' ? 'efectivo' : CUENTA_MANUAL;
-    const tx = { fecha: n.fecha || hoyISO(), descripcion: n.concepto.trim() || cat.nombre, importe, tipo: n.tipo, categoria: cat.bd, medio: n.medio, cuenta };
+    const cuenta = n.medio === 'efectivo' && n.cat !== 'traspaso' ? 'efectivo' : CUENTA_MANUAL;
+    const descripcion = n.concepto.trim() || (conPersona(n.medio) || luego ? textos.nombre : cat.nombre);
+    const tx = { fecha: n.fecha || hoyISO(), descripcion, importe, tipo: n.tipo, categoria, medio: n.medio, cuenta };
     const fila = await D.insertarMovimiento(tx);
     if (!fila) return;
     E.txs.push(fila);
     E.txs.sort((a, b) => b.fecha.localeCompare(a.fecha));
     E.nuevo = nuevoMovimiento();
     // Un traspaso pregunta de qué cuenta sale el dinero, ya en Inicio (al cambiar de pantalla se cierran las hojas)
-    if (cat.id === 'traspaso') window.addEventListener('hashchange', () => preguntarTraspaso(ctx, fila), { once: true });
-    else toast(n.tipo === 'gasto' ? `Gasto de ${fmt(importe)} guardado` : `Ingreso de ${fmt(importe)} guardado`);
+    if (n.cat === 'traspaso') window.addEventListener('hashchange', () => preguntarTraspaso(ctx, fila), { once: true });
+    else toast(`${textos.nombre} de ${fmt(importe)} ${n.medio === 'transferencia' ? 'guardada' : 'guardado'}${luego ? '. Ponle categoría cuando quieras en «Por revisar».' : ''}`);
     location.hash = '#/inicio';
   },
   'cancelar-importacion': (ctx) => { ctx.E.importacion = null; ctx.pintar(); },
@@ -226,7 +261,7 @@ export const acciones = {
     // y conserva su categoría y su forma de pago
     let unidos = 0;
     for (const { guardado, banco } of pares.filter(x => x.unir)) {
-      const cambios = { fecha: banco.fecha, descripcion: banco.descripcion, cuenta: banco.cuenta };
+      const cambios = { fecha: banco.fecha, descripcion: banco.descripcion, cuenta: banco.cuenta, importe: banco.importe };
       if (E.conRetenidos) cambios.pendiente = !!banco.pendiente;
       if (porRevisar(guardado, E.reglas) && !porRevisar(banco, E.reglas)) cambios.categoria = banco.categoria;
       if (await D.actualizarMovimientos([guardado.id], cambios, 'juntar lo que apuntaste con el movimiento del banco')) { Object.assign(guardado, cambios); unidos++; }
@@ -251,7 +286,6 @@ export const acciones = {
 
 export const entradas = {
   'fecha-nuevo': (ctx, el) => { ctx.E.nuevo.fecha = el.value; },
-  'medio-nuevo': (ctx, el) => { ctx.E.nuevo.medio = el.value; },
   'concepto-nuevo': (ctx, el) => { ctx.E.nuevo.concepto = el.value; }
 };
 

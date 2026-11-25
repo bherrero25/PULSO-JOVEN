@@ -4,6 +4,9 @@ import { ic } from '../iconos.js';
 import { esc, fmt, fmt0, nombreMes, resumenMes, ritmoDelMes, estadoPresupuestos, porRevisar, gastoHastaDia, sumarMeses, porCategoria, hoyISO, fechaCorta, TIPOS_CUENTA, totalCuentas, saldoDisponible } from '../logica.js';
 import { selectorMes, filaMovimiento, ficha, barraPresupuesto, textoEstado, inicial } from '../componentes.js';
 
+// Botones para apuntar a mano en dos toques: abren el formulario ya preparado
+const RAPIDOS = [['gasto', 'tarjeta', 'Gasto', 'menos'], ['ingreso', 'transferencia', 'Ingreso', 'mas'], ['gasto', 'bizum', 'Bizum', 'movil'], ['gasto', 'transferencia', 'Transferencia', 'banco']];
+
 export function render(E) {
   const R = resumenMes(E.txs, E.mes);
   const ritmo = ritmoDelMes(E.mes);
@@ -72,6 +75,10 @@ export function render(E) {
       <span class="nota">de lo que entra se queda contigo · objetivo: 20 %</span>
     </section>
   </div>
+
+  <nav class="rapidos" aria-label="Apuntar rápido">
+    ${RAPIDOS.map(([tipo, medio, texto, icono]) => `<a href="#/anadir?tipo=${tipo}&medio=${medio}"><span class="ficha">${ic(icono)}</span>${texto}</a>`).join('')}
+  </nav>
 
   ${tarjetaDinero(E)}
 

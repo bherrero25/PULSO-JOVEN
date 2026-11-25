@@ -1,6 +1,6 @@
 // Datos de ejemplo del modo demo: los 6 últimos meses de una persona estudiante. No se guardan en ningún sitio.
 
-import { mesActual, sumarMeses, diasDelMes, hoyISO } from './logica.js';
+import { mesActual, sumarMeses, diasDelMes, hoyISO, ultimaFechaFijo } from './logica.js';
 
 // Generador pseudoaleatorio con semilla, para que la demo salga siempre igual
 function aleatorio(semilla) {
@@ -71,5 +71,10 @@ export function datosDemo() {
     { id: 'c1', nombre: 'Bankinter', tipo: 'banco', clave: 'bankinter', saldo: 1234.56, fecha_saldo: hoyISO(-4) },
     { id: 'c2', nombre: 'Efectivo ahorrado', tipo: 'efectivo', clave: null, saldo: 600, fecha_saldo: hoyISO(-10) }
   ];
-  return { txs, presupuestos, metas, reglas: {}, cuentas, conRetenidos: true };
+  // Lo que le llega cada mes: ya están los de este mes, así que la demo no crea previstos al abrirse
+  const fijos = [
+    { id: 'f1', nombre: 'Transferencia de casa', tipo: 'ingreso', categoria: '💰 Mensualidad', importe: 470, dia: 29, medio: 'transferencia', activo: true },
+    { id: 'f2', nombre: 'Nómina Bar La Esquina', tipo: 'ingreso', categoria: '💰 Nómina', importe: 320, dia: 20, medio: 'transferencia', activo: true }
+  ].map(f => ({ ...f, ultimo: ultimaFechaFijo(f) }));
+  return { txs, presupuestos, metas, reglas: {}, cuentas, fijos, conRetenidos: true };
 }

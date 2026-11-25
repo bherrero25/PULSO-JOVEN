@@ -81,6 +81,7 @@ function abrirEdicion(ctx, t) {
   abrirHoja(`${cabeceraHoja(esc(conceptoVisible(t)), pregunta)}
     <span class="num texto-2" style="font-size:15px;margin-top:-8px">${imp.texto}</span>
     ${t.cuenta === CUENTA_MANUAL ? '<p class="nota">Lo apuntaste a mano. Cuando importes el extracto del banco, se juntará con su movimiento sin repetirse.</p>' : ''}
+    ${t.cuenta === 'previsto' ? '<p class="nota" style="background:var(--fondo);border-radius:12px;padding:10px 12px"><b>Previsto:</b> lo ha apuntado la app por tus movimientos fijos. Cuando importes el extracto se juntará con el de verdad y se quedará con su importe. Si este mes no llega, bórralo.</p>' : ''}
     ${t.pendiente ? '<p class="nota" style="background:var(--fondo);border-radius:12px;padding:10px 12px"><b>Retenido:</b> el banco aún no lo ha cobrado del todo. Ya cuenta en tus gastos; cuando lo cobre, al importar el siguiente extracto se convertirá en el movimiento definitivo.</p>' : ''}
     ${opciones.length ? `<div class="rejilla-cats">${opciones.map(c => `<button type="button" data-accion="poner-categoria" data-id="${esc(t.id)}" data-cat="${esc(c.bd)}" aria-pressed="${!rev && c.bd === t.categoria}">${ficha(c)}${esc(c.nombre)}</button>`).join('')}</div>
     <label class="casilla"><input type="checkbox" id="recordar"${recordarMarcado ? ' checked' : ''}> <span>${esc(textoRecordar)}</span></label>

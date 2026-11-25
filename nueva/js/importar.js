@@ -53,24 +53,42 @@ export function detectarBanco(cabecera) {
 // Cabecera de la plantilla de efectivo: Fecha · Concepto · Categoria · Clase · Medio de pago · Importe
 const esPlantillaEfectivo = h => h.some(c => c === 'clase' || c.includes('medio de pago')) && h.some(c => c.includes('concepto'));
 
+// Bankinter pone antes un bloque de «movimientos pendientes» (retenidos) con otra cabecera más corta:
+// se usa la cabecera del banco reconocido para los movimientos, y se recuerda dónde empezaba ese bloque.
 function buscarCabecera(filas) {
-  let inicio = -1, cabecera = [], banco = 'generico';
-  // Bankinter pone antes un bloque de «movimientos pendientes» con otra cabecera: se prefiere la de un banco reconocido
+  let inicio = -1, cabecera = [], banco = 'generico', previa = -1;
   for (let i = 0; i < Math.min(filas.length, 40); i++) {
     const f = filas[i].map(c => String(c).toLowerCase());
     if (f.some(c => c.includes('fecha') || c.includes('date') || c.includes('data')) &&
         (f.some(c => c.includes('importe') || c.includes('amount') || c.includes('import')) || f.some(c => c.includes('concepto') || c.includes('descripci') || c.includes('payee') || c.includes('comercio')))) {
       const b = detectarBanco(filas[i]);
+      if (b !== 'generico' && inicio >= 0 && banco === 'generico') previa = inicio - 1;
       if (inicio < 0 || b !== 'generico') { inicio = i + 1; cabecera = filas[i]; banco = b; }
       if (b !== 'generico' || esPlantillaEfectivo(filas[i].map(normal))) break;
     }
   }
-  return { inicio, cabecera, banco };
+  return { inicio, cabecera, banco, previa };
+}
+
+// Movimientos del bloque de retenidos (entre su cabecera y la cabecera principal del extracto)
+function leerRetenidos(filas, previa, finBloque, banco, reglas) {
+  if (previa < 0) return [];
+  const h = filas[previa].map(normal);
+  const cF = h.findIndex(c => c.includes('fecha')), cD = h.findIndex(c => c.includes('descripci') || c.includes('concepto')), cI = h.findIndex(c => c.includes('importe'));
+  if (cF < 0 || cD < 0 || cI < 0) return [];
+  const lista = [];
+  for (const f of filas.slice(previa + 1, finBloque)) {
+    const fecha = parsearFecha(f[cF]), descripcion = String(f[cD] || '').trim(), bruto = parsearImporte(f[cI]);
+    if (!fecha || !descripcion || isNaN(bruto) || bruto === 0) continue;
+    const tipo = bruto < 0 ? 'gasto' : 'ingreso';
+    lista.push({ fecha, descripcion, importe: Math.abs(bruto), tipo, categoria: categoriaConAprendizaje(descripcion, tipo, reglas), medio: medioAutomatico(descripcion), cuenta: banco, pendiente: true });
+  }
+  return lista;
 }
 
 // Devuelve { tipo, banco, txs } o { error }. `hayTarjeta`: si ya hay movimientos de tarjeta de crédito importados.
 export function analizarExtracto(filas, { reglas, hayTarjeta }) {
-  const { inicio, cabecera, banco } = buscarCabecera(filas);
+  const { inicio, cabecera, banco, previa } = buscarCabecera(filas);
   if (inicio < 0) return { error: 'No se ha encontrado la cabecera del archivo (Fecha, Concepto, Importe…).' };
   const h = cabecera.map(normal);
   const col = (...pruebas) => h.findIndex(c => pruebas.some(p => typeof p === 'string' ? c.includes(p) : p.test(c)));
@@ -143,7 +161,7 @@ export function analizarExtracto(filas, { reglas, hayTarjeta }) {
     const tipo = esLiq ? 'liquidacion_tarjeta' : bruto < 0 ? 'gasto' : 'ingreso';
     txs.push({ fecha, descripcion, importe: Math.abs(bruto), tipo, categoria: esLiq ? '💳 Liquidación tarjeta' : categoriaConAprendizaje(descripcion, tipo, reglas), medio: medioAutomatico(descripcion), cuenta: banco });
   }
-  return { tipo: 'cuenta', banco, txs, saldo: saldoFinal(saldos) };
+  return { tipo: 'cuenta', banco, txs, saldo: saldoFinal(saldos), retenidos: leerRetenidos(filas, previa, inicio - 1, banco, reglas) };
 }
 
 // Saldo tras el último movimiento. Los bancos ordenan el archivo de más nuevo a más antiguo o al revés:

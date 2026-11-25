@@ -15,7 +15,7 @@ import * as dinero from './pantallas/dinero.js';
 // Estado de la app: datos de la persona y lo que tiene elegido en pantalla
 const E = {
   usuario: null, nombre: '', cargado: false,
-  txs: [], presupuestos: [], metas: [], reglas: {}, cuentas: null,
+  txs: [], presupuestos: [], metas: [], reglas: {}, cuentas: null, conRetenidos: false,
   meses: [mesActual()], mes: mesActual(), pantalla: 'inicio',
   filtro: 'todos', q: '',
   tabAnadir: 'mano', nuevo: anadir.nuevoMovimiento(), importacion: null,

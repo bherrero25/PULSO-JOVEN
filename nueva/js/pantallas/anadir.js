@@ -1,7 +1,7 @@
 // Añadir: a mano con teclado, subiendo el extracto del banco o (más adelante) de forma automática
 
 import { ic } from '../iconos.js';
-import { esc, fmt, hoyISO, fechaCorta, RAPIDAS_GASTO, RAPIDAS_INGRESO, categoriaPorId, MEDIOS, nombreCuenta, infoCategoria, separarYaApuntados } from '../logica.js';
+import { esc, fmt, hoyISO, fechaCorta, RAPIDAS_GASTO, RAPIDAS_INGRESO, categoriaPorId, MEDIOS, nombreCuenta, infoCategoria, separarYaApuntados, conciliarRetenidos, porRevisar } from '../logica.js';
 import { ficha } from '../componentes.js';
 import { toast, abrirHoja, cabeceraHoja, confirmar } from '../ui.js';
 import * as D from '../datos.js';
@@ -49,24 +49,33 @@ function aMano(E) {
 function extracto(E) {
   const imp = E.importacion;
   if (imp && imp.txs) {
-    const fechas = imp.txs.map(t => t.fecha).sort();
+    const fechas = [...imp.txs, ...imp.retenidosNuevos].map(t => t.fecha).sort();
+    const aImportar = [...imp.nuevas, ...imp.retenidosNuevos];
+    const hayCambios = aImportar.length || imp.cobrados.length || imp.caducados.length || (imp.saldo && E.cuentas);
     return `<section class="tarjeta" style="border:1px solid var(--linea-2)">
         <div style="display:flex;align-items:center;gap:10px">${'<span class="ficha">' + ic('banco') + '</span>'}
           <div style="display:flex;flex-direction:column;gap:2px"><b style="font-size:16px">${esc(nombreCuenta(imp.banco))} · ${imp.tipo === 'tarjeta' ? 'tarjeta' : imp.tipo === 'efectivo' ? 'efectivo' : 'cuenta'}</b>
-          <span class="nota">${imp.txs.length} movimientos del ${fechaCorta(fechas[0])} al ${fechaCorta(fechas[fechas.length - 1])}</span></div></div>
+          <span class="nota">${imp.txs.length} movimientos${imp.retenidos?.length ? ` y ${imp.retenidos.length} retenidos` : ''} del ${fechaCorta(fechas[0])} al ${fechaCorta(fechas[fechas.length - 1])}</span></div></div>
         <div class="dos-col">
           <div class="dato"><small style="color:var(--texto-3)">Nuevos</small><b class="num">${imp.nuevas.length}</b></div>
-          <div class="dato"><small style="color:var(--texto-3)">Ya estaban</small><b class="num">${imp.txs.length - imp.nuevas.length}</b></div>
+          <div class="dato"><small style="color:var(--texto-3)">Ya estaban</small><b class="num">${imp.yaEstaban}</b></div>
         </div>
+        ${imp.retenidosNuevos.length || imp.cobrados.length || imp.caducados.length ? `<div style="background:var(--fondo);border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:8px;font-size:13px;line-height:1.45;color:#33393F">
+          ${imp.retenidosNuevos.length ? `<span><b>${imp.retenidosNuevos.length} ${imp.retenidosNuevos.length === 1 ? 'retenido' : 'retenidos'}</b> (el banco aún no ${imp.retenidosNuevos.length === 1 ? 'lo ha' : 'los ha'} cobrado): ya ${imp.retenidosNuevos.length === 1 ? 'cuenta' : 'cuentan'} en tus gastos.</span>` : ''}
+          ${imp.cobrados.length ? `<span><b>${imp.cobrados.length} ${imp.cobrados.length === 1 ? 'retenido ya cobrado' : 'retenidos ya cobrados'}</b>: se ${imp.cobrados.length === 1 ? 'convierte' : 'convierten'} en el movimiento definitivo, con la categoría que tenía.</span>` : ''}
+          ${imp.caducados.length ? `<span><b>${imp.caducados.length} ${imp.caducados.length === 1 ? 'retenido que ya no aparece' : 'retenidos que ya no aparecen'}</b> (${imp.caducados.length === 1 ? 'anulado' : 'anulados'} o con otro importe): se ${imp.caducados.length === 1 ? 'quita' : 'quitan'}.</span>` : ''}
+        </div>` : ''}
+        ${imp.retenidosSinColumna ? `<p class="nota">Este extracto trae ${imp.retenidosSinColumna} ${imp.retenidosSinColumna === 1 ? 'movimiento retenido' : 'movimientos retenidos'}. Para incluirlos, hay que ejecutar en Supabase el texto <b>sql/2026-11-retenidos.sql</b>.</p>` : ''}
         ${imp.deApplePay ? `<p class="nota">De los que ya estaban, ${imp.deApplePay} ${imp.deApplePay === 1 ? 'entró' : 'entraron'} con Apple Pay (mismo importe y fecha cercana), así que no se repiten.</p>` : ''}
         ${imp.saldo ? `<div style="display:flex;justify-content:space-between;gap:10px;background:var(--fondo);border-radius:12px;padding:10px 12px;font-size:14px">
           <span>Saldo de ${esc(nombreCuenta(imp.banco))} el ${fechaCorta(imp.saldo.fecha)}</span><b class="num">${imp.saldo.valor < 0 ? '−' : ''}${fmt(imp.saldo.valor)}</b></div>` : ''}
-        ${imp.nuevas.length ? `<div>${imp.nuevas.slice(0, 6).map(t => { const c = infoCategoria(t.categoria); return `<div class="fila">${ficha(c, 'peq')}<span class="cuerpo"><span class="concepto" style="font-size:14px">${esc(t.descripcion)}</span><span class="detalle">${fechaCorta(t.fecha)} · ${esc(c.nombre)}</span></span><span class="importe num${t.tipo === 'ingreso' ? ' positivo' : ''}" style="font-size:14px">${fmt(t.tipo === 'ingreso' ? +t.importe : -t.importe, true)}</span></div>`; }).join('')}
-          ${imp.nuevas.length > 6 ? `<p class="nota" style="padding-top:8px">y ${imp.nuevas.length - 6} más</p>` : ''}</div>` : '<p class="nota">Todos los movimientos de este archivo ya estaban guardados.</p>'}
+        ${aImportar.length ? `<div>${aImportar.slice(0, 6).map(t => { const c = infoCategoria(t.categoria); return `<div class="fila">${ficha(c, 'peq')}<span class="cuerpo"><span class="concepto" style="font-size:14px">${esc(t.descripcion)}</span><span class="detalle">${fechaCorta(t.fecha)} · ${esc(c.nombre)}${t.pendiente ? ' <span class="retenido">Retenido</span>' : ''}</span></span><span class="importe num${t.tipo === 'ingreso' ? ' positivo' : ''}" style="font-size:14px">${fmt(t.tipo === 'ingreso' ? +t.importe : -t.importe, true)}</span></div>`; }).join('')}
+          ${aImportar.length > 6 ? `<p class="nota" style="padding-top:8px">y ${aImportar.length - 6} más</p>` : ''}</div>` : '<p class="nota">Todos los movimientos de este archivo ya estaban guardados.</p>'}
       </section>
-      ${imp.nuevas.length || (imp.saldo && E.cuentas) ? `<button type="button" class="boton" data-accion="confirmar-importacion"${imp.guardando ? ' disabled' : ''}>${imp.guardando ? 'Guardando…'
-        : imp.nuevas.length ? `Importar ${imp.nuevas.length} ${imp.nuevas.length === 1 ? 'movimiento' : 'movimientos'}` : `Actualizar el saldo de ${esc(nombreCuenta(imp.banco))}`}</button>` : ''}
-      <button type="button" class="boton suave" data-accion="cancelar-importacion">${imp.nuevas.length ? 'Cancelar' : 'Elegir otro archivo'}</button>
+      ${hayCambios ? `<button type="button" class="boton" data-accion="confirmar-importacion"${imp.guardando ? ' disabled' : ''}>${imp.guardando ? 'Guardando…'
+        : aImportar.length ? `Importar ${aImportar.length} ${aImportar.length === 1 ? 'movimiento' : 'movimientos'}`
+        : imp.cobrados.length || imp.caducados.length ? 'Actualizar los retenidos' : `Actualizar el saldo de ${esc(nombreCuenta(imp.banco))}`}</button>` : ''}
+      <button type="button" class="boton suave" data-accion="cancelar-importacion">${hayCambios ? 'Cancelar' : 'Elegir otro archivo'}</button>
       <p class="nota">Después podrás cambiar la categoría de cualquiera; la app aprenderá de tus cambios.</p>`;
   }
   return `<label class="zona-subir">
@@ -165,7 +174,7 @@ export const acciones = {
     // Se vuelve a comprobar contra lo guardado por si se ha importado algo mientras tanto (por ejemplo, desde otra pestaña)
     let claves;
     try { claves = await D.clavesGuardadas(E.txs); } catch (error) { D.avisarError(error, 'comprobar qué movimientos tenías ya'); imp.guardando = false; ctx.pintar(); return; }
-    const nuevas = imp.nuevas.filter(t => !claves.has(D.claveMovimiento(t)));
+    const nuevas = [...imp.nuevas, ...imp.retenidosNuevos].filter(t => !claves.has(D.claveMovimiento(t)));
     const { guardadas, error } = await D.insertarMovimientos(nuevas);
     E.txs.push(...guardadas);
     E.txs.sort((a, b) => b.fecha.localeCompare(a.fecha));
@@ -175,9 +184,27 @@ export const acciones = {
       ctx.pintar();
       return;
     }
+    // Retenidos ya cobrados: pasan a ser el movimiento definitivo y conservan la categoría que se les hubiera dado
+    let cobrados = 0;
+    for (const { retenido, definitivo } of imp.cobrados) {
+      const cambios = { fecha: definitivo.fecha, descripcion: definitivo.descripcion, medio: definitivo.medio, pendiente: false };
+      if (porRevisar(retenido, E.reglas) && !porRevisar(definitivo, E.reglas)) cambios.categoria = definitivo.categoria;
+      if (await D.actualizarMovimientos([retenido.id], cambios, 'actualizar un movimiento retenido')) { Object.assign(retenido, cambios); cobrados++; }
+    }
+    let quitados = 0;
+    if (imp.caducados.length && await D.borrarMovimientos(imp.caducados.map(t => t.id), 'quitar los retenidos que ya no aparecen')) {
+      E.txs = E.txs.filter(t => !imp.caducados.includes(t));
+      quitados = imp.caducados.length;
+    }
+    E.txs.sort((a, b) => b.fecha.localeCompare(a.fecha));
     const saldoNuevo = imp.saldo && await actualizarSaldo(E, imp.banco, imp.saldo);
-    toast((guardadas.length ? `${guardadas.length} movimientos importados` : 'No había movimientos nuevos') + (saldoNuevo ? ` · saldo de ${nombreCuenta(imp.banco)} actualizado` : ''));
-    location.hash = guardadas.length ? '#/movimientos' : '#/inicio';
+    const partes = [];
+    if (guardadas.length) partes.push(`${guardadas.length} movimientos importados`);
+    if (cobrados) partes.push(`${cobrados} ${cobrados === 1 ? 'retenido actualizado' : 'retenidos actualizados'}`);
+    if (quitados) partes.push(`${quitados} ${quitados === 1 ? 'retenido quitado' : 'retenidos quitados'}`);
+    if (saldoNuevo) partes.push(`saldo de ${nombreCuenta(imp.banco)} actualizado`);
+    toast(partes.length ? partes.join(' · ') : 'No había nada nuevo');
+    location.hash = guardadas.length || cobrados ? '#/movimientos' : '#/inicio';
   }
 };
 
@@ -196,12 +223,21 @@ export const cambios = {
     try {
       const filas = await leerFilas(archivo);
       const r = analizarExtracto(filas, { reglas: E.reglas, hayTarjeta: E.txs.some(t => String(t.cuenta || '').endsWith('_tarjeta')) });
+      // Los retenidos solo se incluyen si la base de datos tiene la columna «pendiente»
+      const retenidos = E.conRetenidos ? (r.retenidos || []) : [];
       if (r.error) E.importacion = { error: r.error };
-      else if (!r.txs.length) E.importacion = { error: 'No hemos encontrado movimientos en este archivo.' };
+      else if (!r.txs.length && !retenidos.length) E.importacion = { error: 'No hemos encontrado movimientos en este archivo.' };
       else {
+        const c = conciliarRetenidos(r.txs, retenidos, E.txs, r.banco);
         const guardadas = new Set(E.txs.map(D.claveMovimiento));
-        const { quedan, repetidos } = separarYaApuntados(r.txs.filter(t => !guardadas.has(D.claveMovimiento(t))), E.txs);
-        E.importacion = { ...r, nuevas: quedan, deApplePay: repetidos.length };
+        const def = separarYaApuntados(c.definitivos.filter(t => !guardadas.has(D.claveMovimiento(t))), E.txs);
+        const ret = separarYaApuntados(c.retenidosNuevos.filter(t => !guardadas.has(D.claveMovimiento(t))), E.txs);
+        E.importacion = {
+          ...r, nuevas: def.quedan, retenidosNuevos: ret.quedan, cobrados: c.cobrados, caducados: c.caducados,
+          deApplePay: def.repetidos.length + ret.repetidos.length,
+          yaEstaban: r.txs.length - def.quedan.length - c.cobrados.length,
+          retenidosSinColumna: E.conRetenidos ? 0 : (r.retenidos || []).length
+        };
       }
     } catch (e) {
       console.error(e);

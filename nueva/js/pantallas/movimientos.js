@@ -72,6 +72,7 @@ function abrirEdicion(ctx, t) {
   const pregunta = !rev ? esc(actual.nombre) : bizum ? (t.tipo === 'ingreso' ? '¿De qué es este Bizum?' : '¿Para qué era este Bizum?') : '¿Qué es este movimiento?';
   abrirHoja(`${cabeceraHoja(esc(conceptoVisible(t)), pregunta)}
     <span class="num texto-2" style="font-size:15px;margin-top:-8px">${imp.texto}</span>
+    ${t.pendiente ? '<p class="nota" style="background:var(--fondo);border-radius:12px;padding:10px 12px"><b>Retenido:</b> el banco aún no lo ha cobrado del todo. Ya cuenta en tus gastos; cuando lo cobre, al importar el siguiente extracto se convertirá en el movimiento definitivo.</p>' : ''}
     ${opciones.length ? `<div class="rejilla-cats">${opciones.map(c => `<button type="button" data-accion="poner-categoria" data-id="${esc(t.id)}" data-cat="${esc(c.bd)}" aria-pressed="${!rev && c.bd === t.categoria}">${ficha(c)}${esc(c.nombre)}</button>`).join('')}</div>
     <label class="casilla"><input type="checkbox" id="recordar"${bizum ? '' : ' checked'}> ${bizum ? 'Usar esta categoría siempre para los Bizum de esta persona' : 'Recordar para los próximos movimientos de este comercio'}</label>` : '<p class="nota">Es el cargo mensual de la tarjeta: sus compras ya están contadas una a una.</p>'}
     <div class="par">

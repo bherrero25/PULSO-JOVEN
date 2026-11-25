@@ -2,7 +2,8 @@
 // En modo demo no se guarda nada: las funciones de escritura responden como si hubieran ido bien.
 
 import { mostrarAviso } from './ui.js';
-import { claveConcepto } from './logica.js';
+import { claveConcepto, claveMovimiento } from './logica.js';
+export { claveMovimiento };
 import { datosDemo } from './demo.js';
 
 export const SUPABASE_URL = 'https://tqjukdleqgbpseaipfel.supabase.co';
@@ -81,7 +82,9 @@ export async function cargarTodo(usuario) {
     ]);
     const reglas = {};
     filasReglas.forEach(r => { reglas[claveConcepto(r.concepto)] = r.categoria; });
-    return { txs, presupuestos, metas, reglas, cuentas: await cargarCuentas() };
+    // Los retenidos necesitan la columna «pendiente» (sql/2026-11-retenidos.sql)
+    const conRetenidos = txs.length ? 'pendiente' in txs[0] : !(await sb.from('pj_transacciones').select('pendiente').limit(1)).error;
+    return { txs, presupuestos, metas, reglas, cuentas: await cargarCuentas(), conRetenidos };
   } catch (error) {
     avisarError(error, 'cargar tus datos');
     return null;
@@ -104,8 +107,6 @@ export async function clavesGuardadas(txsEnPantalla) {
   const filas = await leerTodas(() => sb.from('pj_transacciones').select('id, fecha, descripcion, importe').eq('user_id', uid).order('id'));
   return new Set(filas.map(claveMovimiento));
 }
-const norm = s => String(s || '').trim().toLowerCase().replace(/\s+/g, ' ');
-export const claveMovimiento = t => `${t.fecha}|${norm(t.descripcion)}|${parseFloat(t.importe)}`;
 
 // ─── ESCRITURA ───
 // Todas devuelven la fila guardada (o true) si fue bien, y null si falló (con el aviso ya mostrado)
@@ -137,6 +138,12 @@ export async function borrarMovimiento(id) {
   if (demo) return true;
   const { error } = await sb.from('pj_transacciones').delete().eq('id', id);
   return !avisarError(error, 'borrar el movimiento');
+}
+
+export async function borrarMovimientos(ids, que) {
+  if (demo || !ids.length) return true;
+  const { error } = await sb.from('pj_transacciones').delete().in('id', ids);
+  return !avisarError(error, que);
 }
 
 export async function guardarRegla(concepto, categoria) {

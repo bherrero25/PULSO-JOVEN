@@ -237,7 +237,7 @@ export const MEDIOS = { tarjeta: 'Tarjeta', transferencia: 'Transferencia', bizu
 
 // ─── TU DINERO (saldos de cuentas, aparte de los ingresos y gastos del mes) ───
 export const TIPOS_CUENTA = { efectivo: ['Efectivo', 'cartera'], ahorro: ['Ahorro', 'escudo'], banco: ['Banco', 'banco'], inversion: ['Inversión', 'tendencia'] };
-export const totalCuentas = cuentas => cuentas.reduce((s, c) => s + parseFloat(c.saldo || 0), 0);
+export const totalCuentas = (cuentas, txs = []) => cuentas.reduce((s, c) => s + saldoDisponible(c, txs).disponible, 0);
 const NOMBRES_CUENTA = { bankinter: 'Bankinter', bbva: 'BBVA', santander: 'Santander', caixabank: 'CaixaBank', ing: 'ING', revolut: 'Revolut', n26: 'N26', efectivo: 'Efectivo', generico: 'Otro banco', apple_pay: 'Apple Pay' };
 export const formaDePago = t => t.cuenta === 'apple_pay' ? 'Apple Pay' : MEDIOS[t.medio] || 'Transferencia';
 
@@ -250,6 +250,42 @@ export function clasificarPagosAtajo(txs, reglas) {
     if (cat !== BD.OTROS) (cambios[cat] ||= []).push(t.id);
   });
   return cambios;
+}
+
+// Clave para no duplicar al importar: misma fecha, mismo concepto y mismo importe
+const normalizar = s => String(s || '').trim().toLowerCase().replace(/\s+/g, ' ');
+export const claveMovimiento = t => `${t.fecha}|${normalizar(t.descripcion)}|${parseFloat(t.importe)}`;
+const diasEntre = (desde, hasta) => Math.round((new Date(hasta + 'T12:00:00') - new Date(desde + 'T12:00:00')) / 86400000);
+
+// Retenidos (movimientos que el banco aún no ha cobrado del todo). Al importar un extracto de una cuenta:
+// - un movimiento definitivo con el mismo importe y fecha entre 0 y 7 días después de un retenido guardado es ese retenido ya cobrado;
+// - los retenidos del archivo que ya estaban guardados como retenidos no se repiten;
+// - los retenidos guardados que ya no aparecen (ni cobrados ni retenidos) se quitan, si el archivo llega hasta su fecha.
+export function conciliarRetenidos(definitivos, retenidosArchivo, guardados, cuenta) {
+  const libres = guardados.filter(t => t.pendiente && t.cuenta === cuenta);
+  const cobrados = [], sinRetener = [];
+  definitivos.forEach(d => {
+    const i = libres.findIndex(p => p.tipo === d.tipo && Math.abs(+p.importe - +d.importe) < 0.005 && diasEntre(p.fecha, d.fecha) >= 0 && diasEntre(p.fecha, d.fecha) <= 7);
+    if (i >= 0) { cobrados.push({ retenido: libres[i], definitivo: d }); libres.splice(i, 1); } else sinRetener.push(d);
+  });
+  const enArchivo = new Set(retenidosArchivo.map(claveMovimiento));
+  const yaGuardados = new Set(libres.filter(p => enArchivo.has(claveMovimiento(p))).map(claveMovimiento));
+  const ultimaFecha = [...definitivos, ...retenidosArchivo].reduce((m, t) => t.fecha > m ? t.fecha : m, '');
+  return {
+    definitivos: sinRetener,
+    cobrados,
+    retenidosNuevos: retenidosArchivo.filter(r => !yaGuardados.has(claveMovimiento(r))),
+    caducados: libres.filter(p => !enArchivo.has(claveMovimiento(p)) && p.fecha <= ultimaFecha)
+  };
+}
+
+// Saldo de una cuenta de banco descontando lo retenido (como el «saldo disponible» del banco)
+export function saldoDisponible(cuenta, txs) {
+  const saldo = parseFloat(cuenta.saldo || 0);
+  if (!cuenta.clave) return { saldo, retenido: 0, disponible: saldo };
+  const ret = txs.filter(t => t.pendiente && t.cuenta === cuenta.clave);
+  const retenido = sumar(ret.filter(t => t.tipo === 'gasto')) - sumar(ret.filter(t => t.tipo === 'ingreso'));
+  return { saldo, retenido, disponible: saldo - retenido };
 }
 
 // Movimientos de un extracto que ya entraron por Apple Pay: mismo importe y fecha del banco entre 0 y 4 días después.

@@ -1,7 +1,7 @@
 // Inicio: de un vistazo, lo que te queda, lo que ha entrado y salido, cómo van los presupuestos y la meta más cercana
 
 import { ic } from '../iconos.js';
-import { esc, fmt, fmt0, nombreMes, resumenMes, ritmoDelMes, estadoPresupuestos, porRevisar, gastoHastaDia, sumarMeses, porCategoria, hoyISO, fechaCorta, TIPOS_CUENTA, totalCuentas } from '../logica.js';
+import { esc, fmt, fmt0, nombreMes, resumenMes, ritmoDelMes, estadoPresupuestos, porRevisar, gastoHastaDia, sumarMeses, porCategoria, hoyISO, fechaCorta, TIPOS_CUENTA, totalCuentas, saldoDisponible } from '../logica.js';
 import { selectorMes, filaMovimiento, ficha, barraPresupuesto, textoEstado, inicial } from '../componentes.js';
 
 export function render(E) {
@@ -122,17 +122,21 @@ function tarjetaDinero(E) {
       <p class="nota">Apunta cuánto tienes. El saldo del banco se pone solo al importar el extracto; el efectivo y los ahorros los añades tú. No cuenta como ingreso de ningún mes.</p>
       <button type="button" class="boton suave peq" data-accion="editar-cuenta" data-id="">${ic('mas')}Añadir efectivo o ahorro</button></section>`;
   }
-  const filas = [...E.cuentas].sort((a, b) => parseFloat(b.saldo) - parseFloat(a.saldo)).map(c => {
-    const [tipo, icono] = TIPOS_CUENTA[c.tipo] || TIPOS_CUENTA.efectivo;
-    return `<button type="button" class="fila" data-accion="editar-cuenta" data-id="${esc(c.id)}">
-      <span class="ficha">${ic(icono)}</span>
-      <span class="cuerpo"><span class="concepto">${esc(c.nombre)}</span><span class="detalle">${tipo} · a ${fechaCorta(c.fecha_saldo)}</span></span>
-      <span class="importe num">${parseFloat(c.saldo) < 0 ? '−' : ''}${fmt(c.saldo)}</span></button>`;
-  }).join('');
-  const total = totalCuentas(E.cuentas);
+  const filas = [...E.cuentas].sort((a, b) => parseFloat(b.saldo) - parseFloat(a.saldo)).map(c => filaCuenta(c, E.txs)).join('');
+  const total = totalCuentas(E.cuentas, E.txs);
   return `<section class="tarjeta" aria-label="Tu dinero" style="gap:6px">${cab}
     <div style="display:flex;align-items:baseline;gap:8px"><span class="cifra-m num">${total < 0 ? '−' : ''}${fmt(total)}</span><span class="nota">en total</span></div>
     <div class="lista-cuentas">${filas}</div></section>`;
+}
+
+// En las cuentas de banco se enseña lo disponible: el saldo del extracto menos lo retenido
+export function filaCuenta(c, txs, conFlecha = false) {
+  const [tipo, icono] = TIPOS_CUENTA[c.tipo] || TIPOS_CUENTA.efectivo;
+  const s = saldoDisponible(c, txs);
+  return `<button type="button" class="fila" data-accion="editar-cuenta" data-id="${esc(c.id)}">
+    <span class="ficha">${ic(icono)}</span>
+    <span class="cuerpo"><span class="concepto">${esc(c.nombre)}</span><span class="detalle">${tipo} · a ${fechaCorta(c.fecha_saldo)}${s.retenido > 0 ? ` · ${fmt(s.retenido)} retenido` : ''}</span></span>
+    <span class="importe num">${s.disponible < 0 ? '−' : ''}${fmt(s.disponible)}</span>${conFlecha ? ic('derecha', 'ic-s') : ''}</button>`;
 }
 
 // La meta sin terminar con la fecha más próxima (o, si ninguna tiene fecha, la más avanzada)

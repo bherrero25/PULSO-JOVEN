@@ -51,6 +51,9 @@ export function datosDemo() {
   // Tres movimientos que la app no ha sabido clasificar
   [['TPV 8834 ZARAGOZA', 15, -1], ['PAYPAL *STEAMGAMES', 9.99, -2], ['COMPRA 4471 MADRID', 6.5, -4]]
     .forEach(([d, imp, off]) => mov(hoyISO(off), d, imp, 'gasto', '🔧 Otros'));
+  // Dos pagos que el banco aún tiene retenidos
+  txs.push({ id: 'demo-r1', fecha: hoyISO(0), descripcion: 'REPSOL VALENCIA', importe: 40, tipo: 'gasto', categoria: '⛽ Gasolina', medio: 'tarjeta', cuenta: 'bankinter', pendiente: true });
+  txs.push({ id: 'demo-r2', fecha: hoyISO(-1), descripcion: 'AMAZON EU', importe: 23.99, tipo: 'gasto', categoria: '🔧 Otros', medio: 'tarjeta', cuenta: 'bankinter', pendiente: true });
   txs.sort((a, b) => b.fecha.localeCompare(a.fecha));
 
   const desde = sumarMeses(actual, -5);
@@ -65,5 +68,5 @@ export function datosDemo() {
     { id: 'c1', nombre: 'Bankinter', tipo: 'banco', clave: 'bankinter', saldo: 1234.56, fecha_saldo: hoyISO(-4) },
     { id: 'c2', nombre: 'Efectivo ahorrado', tipo: 'efectivo', clave: null, saldo: 600, fecha_saldo: hoyISO(-10) }
   ];
-  return { txs, presupuestos, metas, reglas: {}, cuentas };
+  return { txs, presupuestos, metas, reglas: {}, cuentas, conRetenidos: true };
 }

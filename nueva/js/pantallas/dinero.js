@@ -4,16 +4,11 @@ import { ic } from '../iconos.js';
 import { esc, fmt, hoyISO, fechaCorta, nombreCuenta, TIPOS_CUENTA, totalCuentas } from '../logica.js';
 import { abrirHoja, cerrarHoja, cabeceraHoja, toast, confirmar } from '../ui.js';
 import * as D from '../datos.js';
+import { filaCuenta } from './inicio.js';
 
 function hojaCuentas(E) {
-  const filas = E.cuentas.map(c => {
-    const [tipo, icono] = TIPOS_CUENTA[c.tipo] || TIPOS_CUENTA.efectivo;
-    return `<button type="button" class="fila" data-accion="editar-cuenta" data-id="${esc(c.id)}">
-      <span class="ficha">${ic(icono)}</span>
-      <span class="cuerpo"><span class="concepto">${esc(c.nombre)}</span><span class="detalle">${tipo} · a ${fechaCorta(c.fecha_saldo)}</span></span>
-      <span class="importe num">${parseFloat(c.saldo) < 0 ? '−' : ''}${fmt(c.saldo)}</span>${ic('derecha', 'ic-s')}</button>`;
-  }).join('');
-  const total = totalCuentas(E.cuentas);
+  const filas = E.cuentas.map(c => filaCuenta(c, E.txs, true)).join('');
+  const total = totalCuentas(E.cuentas, E.txs);
   abrirHoja(`${cabeceraHoja('Tu dinero', `${total < 0 ? '−' : ''}${fmt(total)} en total`)}
     <div>${filas}</div>
     <button type="button" class="boton suave peq" data-accion="editar-cuenta" data-id="">${ic('mas')}Añadir efectivo, ahorro u otra cuenta</button>
@@ -30,7 +25,7 @@ function hojaCuenta(E, id) {
         ${Object.entries(TIPOS_CUENTA).map(([k, [n]]) => `<option value="${k}"${(c?.tipo || 'efectivo') === k ? ' selected' : ''}>${n}</option>`).join('')}</select></label>
       <label class="campo">Saldo hoy (€)<input type="number" id="cuenta-saldo" inputmode="decimal" step="0.01" value="${c ? parseFloat(c.saldo) : ''}" placeholder="0,00"></label>
     </div>
-    <p class="nota">${banco ? `Se actualiza solo cada vez que importas el extracto de ${esc(nombreCuenta(banco))}. Si lo cambias aquí, valdrá hasta la próxima importación.` : 'Es lo que tienes ahora: no cuenta como ingreso de ningún mes. Cámbialo cuando quieras.'}</p>
+    <p class="nota">${banco ? `Es el saldo contable del extracto de ${esc(nombreCuenta(banco))}; en «Tu dinero» se le resta lo retenido. Se actualiza solo cada vez que importas el extracto; si lo cambias aquí, valdrá hasta la próxima importación.` : 'Es lo que tienes ahora: no cuenta como ingreso de ningún mes. Cámbialo cuando quieras.'}</p>
     <button type="button" class="boton" data-accion="guardar-cuenta" data-id="${esc(c?.id || '')}">Guardar</button>
     ${c ? `<button type="button" class="boton peligro peq" data-accion="borrar-cuenta" data-id="${esc(c.id)}">${ic('papelera')}Quitar esta cuenta</button>` : ''}`, c ? 'Cambiar cuenta' : 'Nueva cuenta');
 }

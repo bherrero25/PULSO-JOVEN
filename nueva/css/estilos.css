@@ -119,6 +119,7 @@ button.fila:hover { background: #FAFAFB; }
 .fila .detalle { font-size: 12px; color: var(--texto-3); }
 .fila .detalle.revisar { color: var(--aviso-texto); font-weight: 600; }
 .fila .importe { font-size: 15px; font-weight: 600; white-space: nowrap; }
+.retenido { display: inline-block; margin-left: 4px; padding: 0 6px; border-radius: 6px; background: var(--gris); color: #33393F; font-size: 11px; font-weight: 600; line-height: 18px; vertical-align: 1px; }
 .grupo-dia { font-size: 13px; font-weight: 600; color: var(--texto-3); margin: 4px 4px -6px; }
 .aviso-revisar { display: flex; align-items: center; gap: 12px; background: var(--aviso-fondo); border: 1px solid var(--aviso-borde); border-radius: 16px; padding: 12px 14px; color: #5C3D00; font-size: 14px; }
 .aviso-revisar span { flex: 1; }

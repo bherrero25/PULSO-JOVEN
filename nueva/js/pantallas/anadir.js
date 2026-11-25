@@ -6,6 +6,7 @@ import { ficha } from '../componentes.js';
 import { toast, abrirHoja, cabeceraHoja, confirmar } from '../ui.js';
 import * as D from '../datos.js';
 import { leerFilas, analizarExtracto } from '../importar.js';
+import { preguntarTraspaso } from './dinero.js';
 
 export const nuevoMovimiento = () => ({ tipo: 'gasto', importe: '', cat: 'comida', fecha: hoyISO(), medio: 'tarjeta', concepto: '' });
 
@@ -145,7 +146,9 @@ export const acciones = {
     E.txs.push(fila);
     E.txs.sort((a, b) => b.fecha.localeCompare(a.fecha));
     E.nuevo = nuevoMovimiento();
-    toast(n.tipo === 'gasto' ? `Gasto de ${fmt(importe)} guardado` : `Ingreso de ${fmt(importe)} guardado`);
+    // Un traspaso pregunta de qué cuenta sale el dinero, ya en Inicio (al cambiar de pantalla se cierran las hojas)
+    if (cat.id === 'traspaso') window.addEventListener('hashchange', () => preguntarTraspaso(ctx, fila), { once: true });
+    else toast(n.tipo === 'gasto' ? `Gasto de ${fmt(importe)} guardado` : `Ingreso de ${fmt(importe)} guardado`);
     location.hash = '#/inicio';
   },
   'cancelar-importacion': (ctx) => { ctx.E.importacion = null; ctx.pintar(); },

@@ -1,7 +1,8 @@
 // Movimientos: lista del mes con buscador y filtros; al tocar uno se puede cambiar su categoría, fecha o forma de pago
 
 import { ic } from '../iconos.js';
-import { esc, fmt, resumenMes, porRevisar, etiquetaDia, infoCategoria, CATEGORIAS, claveConcepto, MEDIOS, BD, esGasto, esBizum } from '../logica.js';
+import { esc, fmt, resumenMes, porRevisar, etiquetaDia, infoCategoria, CATEGORIAS, claveConcepto, MEDIOS, BD, esGasto, esIngreso, esBizum } from '../logica.js';
+import { preguntarTraspaso } from './dinero.js';
 import { selectorMes, filaMovimiento, ficha, conceptoVisible, importeMovimiento } from '../componentes.js';
 import { abrirHoja, cerrarHoja, cabeceraHoja, toast, confirmar } from '../ui.js';
 import * as D from '../datos.js';
@@ -38,7 +39,7 @@ export function render(E) {
 export function renderLista(E) {
   const lista = visibles(E);
   const gastos = lista.filter(esGasto).reduce((s, t) => s + +t.importe, 0);
-  const ingresos = lista.filter(t => t.tipo === 'ingreso').reduce((s, t) => s + +t.importe, 0);
+  const ingresos = lista.filter(esIngreso).reduce((s, t) => s + +t.importe, 0);
   const cab = `<div style="display:flex;flex-wrap:wrap;gap:4px 14px;font-size:13px;color:var(--texto-2)">
     <span>${lista.length} ${lista.length === 1 ? 'movimiento' : 'movimientos'}</span>
     <span class="num" style="color:var(--texto)">${fmt(-gastos, true)}</span>
@@ -59,7 +60,7 @@ export function renderLista(E) {
 // Las categorías genéricas de Bizum no se ofrecen: el Bizum es la forma de pago, no para qué era el dinero
 function opcionesCategoria(t) {
   if (t.tipo === 'liquidacion_tarjeta') return [];
-  return CATEGORIAS.filter(c => c.tipo === t.tipo && !c.generica);
+  return CATEGORIAS.filter(c => (c.tipo === t.tipo || c.tipo === 'ambos') && !c.generica);
 }
 
 function abrirEdicion(ctx, t) {
@@ -95,7 +96,9 @@ export const acciones = {
     const { E } = ctx;
     const t = buscarTx(E, el.dataset.id);
     const nueva = el.dataset.cat;
-    const recordar = document.getElementById('recordar')?.checked;
+    const anterior = t.categoria;
+    // Los traspasos no se recuerdan: cada uno pregunta de qué cuenta sale el dinero
+    const recordar = document.getElementById('recordar')?.checked && nueva !== BD.TRASPASO;
     // Si se recuerda, cambian también los del mismo concepto que estaban sin clasificar o en la misma categoría
     const clave = claveConcepto(t.descripcion);
     const iguales = recordar ? E.txs.filter(x => x !== t && x.tipo === t.tipo && (x.categoria === BD.OTROS || x.categoria === t.categoria) && claveConcepto(x.descripcion) === clave) : [];
@@ -106,6 +109,8 @@ export const acciones = {
     const nombre = infoCategoria(nueva).nombre;
     toast(iguales.length ? `${nombre}: ${iguales.length + 1} movimientos cambiados. Lo recordaremos.` : recordar ? `Guardado en ${nombre}. Lo recordaremos.` : `Guardado en ${nombre}`);
     ctx.pintar();
+    if (nueva === BD.TRASPASO && anterior !== BD.TRASPASO) preguntarTraspaso(ctx, t);
+    else if (anterior === BD.TRASPASO && nueva !== BD.TRASPASO) preguntarTraspaso(ctx, t, true);
   },
 
   'borrar-mov': async (ctx, el) => {

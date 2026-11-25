@@ -79,12 +79,13 @@ export const CATEGORIAS = [
   { id: 'bizum_recibido', nombre: 'Bizum recibido', bd: '📱 Bizum recibido', icono: 'movil', tipo: 'ingreso', generica: true },
   { id: 'ingresos', nombre: 'Otros ingresos', bd: '💰 Ingresos', icono: 'ingreso', tipo: 'ingreso' },
   { id: 'reenviado', nombre: 'Dinero de paso', bd: '↩️ Reenviado', icono: 'paso', tipo: 'gasto' },
+  { id: 'traspaso', nombre: 'Traspaso entre tus cuentas', bd: '🔄 Traspaso', icono: 'devolver', tipo: 'ambos' },
   { id: 'liquidacion', nombre: 'Liquidación de tarjeta', bd: '💳 Liquidación tarjeta', icono: 'tarjeta', tipo: 'liquidacion_tarjeta' }
 ];
-export const BD = { OTROS: '🔧 Otros', MENSUALIDAD: '💰 Mensualidad', REENVIO: '↩️ Reenviado' };
+export const BD = { OTROS: '🔧 Otros', MENSUALIDAD: '💰 Mensualidad', REENVIO: '↩️ Reenviado', TRASPASO: '🔄 Traspaso' };
 // Las que salen primero al apuntar a mano
-export const RAPIDAS_GASTO = ['comida', 'ocio', 'transporte', 'gasolina', 'ropa', 'deporte', 'suscripciones', 'alquiler', 'salud', 'estudios', 'regalo', 'otros'];
-export const RAPIDAS_INGRESO = ['mensualidad', 'nomina', 'devolucion', 'regalo_recibido', 'ventas', 'ingresos'];
+export const RAPIDAS_GASTO = ['comida', 'ocio', 'transporte', 'gasolina', 'ropa', 'deporte', 'suscripciones', 'alquiler', 'salud', 'estudios', 'regalo', 'otros', 'traspaso'];
+export const RAPIDAS_INGRESO = ['mensualidad', 'nomina', 'devolucion', 'regalo_recibido', 'ventas', 'ingresos', 'traspaso'];
 export const SERIES_GRAFICO = CATEGORIAS.filter(c => c.color);
 
 const PORBD = new Map(CATEGORIAS.map(c => [c.bd, c]));
@@ -104,6 +105,7 @@ export function infoCategoria(valor) {
 export const colorCategoria = c => c.color || GRIS;
 export function tinteCategoria(c) {
   if (c.tipo === 'ingreso') return 'rgba(0,99,0,0.10)';
+  if (c.tipo === 'ambos') return 'rgba(42,120,214,0.12)';
   if (!c.color) return 'rgba(17,20,24,0.07)';
   const [r, g, b] = [1, 3, 5].map(i => parseInt(c.color.slice(i, i + 2), 16));
   return `rgba(${r},${g},${b},0.15)`;
@@ -111,9 +113,12 @@ export function tinteCategoria(c) {
 
 // ─── DINERO DEL MES ───
 // «Dinero de paso» (↩️ Reenviado): llega y se reenvía a otra persona. No es gasto y se descuenta de lo ingresado.
+// «Traspaso entre tus cuentas» (🔄 Traspaso): tu dinero cambia de sitio (efectivo ahorrado al banco, cajero a la hucha…).
+// No es ingreso ni gasto: solo mueve saldo entre las cuentas de «Tu dinero».
+export const esTraspaso = t => t.categoria === BD.TRASPASO;
 export const esPaso = t => t.tipo === 'gasto' && t.categoria === BD.REENVIO;
-export const esGasto = t => t.tipo === 'gasto' && t.categoria !== BD.REENVIO;
-export const esIngreso = t => t.tipo === 'ingreso';
+export const esGasto = t => t.tipo === 'gasto' && t.categoria !== BD.REENVIO && !esTraspaso(t);
+export const esIngreso = t => t.tipo === 'ingreso' && !esTraspaso(t);
 const esMensualidad = t => t.tipo === 'ingreso' && t.categoria === BD.MENSUALIDAD;
 
 // La mensualidad y el dinero de paso de los 3 últimos días del mes cuentan para el mes siguiente

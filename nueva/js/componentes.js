@@ -1,7 +1,7 @@
 // Piezas que se repiten en varias pantallas
 
 import { ic } from './iconos.js';
-import { esc, fmt, infoCategoria, tinteCategoria, porRevisar, esPaso, formaDePago, nombreMes, mesActual } from './logica.js';
+import { esc, fmt, infoCategoria, tinteCategoria, porRevisar, esPaso, esTraspaso, formaDePago, nombreMes, mesActual } from './logica.js';
 
 const ENLACES = [
   ['inicio', 'Inicio', 'inicio'],
@@ -58,6 +58,7 @@ export const conceptoVisible = t => String(t.descripcion || '').replace(/^\[Efec
 export function importeMovimiento(t) {
   if (t.tipo === 'liquidacion_tarjeta') return { texto: '≈ ' + fmt(t.importe), clase: '' };
   if (esPaso(t)) return { texto: '↩ ' + fmt(t.importe), clase: '' };
+  if (esTraspaso(t)) return { texto: '⇄ ' + fmt(t.importe), clase: '' };
   return t.tipo === 'ingreso' ? { texto: fmt(t.importe, true), clase: 'positivo' } : { texto: fmt(-t.importe, true), clase: '' };
 }
 

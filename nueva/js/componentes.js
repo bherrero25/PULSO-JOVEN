@@ -1,7 +1,7 @@
 // Piezas que se repiten en varias pantallas
 
 import { ic } from './iconos.js';
-import { esc, fmt, infoCategoria, tinteCategoria, porRevisar, esPaso, esTraspaso, formaDePago, nombreMes, mesActual } from './logica.js';
+import { esc, fmt, infoCategoria, tinteCategoria, porRevisar, esPaso, esTraspaso, formaDePago, nombreMes, mesActual, cuentasBanco, esManual, destinoManual } from './logica.js';
 
 const ENLACES = [
   ['inicio', 'Inicio', 'inicio'],
@@ -62,14 +62,23 @@ export function importeMovimiento(t) {
   return t.tipo === 'ingreso' ? { texto: fmt(t.importe, true), clase: 'positivo' } : { texto: fmt(-t.importe, true), clase: '' };
 }
 
+// Con varias cuentas de banco, el nombre de la cuenta del movimiento
+export function cuentaDeMovimiento(t, E) {
+  const bancos = cuentasBanco(E.cuentas);
+  if (bancos.length < 2) return '';
+  const clave = esManual(t) ? destinoManual(t) : t.cuenta;
+  return bancos.find(c => c.clave === clave)?.nombre || '';
+}
+
 export function filaMovimiento(t, E, detalle) {
   const cat = infoCategoria(t.categoria);
+  const cuenta = cuentaDeMovimiento(t, E);
   const rev = porRevisar(t, E.reglas);
   const imp = importeMovimiento(t);
   return `<button type="button" class="fila" data-accion="editar-mov" data-id="${esc(t.id)}">
     ${rev ? `<span class="ficha revisar">${ic('alerta')}</span>` : ficha(cat)}
     <span class="cuerpo"><span class="concepto">${esc(conceptoVisible(t))}</span>
-      <span class="detalle${rev ? ' revisar' : ''}">${rev ? 'Sin categoría · toca para elegir' : esc(detalle ?? `${cat.nombre} · ${formaDePago(t)}`)}${t.pendiente ? ' <span class="retenido">Retenido</span>' : ''}${t.cuenta === 'previsto' ? ' <span class="retenido">Previsto</span>' : ''}</span></span>
+      <span class="detalle${rev ? ' revisar' : ''}">${rev ? 'Sin categoría · toca para elegir' : esc(detalle ?? `${cat.nombre} · ${formaDePago(t)}${cuenta ? ` · ${cuenta}` : ''}`)}${t.pendiente ? ' <span class="retenido">Retenido</span>' : ''}${t.cuenta === 'previsto' ? ' <span class="retenido">Previsto</span>' : ''}</span></span>
     <span class="importe num ${imp.clase}">${imp.texto}</span>
   </button>`;
 }

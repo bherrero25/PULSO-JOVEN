@@ -1,7 +1,7 @@
 // Añadir: a mano con teclado, subiendo el extracto del banco o (más adelante) de forma automática
 
 import { ic } from '../iconos.js';
-import { esc, fmt, hoyISO, fechaCorta, RAPIDAS_GASTO, RAPIDAS_INGRESO, categoriaPorId, MEDIOS, nombreCuenta, infoCategoria, separarYaApuntados, conciliarRetenidos, porRevisar, emparejarApuntados, CUENTA_MANUAL, BD } from '../logica.js';
+import { esc, fmt, hoyISO, fechaCorta, RAPIDAS_GASTO, RAPIDAS_INGRESO, categoriaPorId, MEDIOS, nombreCuenta, infoCategoria, separarYaApuntados, conciliarRetenidos, porRevisar, emparejarApuntados, CUENTA_MANUAL, BD, cuentaParaExtracto, detectarTraspasos, cuentasBanco, cuentaManual, cuentaPrincipal, claveCuentaBanco, esClaveBanco } from '../logica.js';
 import { ficha, conceptoVisible } from '../componentes.js';
 import { toast, abrirHoja, cabeceraHoja, confirmar } from '../ui.js';
 import * as D from '../datos.js';
@@ -20,6 +20,15 @@ export function nuevoMovimiento({ tipo, medio } = {}) {
   const m = MEDIOS[medio] ? medio : t === 'gasto' ? 'tarjeta' : 'transferencia';
   return { tipo: t, importe: '', cat: catPorDefecto(t, m), catElegida: false, fecha: hoyISO(), medio: m, concepto: '' };
 }
+// Con varias cuentas de banco, a cuál va lo apuntado (para «Tu dinero» y para juntarlo con el extracto de esa cuenta)
+function selectorCuenta(E, n) {
+  const bancos = cuentasBanco(E.cuentas);
+  if (bancos.length < 2 || n.medio === 'efectivo') return '';
+  const elegida = n.cuentaBanco || cuentaPrincipal(bancos).clave;
+  return `<label class="campo" style="gap:4px"><span class="solo-lector">Cuenta</span><select data-entrada="cuenta-nuevo" aria-label="Cuenta">
+    ${bancos.map(c => `<option value="${esc(c.clave)}"${c.clave === elegida ? ' selected' : ''}>Cuenta: ${esc(c.nombre)}</option>`).join('')}</select></label>`;
+}
+
 function textosNuevo(n) {
   const g = n.tipo === 'gasto';
   if (n.medio === 'bizum') return { tipos: ['Enviado', 'Recibido'], concepto: g ? '¿A quién?' : '¿De quién?', guardar: g ? 'Guardar Bizum enviado' : 'Guardar Bizum recibido', nombre: g ? 'Bizum enviado' : 'Bizum recibido' };
@@ -50,6 +59,7 @@ function aMano(E) {
   return `
     <div class="tipo" role="group" aria-label="Tipo">${boton('gasto', tx.tipos[0])}${boton('ingreso', tx.tipos[1])}</div>
     <div class="formas" role="group" aria-label="Forma de pago">${FORMAS.map(([k, t]) => `<button type="button" data-accion="forma-nuevo" data-valor="${k}" aria-pressed="${n.medio === k}">${t}</button>`).join('')}</div>
+    ${selectorCuenta(E, n)}
     <div class="pantalla-importe num${n.importe ? '' : ' vacio-imp'}${n.tipo === 'ingreso' && n.importe ? ' positivo' : ''}" aria-live="polite">${n.importe ? (n.tipo === 'gasto' ? '−' : '+') + n.importe : '0'} €</div>
     <div class="chips sin-scroll" role="group" aria-label="Categoría">
       ${conPersona(n.medio) ? luego : ''}${ids.map(id => { const c = categoriaPorId(id); return `<button type="button" class="cat-chip" data-accion="cat-nuevo" data-valor="${id}" aria-pressed="${n.cat === id}">${ficha(c, 'peq')}${esc(c.nombre)}</button>`; }).join('')}${conPersona(n.medio) ? '' : luego}
@@ -73,12 +83,16 @@ function extracto(E) {
     const separados = pares.filter(x => !x.unir).map(x => x.banco), unir = pares.filter(x => x.unir);
     const aImportar = [...imp.nuevas, ...separados.filter(t => !t.pendiente), ...imp.retenidosNuevos, ...separados.filter(t => t.pendiente)];
     const nNuevos = imp.nuevas.length + separados.filter(t => !t.pendiente).length;
-    const listaNuevos = [...imp.nuevas, ...imp.retenidosNuevos];
+    // Los traspasos marcados ya se ven en su recuadro: abajo solo el resto
+    const enTraspaso = new Set((imp.traspasos || []).filter(x => x.unir).map(x => x.nuevo));
+    const listaNuevos = [...imp.nuevas, ...imp.retenidosNuevos].filter(t => !enTraspaso.has(t));
     const hayCambios = aImportar.length || unir.length || imp.cobrados.length || imp.caducados.length || (imp.saldo && E.cuentas);
+    const d = imp.destino, nombreDestino = d?.nombre || nombreCuenta(imp.banco);
     return `<section class="tarjeta" style="border:1px solid var(--linea-2)">
         <div style="display:flex;align-items:center;gap:10px">${'<span class="ficha">' + ic('banco') + '</span>'}
           <div style="display:flex;flex-direction:column;gap:2px"><b style="font-size:16px">${esc(nombreCuenta(imp.banco))} · ${imp.tipo === 'tarjeta' ? 'tarjeta' : imp.tipo === 'efectivo' ? 'efectivo' : 'cuenta'}</b>
-          <span class="nota">${imp.txs.length} movimientos${imp.retenidos?.length ? ` y ${imp.retenidos.length} ${imp.retenidos.length === 1 ? 'retenido' : 'retenidos'}` : ''} del ${fechaCorta(fechas[0])} al ${fechaCorta(fechas[fechas.length - 1])}</span></div></div>
+          <span class="nota">${imp.txs.length} ${imp.txs.length === 1 ? 'movimiento' : 'movimientos'}${imp.retenidos?.length ? ` y ${imp.retenidos.length} ${imp.retenidos.length === 1 ? 'retenido' : 'retenidos'}` : ''} del ${fechaCorta(fechas[0])} al ${fechaCorta(fechas[fechas.length - 1])}</span></div></div>
+        ${d && E.cuentas ? bloqueCuenta(d) : ''}
         <div class="dos-col">
           <div class="dato"><small style="color:var(--texto-3)">Nuevos</small><b class="num">${nNuevos}</b></div>
           <div class="dato"><small style="color:var(--texto-3)">Ya estaban</small><b class="num">${imp.yaEstaban}</b></div>
@@ -88,18 +102,18 @@ function extracto(E) {
           ${imp.cobrados.length ? `<span><b>${imp.cobrados.length} ${imp.cobrados.length === 1 ? 'retenido ya cobrado' : 'retenidos ya cobrados'}</b>: se ${imp.cobrados.length === 1 ? 'convierte' : 'convierten'} en el movimiento definitivo, con la categoría que tenía.</span>` : ''}
           ${imp.caducados.length ? `<span><b>${imp.caducados.length} ${imp.caducados.length === 1 ? 'retenido que ya no aparece' : 'retenidos que ya no aparecen'}</b> (${imp.caducados.length === 1 ? 'anulado' : 'anulados'} o con otro importe): se ${imp.caducados.length === 1 ? 'quita' : 'quitan'}.</span>` : ''}
         </div>` : ''}
-        ${bloquePares(pares, true)}${bloquePares(pares, false)}
+        ${bloquePares(pares, true)}${bloquePares(pares, false)}${bloqueTraspasos(E, imp.traspasos || [])}
         ${imp.retenidosSinColumna ? `<p class="nota">Este extracto trae ${imp.retenidosSinColumna} ${imp.retenidosSinColumna === 1 ? 'movimiento retenido' : 'movimientos retenidos'}. Para incluirlos, hay que ejecutar en Supabase el texto <b>sql/2026-11-retenidos.sql</b>.</p>` : ''}
         ${imp.deApplePay ? `<p class="nota">De los que ya estaban, ${imp.deApplePay} ${imp.deApplePay === 1 ? 'entró' : 'entraron'} con Apple Pay (mismo importe y fecha cercana), así que no se repiten.</p>` : ''}
         ${imp.saldo ? `<div style="display:flex;justify-content:space-between;gap:10px;background:var(--fondo);border-radius:12px;padding:10px 12px;font-size:14px">
-          <span>Saldo de ${esc(nombreCuenta(imp.banco))} el ${fechaCorta(imp.saldo.fecha)}</span><b class="num">${imp.saldo.valor < 0 ? '−' : ''}${fmt(imp.saldo.valor)}</b></div>` : ''}
+          <span>Saldo de ${esc(nombreDestino)} el ${fechaCorta(imp.saldo.fecha)}</span><b class="num" style="white-space:nowrap">${imp.saldo.valor < 0 ? '−' : ''}${fmt(imp.saldo.valor)}</b></div>` : ''}
         ${listaNuevos.length ? `<div>${listaNuevos.slice(0, 6).map(t => { const c = infoCategoria(t.categoria); return `<div class="fila">${ficha(c, 'peq')}<span class="cuerpo"><span class="concepto" style="font-size:14px">${esc(t.descripcion)}</span><span class="detalle">${fechaCorta(t.fecha)} · ${esc(c.nombre)}${t.pendiente ? ' <span class="retenido">Retenido</span>' : ''}</span></span><span class="importe num${t.tipo === 'ingreso' ? ' positivo' : ''}" style="font-size:14px">${fmt(t.tipo === 'ingreso' ? +t.importe : -t.importe, true)}</span></div>`; }).join('')}
           ${listaNuevos.length > 6 ? `<p class="nota" style="padding-top:8px">y ${listaNuevos.length - 6} más</p>` : ''}</div>` : `<p class="nota">${pares.length ? 'No hay más movimientos nuevos en este archivo.' : 'Todos los movimientos de este archivo ya estaban guardados.'}</p>`}
       </section>
       ${hayCambios ? `<button type="button" class="boton" data-accion="confirmar-importacion"${imp.guardando ? ' disabled' : ''}>${imp.guardando ? 'Guardando…'
         : aImportar.length ? `Importar ${aImportar.length} ${aImportar.length === 1 ? 'movimiento' : 'movimientos'}`
         : unir.length ? `Juntar ${unir.length === 1 ? 'el movimiento' : `los ${unir.length} movimientos`} con lo que ya tenías`
-        : imp.cobrados.length || imp.caducados.length ? 'Actualizar los retenidos' : `Actualizar el saldo de ${esc(nombreCuenta(imp.banco))}`}</button>` : ''}
+        : imp.cobrados.length || imp.caducados.length ? 'Actualizar los retenidos' : `Actualizar el saldo de ${esc(nombreDestino)}`}</button>` : ''}
       <button type="button" class="boton suave" data-accion="cancelar-importacion">${hayCambios ? 'Cancelar' : 'Elegir otro archivo'}</button>
       <p class="nota">Después podrás cambiar la categoría de cualquiera; la app aprenderá de tus cambios.</p>`;
   }
@@ -117,6 +131,34 @@ function extracto(E) {
       <div><b>3</b><span>Revisa lo que hemos encontrado y confirma. Lo repetido no se duplica.</span></div>
     </div>
     <p class="nota">Probado con Bankinter. BBVA, Santander, CaixaBank, ING, Revolut y N26 se reconocen por el formato de su archivo. Para el efectivo, <a href="../plantilla-efectivo-pulso.xlsx" style="text-decoration:underline">descarga la plantilla</a>.</p>`;
+}
+
+// De qué cuenta es el extracto: se pregunta si hay dudas; una cuenta nueva se puede nombrar
+function bloqueCuenta(d) {
+  const caja = 'background:var(--fondo);border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:8px;font-size:13px;line-height:1.45;color:#33393F';
+  const eleccion = d.preguntar ? `<label class="campo" style="gap:4px">¿De qué cuenta es?<select data-cambio="cuenta-extracto">
+      ${d.opciones.map(o => `<option value="${esc(o.clave)}"${!d.nueva && o.clave === d.clave ? ' selected' : ''}>${esc(o.nombre)}</option>`).join('')}
+      <option value="__nueva"${d.nueva ? ' selected' : ''}>Una cuenta nueva</option></select></label>` : '';
+  const nueva = d.nueva ? `<label class="campo" style="gap:4px">${d.preguntar ? 'Nombre de la cuenta nueva' : 'Cuenta nueva · ponle nombre'}<input type="text" data-entrada="nombre-cuenta-nueva" maxlength="40" value="${esc(d.nombre)}"></label>
+      <span class="nota">Aparecerá en «Tu dinero» con el saldo de este extracto.</span>` : '';
+  const fija = !d.preguntar && !d.nueva ? `<span>Cuenta: <b>${esc(d.nombre)}</b></span>` : '';
+  const numero = d.adoptar ? `<span class="nota">A partir de ahora la reconoceremos por su número ···${esc(d.adoptar.split('·')[1])}.</span>` : '';
+  return `<div style="${caja}">${eleccion}${nueva}${fija}${numero}</div>`;
+}
+
+// Salidas de esta cuenta que entran en otra tuya (o al revés): no son ni gasto ni ingreso
+function bloqueTraspasos(E, lista) {
+  if (!lista.length) return '';
+  const nombre = clave => (E.cuentas || []).find(c => c.clave === clave)?.nombre || nombreCuenta(clave);
+  const n = lista.length;
+  return `<div style="background:var(--fondo);border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:4px;font-size:13px;line-height:1.45;color:#33393F">
+    <span><b>${n === 1 ? 'Un traspaso entre tus cuentas' : `${n} traspasos entre tus cuentas`}</b>: no ${n === 1 ? 'cuenta' : 'cuentan'} como gasto ni como ingreso.</span>
+    ${lista.map(({ nuevo: t, guardado: g, unir }, i) => `<div style="border-top:1px solid var(--linea);margin-top:6px;padding-top:6px">
+      <div class="fila" style="padding:4px 0">${ficha(infoCategoria(BD.TRASPASO), 'peq')}<span class="cuerpo"><span class="concepto" style="font-size:14px">${esc(t.descripcion)}</span><span class="detalle">${fechaCorta(t.fecha)}</span></span>
+        <span class="importe num" style="font-size:14px">${fmt(t.tipo === 'ingreso' ? +t.importe : -t.importe, true)}</span></div>
+      <label class="casilla" style="min-height:36px;font-size:13px"><input type="checkbox" data-cambio="traspaso-unir" data-i="${i}"${unir ? ' checked' : ''}> <span>${t.tipo === 'gasto' ? 'Va a' : 'Viene de'} «${esc(nombre(g.cuenta))}» (${fechaCorta(g.fecha)})</span></label>
+    </div>`).join('')}
+  </div>`;
 }
 
 // Movimientos del extracto que coinciden con algo que ya habías apuntado.
@@ -199,14 +241,16 @@ export const acciones = {
     const luego = n.cat === LUEGO, cat = luego ? null : categoriaPorId(n.cat), textos = textosNuevo(n);
     const categoria = !luego ? cat.bd : n.medio === 'bizum' ? (n.tipo === 'gasto' ? '📱 Bizum enviado' : '📱 Bizum recibido') : BD.OTROS;
     // Lo pagado en efectivo no sale en el banco; lo demás (y meter efectivo en el banco) se juntará con el extracto
-    const cuenta = n.medio === 'efectivo' && n.cat !== 'traspaso' ? 'efectivo' : CUENTA_MANUAL;
+    const bancos = cuentasBanco(E.cuentas);
+    const cuenta = n.medio === 'efectivo' && n.cat !== 'traspaso' ? 'efectivo'
+      : cuentaManual(bancos.length > 1 ? (n.cuentaBanco || cuentaPrincipal(bancos).clave) : null);
     const descripcion = n.concepto.trim() || (conPersona(n.medio) || luego ? textos.nombre : cat.nombre);
     const tx = { fecha: n.fecha || hoyISO(), descripcion, importe, tipo: n.tipo, categoria, medio: n.medio, cuenta };
     const fila = await D.insertarMovimiento(tx);
     if (!fila) return;
     E.txs.push(fila);
     E.txs.sort((a, b) => b.fecha.localeCompare(a.fecha));
-    E.nuevo = nuevoMovimiento();
+    E.nuevo = { ...nuevoMovimiento(), cuentaBanco: n.cuentaBanco }; // la próxima vez, la misma cuenta
     // Un traspaso pregunta de qué cuenta sale el dinero, ya en Inicio (al cambiar de pantalla se cierran las hojas)
     if (n.cat === 'traspaso') window.addEventListener('hashchange', () => preguntarTraspaso(ctx, fila), { once: true });
     else toast(`${textos.nombre} de ${fmt(importe)} ${n.medio === 'transferencia' ? 'guardada' : 'guardado'}${luego ? '. Ponle categoría cuando quieras en «Por revisar».' : ''}`);
@@ -240,6 +284,8 @@ export const acciones = {
     try { claves = await D.clavesGuardadas(E.txs); } catch (error) { D.avisarError(error, 'comprobar qué movimientos tenías ya'); imp.guardando = false; ctx.pintar(); return; }
     const pares = imp.pares || [];
     const separados = pares.filter(x => !x.unir).map(x => x.banco);
+    const traspasos = (imp.traspasos || []).filter(x => x.unir);
+    traspasos.forEach(x => { x.nuevo.categoria = BD.TRASPASO; });
     const nuevas = [...imp.nuevas, ...imp.retenidosNuevos, ...separados].filter(t => !claves.has(D.claveMovimiento(t)));
     const { guardadas, error } = await D.insertarMovimientos(nuevas);
     E.txs.push(...guardadas);
@@ -271,22 +317,34 @@ export const acciones = {
       E.txs = E.txs.filter(t => !imp.caducados.includes(t));
       quitados = imp.caducados.length;
     }
+    // La otra mitad de cada traspaso (ya guardada en tu otra cuenta) también pasa a ser traspaso
+    const otraMitad = traspasos.map(x => x.guardado).filter(g => g.categoria !== BD.TRASPASO);
+    if (otraMitad.length && await D.actualizarMovimientos(otraMitad.map(g => g.id), { categoria: BD.TRASPASO }, 'marcar los traspasos entre tus cuentas')) otraMitad.forEach(g => { g.categoria = BD.TRASPASO; });
+    // La cuenta antigua sin número adopta el del archivo (cambia en ella y en todos sus movimientos)
+    const d = imp.destino;
+    if (d?.adoptar && await D.renombrarCuenta(d.clave, d.adoptar)) {
+      E.txs.forEach(t => { if (t.cuenta === d.clave) t.cuenta = d.adoptar; else if (t.cuenta === cuentaManual(d.clave)) t.cuenta = cuentaManual(d.adoptar); });
+      (E.cuentas || []).forEach(c => { if (c.clave === d.clave) c.clave = d.adoptar; });
+    }
     E.txs.sort((a, b) => b.fecha.localeCompare(a.fecha));
-    const saldoNuevo = imp.saldo && await actualizarSaldo(E, imp.banco, imp.saldo);
+    const saldoNuevo = imp.saldo && d && await actualizarSaldo(E, d, imp.saldo);
     const partes = [];
     if (guardadas.length) partes.push(`${guardadas.length} movimientos importados`);
     if (unidos) partes.push(`${unidos} ${unidos === 1 ? 'apuntado a mano juntado' : 'apuntados a mano juntados'} con el banco`);
     if (cobrados) partes.push(`${cobrados} ${cobrados === 1 ? 'retenido actualizado' : 'retenidos actualizados'}`);
     if (quitados) partes.push(`${quitados} ${quitados === 1 ? 'retenido quitado' : 'retenidos quitados'}`);
-    if (saldoNuevo) partes.push(`saldo de ${nombreCuenta(imp.banco)} actualizado`);
+    if (traspasos.length) partes.push(`${traspasos.length} ${traspasos.length === 1 ? 'traspaso' : 'traspasos'} entre tus cuentas`);
+    if (saldoNuevo) partes.push(`saldo de ${d.nombre} actualizado`);
     toast(partes.length ? partes.join(' · ') : 'No había nada nuevo');
     location.hash = guardadas.length || cobrados || unidos ? '#/movimientos' : '#/inicio';
   }
 };
 
 export const entradas = {
+  'nombre-cuenta-nueva': (ctx, el) => { if (ctx.E.importacion?.destino) ctx.E.importacion.destino.nombre = el.value; },
   'fecha-nuevo': (ctx, el) => { ctx.E.nuevo.fecha = el.value; },
-  'concepto-nuevo': (ctx, el) => { ctx.E.nuevo.concepto = el.value; }
+  'concepto-nuevo': (ctx, el) => { ctx.E.nuevo.concepto = el.value; },
+  'cuenta-nuevo': (ctx, el) => { ctx.E.nuevo.cuentaBanco = el.value; }
 };
 
 export const cambios = {
@@ -307,29 +365,66 @@ export const cambios = {
       if (r.error) E.importacion = { error: r.error };
       else if (!r.txs.length && !retenidos.length) E.importacion = { error: 'No hemos encontrado movimientos en este archivo.' };
       else {
-        const c = conciliarRetenidos(r.txs, retenidos, E.txs, r.banco);
-        const guardadas = new Set(E.txs.map(D.claveMovimiento));
-        const def = separarYaApuntados(c.definitivos.filter(t => !guardadas.has(D.claveMovimiento(t))), E.txs);
-        const ret = separarYaApuntados(c.retenidosNuevos.filter(t => !guardadas.has(D.claveMovimiento(t))), E.txs);
-        // Lo apuntado a mano que ahora sale en el extracto se junta con su movimiento del banco
-        const m = r.tipo === 'efectivo' ? { quedan: [...def.quedan, ...ret.quedan], pares: [] }
-          : emparejarApuntados([...def.quedan, ...ret.quedan], E.txs, [...r.txs, ...retenidos]);
-        const nuevas = m.quedan.filter(t => !t.pendiente);
-        E.importacion = {
-          ...r, nuevas, retenidosNuevos: m.quedan.filter(t => t.pendiente), cobrados: c.cobrados, caducados: c.caducados,
-          pares: m.pares.map(x => ({ ...x, unir: x.seguro })),
-          deApplePay: def.repetidos.length + ret.repetidos.length,
-          yaEstaban: r.txs.length - def.quedan.length - c.cobrados.length,
-          retenidosSinColumna: E.conRetenidos ? 0 : (r.retenidos || []).length
-        };
+        // Extracto de una cuenta: de qué cuenta es (sin la tabla de cuentas, como siempre: por el banco)
+        const destino = r.tipo !== 'cuenta' ? null
+          : E.cuentas ? cuentaParaExtracto(E.cuentas, E.txs, { banco: r.banco, fin: r.fin, entidad: r.entidad, movs: r.txs })
+          : { clave: r.banco };
+        E.importacion = prepararImportacion(E, r, retenidos, destino);
       }
     } catch (e) {
       console.error(e);
       E.importacion = { error: 'No se ha podido leer el archivo. ¿Es un Excel o un CSV?' };
     }
     ctx.pintar();
+  },
+  // Otra cuenta para el extracto: se vuelve a calcular todo para esa cuenta
+  'cuenta-extracto': (ctx, el) => {
+    const { E } = ctx, imp = E.importacion, d = imp.destino;
+    const base = { preguntar: true, opciones: d.opciones, nuevaPropuesta: d.nuevaPropuesta };
+    let destino;
+    if (el.value === '__nueva') destino = { ...d.nuevaPropuesta, ...base };
+    else {
+      const o = d.opciones.find(x => x.clave === el.value);
+      // La cuenta antigua sin número adopta el del archivo, si ninguna otra lo tiene ya
+      const numero = imp.bruto.fin && o.clave === imp.bruto.banco && !d.opciones.some(x => x.clave === claveCuentaBanco(imp.bruto.banco, imp.bruto.fin));
+      destino = { clave: o.clave, nombre: o.nombre, ...(numero ? { adoptar: claveCuentaBanco(imp.bruto.banco, imp.bruto.fin) } : {}), ...base };
+    }
+    E.importacion = prepararImportacion(E, imp.bruto, imp.retenidosBrutos, destino);
+    ctx.pintar();
+  },
+  'traspaso-unir': (ctx, el) => {
+    const x = ctx.E.importacion?.traspasos?.[+el.dataset.i];
+    if (x) { x.unir = el.checked; ctx.pintar(); }
   }
 };
+
+// Todo lo que cambia al importar un extracto, calculado para la cuenta elegida (destino; null en tarjeta o efectivo):
+// retenidos cobrados o anulados, lo que ya estaba, lo que entró por Apple Pay, lo apuntado a mano y los traspasos entre cuentas.
+function prepararImportacion(E, r, retenidosArchivo, destino) {
+  const clave = destino ? destino.clave : r.banco;
+  const conCuenta = t => destino ? { ...t, cuenta: clave } : t;
+  const txs = r.txs.map(conCuenta), retenidos = retenidosArchivo.map(conCuenta);
+  const c = conciliarRetenidos(txs, retenidos, E.txs, clave);
+  const guardadas = new Set(E.txs.map(D.claveMovimiento));
+  const def = separarYaApuntados(c.definitivos.filter(t => !guardadas.has(D.claveMovimiento(t))), E.txs);
+  const ret = separarYaApuntados(c.retenidosNuevos.filter(t => !guardadas.has(D.claveMovimiento(t))), E.txs);
+  // Lo apuntado a mano que ahora sale en el extracto se junta con su movimiento del banco
+  const m = r.tipo === 'efectivo' ? { quedan: [...def.quedan, ...ret.quedan], pares: [] }
+    : emparejarApuntados([...def.quedan, ...ret.quedan], E.txs, [...txs, ...retenidos]);
+  const nuevas = m.quedan.filter(t => !t.pendiente);
+  // Traspasos con tus otras cuentas de banco
+  const claves = new Set([clave, ...cuentasBanco(E.cuentas).map(x => x.clave), ...E.txs.map(t => t.cuenta).filter(esClaveBanco)]);
+  const traspasos = destino ? detectarTraspasos(nuevas, E.txs, clave, claves).pares : [];
+  return {
+    ...r, txs, bruto: r, retenidosBrutos: retenidosArchivo, destino,
+    nuevas, retenidosNuevos: m.quedan.filter(t => t.pendiente), cobrados: c.cobrados, caducados: c.caducados,
+    pares: m.pares.map(x => ({ ...x, unir: x.seguro })),
+    traspasos: traspasos.map(x => ({ ...x, unir: true })),
+    deApplePay: def.repetidos.length + ret.repetidos.length,
+    yaEstaban: r.txs.length - def.quedan.length - c.cobrados.length,
+    retenidosSinColumna: E.conRetenidos ? 0 : (r.retenidos || []).length
+  };
+}
 
 // Instrucciones para crear en la app Atajos la automatización que manda cada pago a Pulso Joven
 function hojaApplePay(codigo) {
@@ -354,13 +449,16 @@ function hojaApplePay(codigo) {
     <button type="button" class="boton suave peq" data-accion="cambiar-codigo">Cambiar mi código</button>`, 'Atajo de Apple Pay');
 }
 
-// Guarda el saldo del banco que trae el extracto, salvo que ya hubiera uno más reciente (de otro extracto posterior)
-async function actualizarSaldo(E, banco, saldo) {
-  if (!E.cuentas || banco === 'generico') return false;
-  const actual = E.cuentas.find(c => c.clave === banco);
+// Guarda el saldo de la cuenta que trae el extracto, salvo que ya hubiera uno más reciente (de otro extracto posterior).
+// Una cuenta nueva se crea aquí, con el nombre que se le haya dado.
+async function actualizarSaldo(E, destino, saldo) {
+  if (!E.cuentas) return false;
+  const clave = destino.adoptar || destino.clave;
+  const actual = E.cuentas.find(c => c.clave === clave);
   if (actual && actual.fecha_saldo > saldo.fecha) return false;
-  const fila = await D.guardarSaldoBanco(banco, actual?.nombre || nombreCuenta(banco), saldo.valor, saldo.fecha);
+  const nombre = actual?.nombre || destino.nombre?.trim() || nombreCuenta(clave);
+  const fila = await D.guardarSaldoBanco(clave, nombre, saldo.valor, saldo.fecha);
   if (!fila) return false;
-  E.cuentas = [...E.cuentas.filter(c => c.clave !== banco), fila];
+  E.cuentas = [...E.cuentas.filter(c => c.clave !== clave), fila];
   return true;
 }

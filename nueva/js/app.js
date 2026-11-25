@@ -18,7 +18,7 @@ const E = {
   usuario: null, nombre: '', cargado: false,
   txs: [], presupuestos: [], metas: [], reglas: {}, cuentas: null, fijos: null, conRetenidos: false,
   meses: [mesActual()], mes: mesActual(), pantalla: 'inicio',
-  filtro: 'todos', q: '',
+  filtro: 'todos', q: '', filtroCuenta: '',
   tabAnadir: 'mano', nuevo: anadir.nuevoMovimiento(), importacion: null,
   inv: { mensual: 50, anos: 10, perfil: 'equilibrado' },
   modoEntrar: 'entrar'

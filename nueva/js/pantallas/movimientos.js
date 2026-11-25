@@ -1,7 +1,7 @@
 // Movimientos: lista del mes con buscador y filtros; al tocar uno se puede cambiar su categoría, fecha o forma de pago
 
 import { ic } from '../iconos.js';
-import { esc, fmt, resumenMes, porRevisar, etiquetaDia, infoCategoria, CATEGORIAS, claveConcepto, MEDIOS, BD, esGasto, esIngreso, esBizum, CUENTA_MANUAL } from '../logica.js';
+import { esc, fmt, resumenMes, porRevisar, etiquetaDia, infoCategoria, CATEGORIAS, claveConcepto, MEDIOS, BD, esGasto, esIngreso, esBizum, CUENTA_MANUAL, esManual, cuentasBanco, cuentaManual, cuentaPrincipal } from '../logica.js';
 import { preguntarTraspaso } from './dinero.js';
 import { selectorMes, filaMovimiento, ficha, conceptoVisible, importeMovimiento } from '../componentes.js';
 import { abrirHoja, cerrarHoja, cabeceraHoja, toast, confirmar } from '../ui.js';
@@ -9,10 +9,21 @@ import * as D from '../datos.js';
 
 const FILTROS = [['todos', 'Todos'], ['gastos', 'Gastos'], ['ingresos', 'Ingresos'], ['revisar', 'Por revisar']];
 
+// Filtro por cuenta (con varias cuentas de banco): lo de esa cuenta y lo apuntado para ella; a la principal va también
+// lo apuntado sin cuenta y lo de Apple Pay, como en «Tu dinero»
+function deLaCuenta(E, t) {
+  const f = E.filtroCuenta;
+  if (!f) return true;
+  if (f === 'efectivo') return t.cuenta === 'efectivo';
+  if (t.cuenta === f || t.cuenta === cuentaManual(f)) return true;
+  return cuentaPrincipal(E.cuentas)?.clave === f && (t.cuenta === CUENTA_MANUAL || t.cuenta === 'apple_pay');
+}
+
 function visibles(E) {
   const q = E.q.trim().toLowerCase();
   return resumenMes(E.txs, E.mes).movs.filter(t => {
     if (q && !String(t.descripcion).toLowerCase().includes(q)) return false;
+    if (!deLaCuenta(E, t)) return false;
     if (E.filtro === 'gastos') return t.tipo !== 'ingreso';
     if (E.filtro === 'ingresos') return t.tipo === 'ingreso';
     if (E.filtro === 'revisar') return porRevisar(t, E.reglas);
@@ -33,7 +44,16 @@ export function render(E) {
   <div class="chips sin-scroll" role="group" aria-label="Filtrar">
     ${FILTROS.map(([k, t]) => `<button type="button" class="chip" data-accion="filtro" data-valor="${k}" aria-pressed="${E.filtro === k}">${k === 'revisar' ? `${t} (${nRev})` : t}</button>`).join('')}
   </div>
+  ${filtroCuentas(E)}
   <div id="lista-movs" style="display:flex;flex-direction:column;gap:12px">${renderLista(E)}</div>`;
+}
+
+function filtroCuentas(E) {
+  const bancos = cuentasBanco(E.cuentas);
+  if (bancos.length < 2 && !E.filtroCuenta) return '';
+  const op = (v, t) => `<option value="${esc(v)}"${E.filtroCuenta === v ? ' selected' : ''}>${esc(t)}</option>`;
+  return `<label class="campo" style="gap:0"><span class="solo-lector">Cuenta</span><select data-cambio="filtro-cuenta" aria-label="Cuenta">
+    ${op('', 'Todas las cuentas')}${bancos.map(c => op(c.clave, c.nombre)).join('')}${op('efectivo', 'Efectivo')}</select></label>`;
 }
 
 export function renderLista(E) {
@@ -80,7 +100,7 @@ function abrirEdicion(ctx, t) {
   const pregunta = !rev ? esc(actual.nombre) : bizum ? (t.tipo === 'ingreso' ? '¿De qué es este Bizum?' : '¿Para qué era este Bizum?') : '¿Qué es este movimiento?';
   abrirHoja(`${cabeceraHoja(esc(conceptoVisible(t)), pregunta)}
     <span class="num texto-2" style="font-size:15px;margin-top:-8px">${imp.texto}</span>
-    ${t.cuenta === CUENTA_MANUAL ? '<p class="nota">Lo apuntaste a mano. Cuando importes el extracto del banco, se juntará con su movimiento sin repetirse.</p>' : ''}
+    ${esManual(t) ? '<p class="nota">Lo apuntaste a mano. Cuando importes el extracto del banco, se juntará con su movimiento sin repetirse.</p>' : ''}
     ${t.cuenta === 'previsto' ? '<p class="nota" style="background:var(--fondo);border-radius:12px;padding:10px 12px"><b>Previsto:</b> lo ha apuntado la app por tus movimientos fijos. Cuando importes el extracto se juntará con el de verdad y se quedará con su importe. Si este mes no llega, bórralo.</p>' : ''}
     ${t.pendiente ? '<p class="nota" style="background:var(--fondo);border-radius:12px;padding:10px 12px"><b>Retenido:</b> el banco aún no lo ha cobrado del todo. Ya cuenta en tus gastos; cuando lo cobre, al importar el siguiente extracto se convertirá en el movimiento definitivo.</p>' : ''}
     ${opciones.length ? `<div class="rejilla-cats">${opciones.map(c => `<button type="button" data-accion="poner-categoria" data-id="${esc(t.id)}" data-cat="${esc(c.bd)}" aria-pressed="${!rev && c.bd === t.categoria}">${ficha(c)}${esc(c.nombre)}</button>`).join('')}</div>
@@ -140,6 +160,7 @@ export const acciones = {
 };
 
 export const cambios = {
+  'filtro-cuenta': (ctx, el) => { ctx.E.filtroCuenta = el.value; ctx.pintar(); },
   'fecha-mov': async (ctx, el) => {
     const t = buscarTx(ctx.E, el.dataset.id);
     if (!el.value || !await D.actualizarMovimientos([t.id], { fecha: el.value }, 'cambiar la fecha')) { el.value = t.fecha; return; }
@@ -152,7 +173,7 @@ export const cambios = {
     const t = buscarTx(ctx.E, el.dataset.id);
     // Lo apuntado a mano en efectivo no sale en el banco; con otra forma de pago sí, y se juntará con el extracto
     const cambios = { medio: el.value };
-    if (t.cuenta === CUENTA_MANUAL && el.value === 'efectivo' && t.categoria !== BD.TRASPASO) cambios.cuenta = 'efectivo';
+    if (esManual(t) && el.value === 'efectivo' && t.categoria !== BD.TRASPASO) cambios.cuenta = 'efectivo';
     else if (t.cuenta === 'efectivo' && el.value !== 'efectivo') cambios.cuenta = CUENTA_MANUAL;
     if (!await D.actualizarMovimientos([t.id], cambios, 'cambiar la forma de pago')) { el.value = t.medio || 'transferencia'; return; }
     Object.assign(t, cambios);

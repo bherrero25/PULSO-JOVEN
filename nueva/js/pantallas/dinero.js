@@ -1,7 +1,7 @@
 // Tu dinero: añadir, cambiar o quitar cuentas (efectivo, ahorro…). El saldo no cuenta como ingreso de ningún mes.
 
 import { ic } from '../iconos.js';
-import { esc, fmt, hoyISO, fechaCorta, nombreCuenta, TIPOS_CUENTA, totalCuentas } from '../logica.js';
+import { esc, fmt, hoyISO, fechaCorta, nombreCuenta, TIPOS_CUENTA, totalCuentas, cuentasBanco } from '../logica.js';
 import { abrirHoja, cerrarHoja, cabeceraHoja, toast, confirmar } from '../ui.js';
 import * as D from '../datos.js';
 import { filaCuenta } from './inicio.js';
@@ -27,6 +27,7 @@ function hojaCuenta(E, id) {
     </div>
     <p class="nota">${banco ? `Es el saldo contable del extracto de ${esc(nombreCuenta(banco))}; en «Tu dinero» se le resta lo retenido y se tiene en cuenta lo que apuntes después. Se actualiza solo cada vez que importas el extracto; si lo cambias aquí, valdrá hasta la próxima importación.` : 'Es lo que tienes ahora: no cuenta como ingreso de ningún mes. Cámbialo cuando quieras.'}</p>
     <button type="button" class="boton" data-accion="guardar-cuenta" data-id="${esc(c?.id || '')}">Guardar</button>
+    ${banco && cuentasBanco(E.cuentas).length > 1 ? `<button type="button" class="boton suave peq" data-accion="ver-movimientos-cuenta" data-clave="${esc(c.clave)}">${ic('lista')}Ver sus movimientos</button>` : ''}
     ${c ? `<button type="button" class="boton peligro peq" data-accion="borrar-cuenta" data-id="${esc(c.id)}">${ic('papelera')}Quitar esta cuenta</button>` : ''}`, c ? 'Cambiar cuenta' : 'Nueva cuenta');
 }
 
@@ -74,6 +75,11 @@ export const acciones = {
     ctx.pintar();
   },
   'gestionar-cuentas': (ctx) => hojaCuentas(ctx.E),
+  'ver-movimientos-cuenta': (ctx, el) => {
+    Object.assign(ctx.E, { filtroCuenta: el.dataset.clave, filtro: 'todos', q: '' });
+    cerrarHoja();
+    if (location.hash === '#/movimientos') ctx.pintar(); else location.hash = '#/movimientos';
+  },
   'editar-cuenta': (ctx, el) => hojaCuenta(ctx.E, el.dataset.id),
   'guardar-cuenta': async (ctx, el) => {
     const { E } = ctx;

@@ -2,7 +2,7 @@
 // En modo demo no se guarda nada: las funciones de escritura responden como si hubieran ido bien.
 
 import { mostrarAviso } from './ui.js';
-import { claveConcepto, claveMovimiento } from './logica.js';
+import { claveConcepto, claveMovimiento, cuentaManual } from './logica.js';
 export { claveMovimiento };
 import { datosDemo } from './demo.js';
 
@@ -254,6 +254,18 @@ export async function borrarFijo(id) {
   if (demo) return true;
   const { error } = await sb.from('pj_fijos').delete().eq('id', id);
   return !avisarError(error, 'quitar el movimiento fijo');
+}
+
+// Una cuenta antigua (clave 'bankinter') adopta su número ('bankinter·1234'): en sus movimientos, en lo apuntado a mano
+// para ella y en la propia cuenta. Primero los movimientos: si algo falla, la cuenta sigue como estaba.
+export async function renombrarCuenta(viejo, nuevo) {
+  if (demo) return true;
+  for (const [de, a] of [[viejo, nuevo], [cuentaManual(viejo), cuentaManual(nuevo)]]) {
+    const { error } = await sb.from('pj_transacciones').update({ cuenta: a }).eq('user_id', uid).eq('cuenta', de);
+    if (avisarError(error, 'actualizar la cuenta de tus movimientos')) return false;
+  }
+  const { error } = await sb.from('pj_cuentas').update({ clave: nuevo }).eq('user_id', uid).eq('clave', viejo);
+  return !avisarError(error, 'actualizar la cuenta');
 }
 
 export async function borrarCuenta(id) {

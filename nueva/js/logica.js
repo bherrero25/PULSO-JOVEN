@@ -308,12 +308,13 @@ export function saldoDisponible(cuenta, txs, cuentas = [cuenta]) {
 // siguiente extracto lo traiga. Lo apuntado a mano sigue como 'manual' hasta que se junta con el banco; se cuenta desde 7 días
 // antes de la fecha del saldo, por si el banco lo carga más tarde. Lo de Apple Pay, desde el día siguiente. Ni el efectivo ni lo previsto.
 export function apuntadoSinExtracto(cuenta, cuentas, txs) {
-  const principal = cuentas.filter(c => c.clave).sort((a, b) => String(b.fecha_saldo).localeCompare(String(a.fecha_saldo)))[0];
-  if (!principal || principal.id !== cuenta.id) return 0;
-  const d = new Date(principal.fecha_saldo + 'T12:00:00'); d.setDate(d.getDate() - 7);
+  if (!cuenta.clave) return 0;
+  const esPrincipal = cuentaPrincipal(cuentas)?.id === cuenta.id;
+  const d = new Date(cuenta.fecha_saldo + 'T12:00:00'); d.setDate(d.getDate() - 7);
   const desdeManual = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const suyo = t => esManual(t) ? (destinoManual(t) ? destinoManual(t) === cuenta.clave : esPrincipal) : false;
   const total = txs.filter(t => (t.tipo === 'ingreso' || t.tipo === 'gasto')
-      && ((t.cuenta === CUENTA_MANUAL && t.fecha > desdeManual) || (t.cuenta === 'apple_pay' && t.fecha > principal.fecha_saldo)))
+      && ((suyo(t) && t.fecha > desdeManual) || (esPrincipal && t.cuenta === 'apple_pay' && t.fecha > cuenta.fecha_saldo)))
     .reduce((s, t) => s + (t.tipo === 'ingreso' ? 1 : -1) * parseFloat(t.importe), 0);
   return Math.round(total * 100) / 100;
 }
@@ -333,6 +334,81 @@ export function separarYaApuntados(nuevos, txs) {
 // Lo apuntado a mano que saldrá en el banco (tarjeta, Bizum, transferencia o un ingreso de efectivo) se guarda con cuenta 'manual'.
 // Al importar el extracto se junta con su movimiento del banco en vez de repetirse.
 export const CUENTA_MANUAL = 'manual';
+// Con varias cuentas de banco, lo apuntado a mano guarda a cuál va: 'manual:bankinter·1234'
+export const esManual = t => t.cuenta === CUENTA_MANUAL || String(t.cuenta || '').startsWith(CUENTA_MANUAL + ':');
+export const destinoManual = t => esManual(t) ? (String(t.cuenta).split(':')[1] || null) : null;
+export const cuentaManual = clave => clave ? `${CUENTA_MANUAL}:${clave}` : CUENTA_MANUAL;
+
+// ─── VARIAS CUENTAS ───
+// Una cuenta de banco se reconoce por el banco y las 4 últimas cifras de su número (clave 'bankinter·1234').
+// Las creadas antes de leer el número (clave 'bankinter') lo adoptan la primera vez que llega en un extracto.
+export const claveCuentaBanco = (banco, fin) => fin ? `${banco}·${fin}` : banco;
+export const bancoDeClave = clave => String(clave || '').split('·')[0];
+export const cuentasBanco = cuentas => (cuentas || []).filter(c => c.clave);
+// Si el valor de «cuenta» de un movimiento es una cuenta de banco (y no efectivo, a mano, Apple Pay, previsto o tarjeta de crédito)
+export const esClaveBanco = c => !!c && !['manual', 'efectivo', 'apple_pay', 'previsto', 'principal'].includes(c) && !String(c).startsWith('manual:') && !String(c).endsWith('_tarjeta');
+// La cuenta de banco con el extracto más reciente: a ella va lo que no dice a qué cuenta pertenece
+export const cuentaPrincipal = cuentas => cuentasBanco(cuentas).sort((a, b) => String(b.fecha_saldo).localeCompare(String(a.fecha_saldo)))[0] || null;
+const ENTIDADES = { '0128': 'Bankinter', '0182': 'BBVA', '0049': 'Santander', '2100': 'CaixaBank', '1465': 'ING', '0081': 'Sabadell', '0073': 'Openbank', '2085': 'Ibercaja', '2095': 'Kutxabank', '2103': 'Unicaja', '3058': 'Cajamar', '0239': 'EVO Banco' };
+
+// De qué cuenta es un extracto. Devuelve { clave, nombre, nueva, adoptar, preguntar, opciones }:
+// - con número: la cuenta que ya lo tiene; si no, la antigua sin número de ese banco (si sus movimientos encajan con el
+//   archivo, adopta el número) o una nueva;
+// - sin número: la única cuenta de ese banco, o se pregunta si hay varias.
+export function cuentaParaExtracto(cuentas, txs, { banco, fin, entidad, movs }) {
+  const delBanco = cuentasBanco(cuentas).filter(c => bancoDeClave(c.clave) === banco);
+  const nombreBanco = banco === 'generico' ? (ENTIDADES[entidad] || 'Mi banco') : nombreCuenta(banco);
+  const libre = () => { // clave nueva que no choque con otra cuenta
+    if (fin) return claveCuentaBanco(banco, fin);
+    if (!delBanco.some(c => c.clave === banco)) return banco;
+    for (let n = 2; ; n++) if (!delBanco.some(c => c.clave === `${banco}·${n}`)) return `${banco}·${n}`;
+  };
+  const nueva = { clave: libre(), nombre: delBanco.length ? `${nombreBanco}${fin ? ` ···${fin}` : ' (otra cuenta)'}` : nombreBanco, nueva: true };
+  const opciones = delBanco.map(c => ({ clave: c.clave, nombre: c.nombre }));
+  if (fin) {
+    const exacta = delBanco.find(c => c.clave === claveCuentaBanco(banco, fin));
+    if (exacta) return { clave: exacta.clave, nombre: exacta.nombre, opciones };
+    const antigua = delBanco.find(c => c.clave === banco);
+    if (antigua) {
+      // ¿Es la misma? Si la antigua tiene movimientos en esas fechas y ninguno coincide con el archivo, es otra cuenta
+      const fechas = movs.map(t => t.fecha).sort(), claves = new Set(movs.map(claveMovimiento));
+      const suyos = txs.filter(t => t.cuenta === banco && t.fecha >= fechas[0] && t.fecha <= fechas[fechas.length - 1]);
+      // Si alguno coincide, es la misma y no se pregunta; si no hay con qué comparar, se propone la antigua pero se pregunta
+      const coincide = suyos.some(t => claves.has(claveMovimiento(t))), misma = !suyos.length || coincide;
+      return { ...(misma ? { clave: banco, nombre: antigua.nombre, adoptar: claveCuentaBanco(banco, fin) } : nueva), preguntar: !coincide, opciones, nuevaPropuesta: nueva };
+    }
+    return { ...nueva, opciones, nuevaPropuesta: nueva }; // otro número: es otra cuenta
+  }
+  if (delBanco.length === 1) return { clave: delBanco[0].clave, nombre: delBanco[0].nombre, opciones };
+  if (!delBanco.length) return { ...nueva, opciones, nuevaPropuesta: nueva };
+  const principal = cuentaPrincipal(delBanco);
+  return { clave: principal.clave, nombre: principal.nombre, preguntar: true, opciones, nuevaPropuesta: nueva };
+}
+
+// Traspasos entre tus cuentas de banco: sale una cantidad de una y entra la misma en otra (hasta 2 días de diferencia).
+// No se emparejan pagos con tarjeta ni retenidos. Cada movimiento, como mucho con otro.
+export function detectarTraspasos(nuevos, txs, clave, clavesBanco) {
+  const otras = new Set([...clavesBanco].filter(c => c !== clave));
+  if (!otras.size) return { pares: [] };
+  const valido = t => (t.tipo === 'gasto' || t.tipo === 'ingreso') && !t.pendiente && t.medio !== 'tarjeta' && t.categoria !== '💳 Liquidación tarjeta';
+  const libres = txs.filter(t => otras.has(t.cuenta) && valido(t));
+  const posibles = [];
+  nuevos.forEach((n, i) => {
+    if (!valido(n)) return;
+    libres.forEach((g, j) => {
+      const d = Math.abs(diasEntre(g.fecha, n.fecha));
+      if (g.tipo !== n.tipo && Math.abs(+g.importe - +n.importe) < 0.005 && d <= 2) posibles.push({ i, j, d });
+    });
+  });
+  posibles.sort((a, b) => a.d - b.d);
+  const usadosN = new Set(), usadosG = new Set(), pares = [];
+  posibles.forEach(({ i, j }) => {
+    if (usadosN.has(i) || usadosG.has(j)) return;
+    usadosN.add(i); usadosG.add(j);
+    pares.push({ nuevo: nuevos[i], guardado: libres[j] });
+  });
+  return { pares };
+}
 
 // ─── MOVIMIENTOS FIJOS (mensualidad, nómina, beca, alquiler…) ───
 // Cada persona apunta los suyos (tabla pj_fijos). El día que toca, la app crea un movimiento «previsto» (cuenta 'previsto')
@@ -377,7 +453,7 @@ export function emparejarApuntados(nuevos, txs, extracto) {
   const cuentas = new Set(extracto.map(t => t.cuenta));
   const fechas = extracto.map(t => t.fecha).sort();
   const desde = fechas[0], hasta = fechas[fechas.length - 1];
-  const candidatos = txs.filter(t => (t.tipo === 'gasto' || t.tipo === 'ingreso') && !t.pendiente && (t.cuenta === CUENTA_MANUAL || t.cuenta === CUENTA_PREVISTO
+  const candidatos = txs.filter(t => (t.tipo === 'gasto' || t.tipo === 'ingreso') && !t.pendiente && ((esManual(t) && (!destinoManual(t) || cuentas.has(destinoManual(t)))) || t.cuenta === CUENTA_PREVISTO
     || (cuentas.has(t.cuenta) && t.fecha >= desde && t.fecha <= hasta && !enExtracto.has(claveMovimiento(t)))));
   const palabras = s => new Set(String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').split(/[^a-z0-9ñ]+/).filter(p => p.length >= 4));
   const posibles = [];
@@ -398,7 +474,7 @@ export function emparejarApuntados(nuevos, txs, extracto) {
         return;
       }
       if (!mismoImporte || d < -3 || d > 7) return;
-      posibles.push({ i, j, exacto: true, seguro: g.cuenta === CUENTA_MANUAL, puntos: Math.abs(d) + (g.medio && n.medio && g.medio !== n.medio ? 3 : 0) - (comun ? 3 : 0) + (g.cuenta === CUENTA_MANUAL ? 0 : 0.5) });
+      posibles.push({ i, j, exacto: true, seguro: esManual(g), puntos: Math.abs(d) + (g.medio && n.medio && g.medio !== n.medio ? 3 : 0) - (comun ? 3 : 0) + (esManual(g) ? 0 : 0.5) });
     });
   });
   // Antes que nada, las de importe exacto (p. ej. una transferencia apuntada a mano no debe perder su movimiento del banco
@@ -417,5 +493,6 @@ export function emparejarApuntados(nuevos, txs, extracto) {
 export function nombreCuenta(c) {
   if (!c || c === 'principal') return 'Cuenta';
   if (c.endsWith('_tarjeta')) return (NOMBRES_CUENTA[c.slice(0, -8)] || c.slice(0, -8)) + ' · tarjeta';
-  return NOMBRES_CUENTA[c] || c;
+  const [banco, fin] = c.split('·');
+  return (NOMBRES_CUENTA[banco] || banco) + (fin ? (/^\d{4}$/.test(fin) ? ` ···${fin}` : ` (${fin})`) : '');
 }

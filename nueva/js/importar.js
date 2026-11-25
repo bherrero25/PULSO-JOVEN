@@ -86,6 +86,25 @@ function leerRetenidos(filas, previa, finBloque, banco, reglas) {
   return lista;
 }
 
+// Número de la cuenta, si el banco lo pone encima de los movimientos: IBAN (también en parte oculto con asteriscos) o
+// cuenta de 20 cifras. Se usan sus 4 últimas cifras para reconocer la cuenta, y la entidad para poner nombre a un banco desconocido.
+export function leerCuentaArchivo(filas, hasta) {
+  for (const f of filas.slice(0, Math.max(0, hasta))) {
+    for (const c of f) {
+      const s = String(c ?? '').toUpperCase().trim();
+      if (!s) continue;
+      const compacto = s.replace(/[\s.-]/g, '');
+      let m = compacto.match(/(?:^|[^A-Z])([A-Z]{2})(\d{2})(\d{4})?([A-Z0-9]{7,26})(?![A-Z0-9])/);
+      if (m && m[3] && /\d{4}$/.test(m[4])) return { fin: m[4].slice(-4), entidad: m[1] === 'ES' ? m[3] : null };
+      m = s.match(/\b([A-Z]{2})\d{2}[\s\d*X·.]*[*X·.]{2,}[\s*X·.]*(\d{4})\s*$/);
+      if (m) return { fin: m[2], entidad: null };
+      m = compacto.match(/(?<!\d)(\d{4})\d{12}(\d{4})(?!\d)/);
+      if (m) return { fin: m[2], entidad: m[1] };
+    }
+  }
+  return null;
+}
+
 // Devuelve { tipo, banco, txs } o { error }. `hayTarjeta`: si ya hay movimientos de tarjeta de crédito importados.
 export function analizarExtracto(filas, { reglas, hayTarjeta }) {
   const { inicio, cabecera, banco, previa } = buscarCabecera(filas);
@@ -161,7 +180,8 @@ export function analizarExtracto(filas, { reglas, hayTarjeta }) {
     const tipo = esLiq ? 'liquidacion_tarjeta' : bruto < 0 ? 'gasto' : 'ingreso';
     txs.push({ fecha, descripcion, importe: Math.abs(bruto), tipo, categoria: esLiq ? '💳 Liquidación tarjeta' : categoriaConAprendizaje(descripcion, tipo, reglas), medio: medioAutomatico(descripcion), cuenta: banco });
   }
-  return { tipo: 'cuenta', banco, txs, saldo: saldoFinal(saldos), retenidos: leerRetenidos(filas, previa, inicio - 1, banco, reglas) };
+  const numero = leerCuentaArchivo(filas, previa >= 0 ? previa : inicio - 1);
+  return { tipo: 'cuenta', banco, txs, saldo: saldoFinal(saldos), retenidos: leerRetenidos(filas, previa, inicio - 1, banco, reglas), fin: numero?.fin || null, entidad: numero?.entidad || null };
 }
 
 // Saldo tras el último movimiento. Los bancos ordenan el archivo de más nuevo a más antiguo o al revés:

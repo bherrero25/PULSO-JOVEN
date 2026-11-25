@@ -1,7 +1,7 @@
 // Resumen: gasto de los últimos meses, en qué se va, de dónde viene el dinero y la comparación con el mes anterior
 
 import { ic } from '../iconos.js';
-import { esc, fmt, fmt0, nombreMes, resumenMes, ritmoDelMes, porCategoria, gastoHastaDia, sumarMeses, mesActual, colorCategoria, fechaCorta } from '../logica.js';
+import { esc, fmt, fmt0, nombreMes, resumenMes, ritmoDelMes, porCategoria, gastoHastaDia, sumarMeses, mesActual, colorCategoria, fechaCorta, infoCategoria, sumar } from '../logica.js';
 import { ficha, conceptoVisible } from '../componentes.js';
 import { datosBarras, graficoBarras } from '../graficos.js';
 
@@ -20,6 +20,8 @@ export function render(E) {
   const fuentes = porCategoria(R.ingresos);
   const anterior = sumarMeses(E.mes, -1);
   const mesAnt = nombreMes(anterior, { año: false }).toLowerCase();
+  // Ingresos que se descuentan de una categoría de gasto para ver lo que de verdad ha costado (coche compartido → gasolina)
+  const compensan = cat => R.ingresos.filter(t => infoCategoria(t.categoria).compensa === cat.id);
 
   let comparacion;
   if (ritmo.abierto) {
@@ -50,11 +52,17 @@ export function render(E) {
     <h2 class="h2">En qué se va · ${mes}</h2>
     ${cats.length ? cats.map(g => {
       const pct = R.totalGastos ? Math.round(g.total / R.totalGastos * 100) : 0;
+      const rec = compensan(g.cat), recuperado = sumar(rec), neto = g.total - recuperado;
+      const con = [...new Set(rec.map(t => infoCategoria(t.categoria).nombre.toLowerCase()))].join(' y ');
+      const movs = [...g.txs, ...rec].sort((a, b) => b.fecha.localeCompare(a.fecha));
       return `<details class="cat-fila"><summary>
         <div class="cab"><i class="cuadro" style="background:${colorCategoria(g.cat)}"></i><span class="nombre">${esc(g.cat.nombre)}</span><span class="pct">${pct} %</span><span class="imp num">${fmt(g.total)}</span></div>
         <div class="progreso" style="height:4px"><i style="width:${g.total / cats[0].total * 100}%;background:${colorCategoria(g.cat)}"></i></div>
+        ${recuperado ? `<span class="nota" style="display:block;margin-top:2px">Recuperado con ${esc(con)} <b class="num positivo">${fmt(recuperado, true)}</b> · ${neto > 0 ? `te ha costado <b class="num" style="color:var(--texto)">${fmt(neto)}</b>` : `has recuperado ${neto < 0 ? `<b class="num positivo">${fmt(-neto)}</b> más de lo que gastaste` : 'todo lo que gastaste'}`}</span>` : ''}
       </summary>
-      <div class="detalle">${g.txs.sort((a, b) => b.fecha.localeCompare(a.fecha)).map(t => `<div><span>${fechaCorta(t.fecha)} · ${esc(conceptoVisible(t))}</span><span class="num">${fmt(t.importe)}</span></div>`).join('')}</div>
+      <div class="detalle">${movs.map(t => t.tipo === 'ingreso'
+        ? `<div><span>${fechaCorta(t.fecha)} · ${esc(conceptoVisible(t))}</span><span class="num positivo">${fmt(t.importe, true)}</span></div>`
+        : `<div><span>${fechaCorta(t.fecha)} · ${esc(conceptoVisible(t))}</span><span class="num">${fmt(t.importe)}</span></div>`).join('')}</div>
       </details>`;
     }).join('') : `<p class="vacio">Aún no hay gastos en ${mes}</p>`}
   </section>

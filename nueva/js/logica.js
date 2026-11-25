@@ -76,6 +76,8 @@ export const CATEGORIAS = [
   { id: 'devolucion', nombre: 'Devoluciones', bd: '🤝 Devolución', icono: 'devolver', tipo: 'ingreso' },
   { id: 'regalo_recibido', nombre: 'Regalos', bd: '🎁 Regalo recibido', icono: 'regalo', tipo: 'ingreso' },
   { id: 'ventas', nombre: 'Ventas', bd: '🏷️ Ventas', icono: 'etiqueta', tipo: 'ingreso' },
+  // Lo que pagan quienes comparten el coche (BlaBlaCar…): es ingreso, y en el Resumen se descuenta de la gasolina para ver lo que de verdad ha costado
+  { id: 'coche_compartido', nombre: 'Coche compartido', bd: '🚗 Coche compartido', icono: 'coche', tipo: 'ingreso', compensa: 'gasolina' },
   { id: 'bizum_recibido', nombre: 'Bizum recibido', bd: '📱 Bizum recibido', icono: 'movil', tipo: 'ingreso', generica: true },
   { id: 'ingresos', nombre: 'Otros ingresos', bd: '💰 Ingresos', icono: 'ingreso', tipo: 'ingreso' },
   { id: 'reenviado', nombre: 'Dinero de paso', bd: '↩️ Reenviado', icono: 'paso', tipo: 'gasto' },
@@ -85,7 +87,7 @@ export const CATEGORIAS = [
 export const BD = { OTROS: '🔧 Otros', MENSUALIDAD: '💰 Mensualidad', REENVIO: '↩️ Reenviado', TRASPASO: '🔄 Traspaso' };
 // Las que salen primero al apuntar a mano
 export const RAPIDAS_GASTO = ['comida', 'ocio', 'transporte', 'gasolina', 'ropa', 'deporte', 'suscripciones', 'alquiler', 'salud', 'estudios', 'regalo', 'otros', 'traspaso'];
-export const RAPIDAS_INGRESO = ['mensualidad', 'nomina', 'devolucion', 'regalo_recibido', 'ventas', 'ingresos', 'traspaso'];
+export const RAPIDAS_INGRESO = ['mensualidad', 'nomina', 'devolucion', 'regalo_recibido', 'ventas', 'coche_compartido', 'ingresos', 'traspaso'];
 export const SERIES_GRAFICO = CATEGORIAS.filter(c => c.color);
 
 const PORBD = new Map(CATEGORIAS.map(c => [c.bd, c]));
@@ -198,6 +200,8 @@ export function categoriaAutomatica(descripcion, tipo) {
   if (/^e ?s |^e\.s\. |estacion(es)? de servicio/.test(d)) return '⛽ Gasolina';
   if (/mercadona|carrefour|lidl|aldi|supermercado|simply|market|fruteria|panaderia|alcampo|(^|\s)dia(\s|$)|eroski|consum|hipercor/.test(d)) return '🍔 Comida';
   if (/netflix|spotify|amazon prime|disney|hbo|apple\.com|google play|playstation|steam/.test(d)) return '📦 Suscripciones';
+  // BlaBlaCar (Comuto SA): si te pagan, es coche compartido; si pagas tú un viaje, es transporte
+  if (/blablacar|comuto/.test(d) && tipo === 'ingreso') return '🚗 Coche compartido';
   if (/renfe|iryo|ouigo|alsa|autobus|nextbike|metro|bus |uber|cabify|blablacar|taxi|parking/.test(d)) return '🚇 Transporte';
   if (/taller|norauto|midas|feu vert|neumatic|itv |recambios|lavadero/.test(d)) return '🚗 Coche';
   if (/gasolinera|estacion(es)? de servicio|petroprix|plenergy|repsol|bp |cepsa|galp|shell|ballenoil|plenoil/.test(d)) return '⛽ Gasolina';

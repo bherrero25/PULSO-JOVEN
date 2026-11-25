@@ -47,6 +47,9 @@ export function datosDemo() {
         for (let k = 0; k < n; k++) mov(dia(1 + Math.floor(r() * dias)), nombre, min + r() * (max - min), 'gasto', categoria, medio);
       }
     }
+    // Lo que pagan quienes van en su coche por BlaBlaCar (sin usar el generador, para no cambiar el resto de la demo)
+    const blabla = [18, 22.5, 0, 31, 16, 24][i];
+    if (blabla) mov(dia(14), 'TRANSF BLABLACAR COMUTO SA', blabla, 'ingreso', '🚗 Coche compartido', 'transferencia');
   }
   // Tres movimientos que la app no ha sabido clasificar
   [['TPV 8834 ZARAGOZA', 15, -1], ['PAYPAL *STEAMGAMES', 9.99, -2], ['COMPRA 4471 MADRID', 6.5, -4]]

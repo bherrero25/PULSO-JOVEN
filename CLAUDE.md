@@ -64,6 +64,7 @@ Seguros, leasing, bonus anual, hipoteca, hijos ni patrimonio complejo.
 
 ## Pendiente antes de venderla
 
+- [ ] Atajo de Apple Pay compartible por enlace de iCloud (a medias, nov. 2026): un atajo suelto no ve los campos de la transacción (no hay tipo «Transaction»). Falta probar con un pago real si la automatización de Wallet, eligiendo un atajo ya instalado, le pasa importe y comercio como texto; si no, plan B: en la automatización, una acción «Text» con Amount y Merchant y «Run Shortcut». El atajo compartido llevará dirección, apikey y una pregunta de importación para el código.
 - [ ] Revisar a fondo RLS (cada usuario solo ve lo suyo)
 - [ ] Probar importación con otros bancos (solo probado Bankinter)
 - [ ] Cobro del plan Pro (la portada lo anuncia, no existe)

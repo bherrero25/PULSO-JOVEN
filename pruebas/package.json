@@ -1,0 +1,9 @@
+{
+  "name": "pulso-joven-pruebas",
+  "private": true,
+  "description": "Librerías que las pruebas sirven a la app sin internet (las mismas versiones que carga nueva/index.html desde el CDN)",
+  "dependencies": {
+    "@supabase/supabase-js": "2.119.2",
+    "xlsx": "0.18.5"
+  }
+}

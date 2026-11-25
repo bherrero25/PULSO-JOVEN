@@ -10,3 +10,9 @@ datos/
 *.xlsx
 *.csv
 !plantilla-efectivo-pulso.xlsx
+
+# Pruebas: librerías, capturas y extractos generados
+pruebas/node_modules
+pruebas/capturas/
+pruebas/tmp/
+__pycache__/

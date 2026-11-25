@@ -246,7 +246,7 @@ export function medioAutomatico(descripcion) {
   return 'transferencia';
 }
 
-export const MEDIOS = { tarjeta: 'Tarjeta', transferencia: 'Transferencia', bizum: 'Bizum', efectivo: 'Efectivo' };
+export const MEDIOS = { tarjeta: 'Tarjeta', transferencia: 'Transferencia', bizum: 'Bizum', efectivo: 'Efectivo', apple_pay: 'Apple Pay' };
 
 // ─── TU DINERO (saldos de cuentas, aparte de los ingresos y gastos del mes) ───
 export const TIPOS_CUENTA = { efectivo: ['Efectivo', 'cartera'], ahorro: ['Ahorro', 'escudo'], banco: ['Banco', 'banco'], inversion: ['Inversión', 'tendencia'] };
@@ -305,32 +305,33 @@ export function saldoDisponible(cuenta, txs, cuentas = [cuenta]) {
 
 // Lo apuntado a mano (tarjeta, Bizum, transferencia…) o con Apple Pay que aún no ha llegado en un extracto también mueve el
 // dinero del banco: se suma (ingresos) o se resta (gastos) en la cuenta de banco con el extracto más reciente, hasta que el
-// siguiente extracto lo traiga. Lo apuntado a mano sigue como 'manual' hasta que se junta con el banco; se cuenta desde 7 días
-// antes de la fecha del saldo, por si el banco lo carga más tarde. Lo de Apple Pay, desde el día siguiente. Ni el efectivo ni lo previsto.
+// siguiente extracto lo traiga. Lo apuntado a mano o con Apple Pay sigue así hasta que se junta con el banco (si en el banco
+// aún está retenido, pasa a ser un retenido); se cuenta desde 7 días antes de la fecha del saldo, por si el banco lo carga
+// más tarde. Ni el efectivo ni lo previsto.
 export function apuntadoSinExtracto(cuenta, cuentas, txs) {
-  if (!cuenta.clave) return 0;
+  const total = movimientosSinExtracto(cuenta, cuentas, txs).reduce((s, t) => s + (t.tipo === 'ingreso' ? 1 : -1) * parseFloat(t.importe), 0);
+  return Math.round(total * 100) / 100;
+}
+export function movimientosSinExtracto(cuenta, cuentas, txs) {
+  if (!cuenta.clave) return [];
   const esPrincipal = cuentaPrincipal(cuentas)?.id === cuenta.id;
   const d = new Date(cuenta.fecha_saldo + 'T12:00:00'); d.setDate(d.getDate() - 7);
   const desdeManual = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   const suyo = t => esManual(t) ? (destinoManual(t) ? destinoManual(t) === cuenta.clave : esPrincipal) : false;
-  const total = txs.filter(t => (t.tipo === 'ingreso' || t.tipo === 'gasto')
-      && ((suyo(t) && t.fecha > desdeManual) || (esPrincipal && t.cuenta === 'apple_pay' && t.fecha > cuenta.fecha_saldo)))
-    .reduce((s, t) => s + (t.tipo === 'ingreso' ? 1 : -1) * parseFloat(t.importe), 0);
-  return Math.round(total * 100) / 100;
+  return txs.filter(t => (t.tipo === 'ingreso' || t.tipo === 'gasto')
+    && ((suyo(t) || (esPrincipal && t.cuenta === 'apple_pay')) && t.fecha > desdeManual))
+    .sort((a, b) => b.fecha.localeCompare(a.fecha));
 }
 
-// Movimientos de un extracto que ya entraron por Apple Pay: mismo importe y fecha del banco entre 0 y 4 días después.
-// Cada pago de Apple Pay se empareja como mucho con un movimiento del extracto.
-export function separarYaApuntados(nuevos, txs) {
-  const libres = txs.filter(t => t.cuenta === 'apple_pay');
-  const dias = (a, b) => Math.round((new Date(a + 'T12:00:00') - new Date(b + 'T12:00:00')) / 86400000);
-  const quedan = [], repetidos = [];
-  nuevos.forEach(n => {
-    const i = n.tipo === 'gasto' ? libres.findIndex(a => Math.abs(+a.importe - +n.importe) < 0.005 && dias(n.fecha, a.fecha) >= 0 && dias(n.fecha, a.fecha) <= 4) : -1;
-    if (i >= 0) { repetidos.push(n); libres.splice(i, 1); } else quedan.push(n);
-  });
-  return { quedan, repetidos };
+// Lo apuntado a mano (o con Apple Pay) que ya estaba en el banco antes de apuntarlo no se junta al importar, porque el
+// del banco no es nuevo: queda repetido. Esto busca su «gemelo» ya guardado del banco (mismo tipo e importe, fecha cercana).
+export function gemeloEnBanco(t, txs) {
+  if (!esManual(t) && t.cuenta !== 'apple_pay') return null;
+  return txs.filter(x => x !== t && esClaveBanco(x.cuenta) && x.tipo === t.tipo && Math.abs(+x.importe - +t.importe) < 0.005
+      && diasEntre(t.fecha, x.fecha) >= -3 && diasEntre(t.fecha, x.fecha) <= 7)
+    .sort((a, b) => Math.abs(diasEntre(t.fecha, a.fecha)) - Math.abs(diasEntre(t.fecha, b.fecha)))[0] || null;
 }
+
 // Lo apuntado a mano que saldrá en el banco (tarjeta, Bizum, transferencia o un ingreso de efectivo) se guarda con cuenta 'manual'.
 // Al importar el extracto se junta con su movimiento del banco en vez de repetirse.
 export const CUENTA_MANUAL = 'manual';
@@ -390,7 +391,7 @@ export function cuentaParaExtracto(cuentas, txs, { banco, fin, entidad, movs }) 
 export function detectarTraspasos(nuevos, txs, clave, clavesBanco) {
   const otras = new Set([...clavesBanco].filter(c => c !== clave));
   if (!otras.size) return { pares: [] };
-  const valido = t => (t.tipo === 'gasto' || t.tipo === 'ingreso') && !t.pendiente && t.medio !== 'tarjeta' && t.categoria !== '💳 Liquidación tarjeta';
+  const valido = t => (t.tipo === 'gasto' || t.tipo === 'ingreso') && !t.pendiente && t.medio !== 'tarjeta' && t.medio !== 'apple_pay' && t.categoria !== '💳 Liquidación tarjeta';
   const libres = txs.filter(t => otras.has(t.cuenta) && valido(t));
   const posibles = [];
   nuevos.forEach((n, i) => {
@@ -444,7 +445,7 @@ export const movimientoPrevisto = (f, fecha) => ({ fecha, descripcion: f.nombre,
 
 // Empareja movimientos nuevos del extracto con lo que ya estaba apuntado: mismo tipo e importe y fecha del banco
 // entre 3 días antes y 7 después. Si hay varios posibles, gana la fecha más cercana, la misma forma de pago y alguna palabra en común.
-// - seguro: era un apuntado a mano (cuenta 'manual');
+// - seguro: era un apuntado a mano (cuenta 'manual') o un pago de Apple Pay;
 // - dudoso: es un movimiento de ese mismo banco, dentro de las fechas del extracto, que no aparece en él
 //   (lo apuntado a mano antes de existir la marca 'manual'); se pregunta antes de juntarlo.
 export function emparejarApuntados(nuevos, txs, extracto) {
@@ -453,7 +454,7 @@ export function emparejarApuntados(nuevos, txs, extracto) {
   const cuentas = new Set(extracto.map(t => t.cuenta));
   const fechas = extracto.map(t => t.fecha).sort();
   const desde = fechas[0], hasta = fechas[fechas.length - 1];
-  const candidatos = txs.filter(t => (t.tipo === 'gasto' || t.tipo === 'ingreso') && !t.pendiente && ((esManual(t) && (!destinoManual(t) || cuentas.has(destinoManual(t)))) || t.cuenta === CUENTA_PREVISTO
+  const candidatos = txs.filter(t => (t.tipo === 'gasto' || t.tipo === 'ingreso') && !t.pendiente && ((esManual(t) && (!destinoManual(t) || cuentas.has(destinoManual(t)))) || t.cuenta === 'apple_pay' || t.cuenta === CUENTA_PREVISTO
     || (cuentas.has(t.cuenta) && t.fecha >= desde && t.fecha <= hasta && !enExtracto.has(claveMovimiento(t)))));
   const palabras = s => new Set(String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').split(/[^a-z0-9ñ]+/).filter(p => p.length >= 4));
   const posibles = [];
@@ -474,7 +475,8 @@ export function emparejarApuntados(nuevos, txs, extracto) {
         return;
       }
       if (!mismoImporte || d < -3 || d > 7) return;
-      posibles.push({ i, j, exacto: true, seguro: esManual(g), puntos: Math.abs(d) + (g.medio && n.medio && g.medio !== n.medio ? 3 : 0) - (comun ? 3 : 0) + (esManual(g) ? 0 : 0.5) });
+      const apuntado = esManual(g) || g.cuenta === 'apple_pay';
+      posibles.push({ i, j, exacto: true, seguro: apuntado, puntos: Math.abs(d) + (g.medio && n.medio && g.medio !== n.medio ? 3 : 0) - (comun ? 3 : 0) + (apuntado ? 0 : 0.5) });
     });
   });
   // Antes que nada, las de importe exacto (p. ej. una transferencia apuntada a mano no debe perder su movimiento del banco
@@ -484,7 +486,7 @@ export function emparejarApuntados(nuevos, txs, extracto) {
   posibles.forEach(({ i, j, seguro }) => {
     if (usadosN.has(i) || usadosG.has(j)) return;
     usadosN.add(i); usadosG.add(j);
-    pares.push({ guardado: candidatos[j], banco: nuevos[i], seguro, previsto: candidatos[j].cuenta === CUENTA_PREVISTO });
+    pares.push({ guardado: candidatos[j], banco: nuevos[i], seguro, previsto: candidatos[j].cuenta === CUENTA_PREVISTO, applePay: candidatos[j].cuenta === 'apple_pay' });
   });
   pares.sort((a, b) => b.banco.fecha.localeCompare(a.banco.fecha));
   return { quedan: nuevos.filter((_, i) => !usadosN.has(i)), pares };

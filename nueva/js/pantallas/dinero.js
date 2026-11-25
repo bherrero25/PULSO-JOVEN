@@ -1,7 +1,8 @@
 // Tu dinero: añadir, cambiar o quitar cuentas (efectivo, ahorro…). El saldo no cuenta como ingreso de ningún mes.
 
 import { ic } from '../iconos.js';
-import { esc, fmt, hoyISO, fechaCorta, nombreCuenta, TIPOS_CUENTA, totalCuentas, cuentasBanco } from '../logica.js';
+import { esc, fmt, hoyISO, fechaCorta, nombreCuenta, TIPOS_CUENTA, totalCuentas, cuentasBanco, saldoDisponible, movimientosSinExtracto, gemeloEnBanco, porRevisar, infoCategoria } from '../logica.js';
+import { conceptoVisible } from '../componentes.js';
 import { abrirHoja, cerrarHoja, cabeceraHoja, toast, confirmar } from '../ui.js';
 import * as D from '../datos.js';
 import { filaCuenta } from './inicio.js';
@@ -19,6 +20,7 @@ function hojaCuenta(E, id) {
   const c = E.cuentas.find(x => String(x.id) === String(id));
   const banco = c?.clave;
   abrirHoja(`${cabeceraHoja(c ? esc(c.nombre) : 'Nueva cuenta', c ? `Saldo a ${fechaCorta(c.fecha_saldo)}` : 'Efectivo, ahorro, otra cuenta…')}
+    ${banco ? desglose(E, c) : ''}
     <label class="campo">Nombre<input type="text" id="cuenta-nombre" maxlength="40" value="${esc(c?.nombre || '')}" placeholder="Efectivo ahorrado, hucha, cuenta de ahorro…"></label>
     <div class="par">
       <label class="campo">Tipo<select id="cuenta-tipo"${banco ? ' disabled' : ''}>
@@ -29,6 +31,29 @@ function hojaCuenta(E, id) {
     <button type="button" class="boton" data-accion="guardar-cuenta" data-id="${esc(c?.id || '')}">Guardar</button>
     ${banco && cuentasBanco(E.cuentas).length > 1 ? `<button type="button" class="boton suave peq" data-accion="ver-movimientos-cuenta" data-clave="${esc(c.clave)}">${ic('lista')}Ver sus movimientos</button>` : ''}
     ${c ? `<button type="button" class="boton peligro peq" data-accion="borrar-cuenta" data-id="${esc(c.id)}">${ic('papelera')}Quitar esta cuenta</button>` : ''}`, c ? 'Cambiar cuenta' : 'Nueva cuenta');
+}
+
+// De dónde sale la cifra de una cuenta de banco en «Tu dinero»: saldo del último extracto, menos lo retenido, más lo
+// apuntado después. Lo apuntado que ya estaba en el banco (repetido) se puede quitar desde aquí.
+function desglose(E, c) {
+  const s = saldoDisponible(c, E.txs, E.cuentas);
+  const retenidos = E.txs.filter(t => t.pendiente && t.cuenta === c.clave);
+  const apuntados = movimientosSinExtracto(c, E.cuentas, E.txs);
+  const linea = (texto, valor, fuerte) => `<div style="display:flex;justify-content:space-between;gap:10px${fuerte ? ';font-weight:600;border-top:1px solid var(--linea);padding-top:8px' : ''}"><span>${texto}</span><b class="num" style="white-space:nowrap">${valor < 0 ? '−' : fuerte ? '' : '+'}${fmt(valor)}</b></div>`;
+  const detalle = t => {
+    const g = gemeloEnBanco(t, E.txs);
+    return `<div style="display:flex;flex-direction:column;gap:2px;padding-left:10px;border-left:2px solid var(--linea);font-size:12.5px;color:var(--texto-2)">
+      <div style="display:flex;justify-content:space-between;gap:8px"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${fechaCorta(t.fecha)} · ${esc(conceptoVisible(t))}</span><span class="num" style="white-space:nowrap">${fmt(t.tipo === 'ingreso' ? +t.importe : -t.importe, true)}</span></div>
+      ${g ? `<span style="color:var(--critico-texto)">Parece repetido: el banco ya tiene «${esc(g.descripcion)}» del ${fechaCorta(g.fecha)}.</span>
+        <button type="button" class="enlace" style="align-self:flex-start;font-size:12.5px" data-accion="quitar-repetido" data-id="${esc(t.id)}" data-gemelo="${esc(g.id)}" data-cuenta="${esc(c.id)}">Es el mismo: quitar el apuntado</button>` : ''}
+    </div>`;
+  };
+  return `<div style="background:var(--fondo);border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:8px;font-size:13.5px">
+    ${linea(`Saldo del extracto (${fechaCorta(c.fecha_saldo)})`, s.saldo)}
+    ${retenidos.length ? linea('Retenido, aún sin cobrar', -s.retenido) + retenidos.map(detalle).join('') : ''}
+    ${apuntados.length ? linea('Apuntado después del extracto', s.apuntado) + apuntados.map(detalle).join('') : ''}
+    ${linea('En «Tu dinero»', s.disponible, true)}
+  </div>`;
 }
 
 // Traspaso entre tus cuentas: pregunta de qué cuenta sale el dinero (o a cuál va) y ajusta su saldo en «Tu dinero».
@@ -75,6 +100,19 @@ export const acciones = {
     ctx.pintar();
   },
   'gestionar-cuentas': (ctx) => hojaCuentas(ctx.E),
+  // Un apuntado a mano que ya estaba en el banco: se quita, y si el del banco estaba sin clasificar, toma su categoría
+  'quitar-repetido': async (ctx, el) => {
+    const { E } = ctx;
+    const t = E.txs.find(x => String(x.id) === el.dataset.id), g = E.txs.find(x => String(x.id) === el.dataset.gemelo);
+    if (!t || !g) return;
+    if (!await confirmar('¿Quitar el apuntado a mano?', `«${esc(conceptoVisible(t))}» (${fmt(t.importe)}) ya está en el banco como «${esc(g.descripcion)}». Se queda el del banco${porRevisar(g, E.reglas) && !porRevisar(t, E.reglas) ? `, con la categoría ${esc(infoCategoria(t.categoria).nombre)}` : ''}.`, 'Quitar')) { hojaCuenta(E, el.dataset.cuenta); return; }
+    if (porRevisar(g, E.reglas) && !porRevisar(t, E.reglas) && await D.actualizarMovimientos([g.id], { categoria: t.categoria }, 'pasar la categoría al movimiento del banco')) g.categoria = t.categoria;
+    if (!await D.borrarMovimiento(t.id)) return;
+    E.txs.splice(E.txs.indexOf(t), 1);
+    toast('Repetido quitado');
+    ctx.pintar();
+    hojaCuenta(E, el.dataset.cuenta);
+  },
   'ver-movimientos-cuenta': (ctx, el) => {
     Object.assign(ctx.E, { filtroCuenta: el.dataset.clave, filtro: 'todos', q: '' });
     cerrarHoja();

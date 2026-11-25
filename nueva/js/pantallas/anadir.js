@@ -1,7 +1,7 @@
 // Añadir: a mano con teclado, subiendo el extracto del banco o (más adelante) de forma automática
 
 import { ic } from '../iconos.js';
-import { esc, fmt, hoyISO, fechaCorta, RAPIDAS_GASTO, RAPIDAS_INGRESO, categoriaPorId, MEDIOS, nombreCuenta, infoCategoria, separarYaApuntados, conciliarRetenidos, porRevisar, emparejarApuntados, CUENTA_MANUAL, BD, cuentaParaExtracto, detectarTraspasos, cuentasBanco, cuentaManual, cuentaPrincipal, claveCuentaBanco, esClaveBanco } from '../logica.js';
+import { esc, fmt, hoyISO, fechaCorta, RAPIDAS_GASTO, RAPIDAS_INGRESO, categoriaPorId, MEDIOS, nombreCuenta, infoCategoria, conciliarRetenidos, porRevisar, emparejarApuntados, CUENTA_MANUAL, BD, cuentaParaExtracto, detectarTraspasos, cuentasBanco, cuentaManual, cuentaPrincipal, claveCuentaBanco, esClaveBanco } from '../logica.js';
 import { ficha, conceptoVisible } from '../componentes.js';
 import { toast, abrirHoja, cabeceraHoja, confirmar } from '../ui.js';
 import * as D from '../datos.js';
@@ -104,7 +104,6 @@ function extracto(E) {
         </div>` : ''}
         ${bloquePares(pares, true)}${bloquePares(pares, false)}${bloqueTraspasos(E, imp.traspasos || [])}
         ${imp.retenidosSinColumna ? `<p class="nota">Este extracto trae ${imp.retenidosSinColumna} ${imp.retenidosSinColumna === 1 ? 'movimiento retenido' : 'movimientos retenidos'}. Para incluirlos, hay que ejecutar en Supabase el texto <b>sql/2026-11-retenidos.sql</b>.</p>` : ''}
-        ${imp.deApplePay ? `<p class="nota">De los que ya estaban, ${imp.deApplePay} ${imp.deApplePay === 1 ? 'entró' : 'entraron'} con Apple Pay (mismo importe y fecha cercana), así que no se repiten.</p>` : ''}
         ${imp.saldo ? `<div style="display:flex;justify-content:space-between;gap:10px;background:var(--fondo);border-radius:12px;padding:10px 12px;font-size:14px">
           <span>Saldo de ${esc(nombreDestino)} el ${fechaCorta(imp.saldo.fecha)}</span><b class="num" style="white-space:nowrap">${imp.saldo.valor < 0 ? '−' : ''}${fmt(imp.saldo.valor)}</b></div>` : ''}
         ${listaNuevos.length ? `<div>${listaNuevos.slice(0, 6).map(t => { const c = infoCategoria(t.categoria); return `<div class="fila">${ficha(c, 'peq')}<span class="cuerpo"><span class="concepto" style="font-size:14px">${esc(t.descripcion)}</span><span class="detalle">${fechaCorta(t.fecha)} · ${esc(c.nombre)}${t.pendiente ? ' <span class="retenido">Retenido</span>' : ''}</span></span><span class="importe num${t.tipo === 'ingreso' ? ' positivo' : ''}" style="font-size:14px">${fmt(t.tipo === 'ingreso' ? +t.importe : -t.importe, true)}</span></div>`; }).join('')}
@@ -175,7 +174,7 @@ function bloquePares(pares, seguros) {
     ${lista.map(x => { const { guardado: g, banco: b, unir, i } = x; return `<div style="border-top:1px solid var(--linea);margin-top:6px;padding-top:6px">
       <div class="fila" style="padding:4px 0">${ficha(infoCategoria(g.categoria), 'peq')}<span class="cuerpo"><span class="concepto" style="font-size:14px">${esc(b.descripcion)}</span><span class="detalle">${fechaCorta(b.fecha)} · en el banco${b.pendiente ? ' <span class="retenido">Retenido</span>' : ''}</span></span>
         <span class="importe num${b.tipo === 'ingreso' ? ' positivo' : ''}" style="font-size:14px">${fmt(b.tipo === 'ingreso' ? +b.importe : -b.importe, true)}</span></div>
-      <label class="casilla" style="min-height:36px;font-size:13px"><input type="checkbox" data-cambio="par-unir" data-i="${i}"${unir ? ' checked' : ''}> <span>${x.previsto ? `Es lo previsto el ${fechaCorta(g.fecha)}: «${esc(conceptoVisible(g))}»${Math.abs(g.importe - b.importe) >= 0.005 ? ` (${fmt(g.importe)}; se queda el importe del banco)` : ''}` : `Es «${esc(conceptoVisible(g))}», ${seguros ? 'que apuntaste' : 'que ya tenías,'} el ${fechaCorta(g.fecha)}`}</span></label>
+      <label class="casilla" style="min-height:36px;font-size:13px"><input type="checkbox" data-cambio="par-unir" data-i="${i}"${unir ? ' checked' : ''}> <span>${x.previsto ? `Es lo previsto el ${fechaCorta(g.fecha)}: «${esc(conceptoVisible(g))}»${Math.abs(g.importe - b.importe) >= 0.005 ? ` (${fmt(g.importe)}; se queda el importe del banco)` : ''}` : `Es «${esc(conceptoVisible(g))}», ${x.applePay ? 'que entró con Apple Pay' : seguros ? 'que apuntaste' : 'que ya tenías,'} el ${fechaCorta(g.fecha)}`}</span></label>
     </div>`; }).join('')}
   </div>`;
 }
@@ -299,7 +298,7 @@ export const acciones = {
     // Retenidos ya cobrados: pasan a ser el movimiento definitivo y conservan la categoría que se les hubiera dado
     let cobrados = 0;
     for (const { retenido, definitivo } of imp.cobrados) {
-      const cambios = { fecha: definitivo.fecha, descripcion: definitivo.descripcion, medio: definitivo.medio, pendiente: false };
+      const cambios = { fecha: definitivo.fecha, descripcion: definitivo.descripcion, medio: retenido.medio === 'apple_pay' ? 'apple_pay' : definitivo.medio, pendiente: false };
       if (porRevisar(retenido, E.reglas) && !porRevisar(definitivo, E.reglas)) cambios.categoria = definitivo.categoria;
       if (await D.actualizarMovimientos([retenido.id], cambios, 'actualizar un movimiento retenido')) { Object.assign(retenido, cambios); cobrados++; }
     }
@@ -308,6 +307,7 @@ export const acciones = {
     let unidos = 0;
     for (const { guardado, banco } of pares.filter(x => x.unir)) {
       const cambios = { fecha: banco.fecha, descripcion: banco.descripcion, cuenta: banco.cuenta, importe: banco.importe };
+      if (guardado.cuenta === 'apple_pay') cambios.medio = 'apple_pay'; // sigue diciendo «Apple Pay»
       if (E.conRetenidos) cambios.pendiente = !!banco.pendiente;
       if (porRevisar(guardado, E.reglas) && !porRevisar(banco, E.reglas)) cambios.categoria = banco.categoria;
       if (await D.actualizarMovimientos([guardado.id], cambios, 'juntar lo que apuntaste con el movimiento del banco')) { Object.assign(guardado, cambios); unidos++; }
@@ -406,11 +406,11 @@ function prepararImportacion(E, r, retenidosArchivo, destino) {
   const txs = r.txs.map(conCuenta), retenidos = retenidosArchivo.map(conCuenta);
   const c = conciliarRetenidos(txs, retenidos, E.txs, clave);
   const guardadas = new Set(E.txs.map(D.claveMovimiento));
-  const def = separarYaApuntados(c.definitivos.filter(t => !guardadas.has(D.claveMovimiento(t))), E.txs);
-  const ret = separarYaApuntados(c.retenidosNuevos.filter(t => !guardadas.has(D.claveMovimiento(t))), E.txs);
-  // Lo apuntado a mano que ahora sale en el extracto se junta con su movimiento del banco
-  const m = r.tipo === 'efectivo' ? { quedan: [...def.quedan, ...ret.quedan], pares: [] }
-    : emparejarApuntados([...def.quedan, ...ret.quedan], E.txs, [...txs, ...retenidos]);
+  const defNuevos = c.definitivos.filter(t => !guardadas.has(D.claveMovimiento(t)));
+  const retNuevos = c.retenidosNuevos.filter(t => !guardadas.has(D.claveMovimiento(t)));
+  // Lo apuntado a mano, con Apple Pay o previsto que ahora sale en el extracto se junta con su movimiento del banco
+  const m = r.tipo === 'efectivo' ? { quedan: [...defNuevos, ...retNuevos], pares: [] }
+    : emparejarApuntados([...defNuevos, ...retNuevos], E.txs, [...txs, ...retenidos]);
   const nuevas = m.quedan.filter(t => !t.pendiente);
   // Traspasos con tus otras cuentas de banco
   const claves = new Set([clave, ...cuentasBanco(E.cuentas).map(x => x.clave), ...E.txs.map(t => t.cuenta).filter(esClaveBanco)]);
@@ -420,8 +420,7 @@ function prepararImportacion(E, r, retenidosArchivo, destino) {
     nuevas, retenidosNuevos: m.quedan.filter(t => t.pendiente), cobrados: c.cobrados, caducados: c.caducados,
     pares: m.pares.map(x => ({ ...x, unir: x.seguro })),
     traspasos: traspasos.map(x => ({ ...x, unir: true })),
-    deApplePay: def.repetidos.length + ret.repetidos.length,
-    yaEstaban: r.txs.length - def.quedan.length - c.cobrados.length,
+    yaEstaban: r.txs.length - defNuevos.length - c.cobrados.length,
     retenidosSinColumna: E.conRetenidos ? 0 : (r.retenidos || []).length
   };
 }

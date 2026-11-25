@@ -1,7 +1,7 @@
 // Movimientos: lista del mes con buscador y filtros; al tocar uno se puede cambiar su categoría, fecha o forma de pago
 
 import { ic } from '../iconos.js';
-import { esc, fmt, resumenMes, porRevisar, etiquetaDia, infoCategoria, CATEGORIAS, claveConcepto, MEDIOS, BD, esGasto, esIngreso, esBizum, CUENTA_MANUAL, esManual, cuentasBanco, cuentaManual, cuentaPrincipal } from '../logica.js';
+import { esc, fmt, resumenMes, porRevisar, etiquetaDia, infoCategoria, CATEGORIAS, claveConcepto, MEDIOS, BD, esGasto, esIngreso, esBizum, CUENTA_MANUAL, esManual, cuentasBanco, cuentaManual, cuentaPrincipal, gemeloEnBanco } from '../logica.js';
 import { preguntarTraspaso } from './dinero.js';
 import { selectorMes, filaMovimiento, ficha, conceptoVisible, importeMovimiento } from '../componentes.js';
 import { abrirHoja, cerrarHoja, cabeceraHoja, toast, confirmar } from '../ui.js';
@@ -100,7 +100,7 @@ function abrirEdicion(ctx, t) {
   const pregunta = !rev ? esc(actual.nombre) : bizum ? (t.tipo === 'ingreso' ? '¿De qué es este Bizum?' : '¿Para qué era este Bizum?') : '¿Qué es este movimiento?';
   abrirHoja(`${cabeceraHoja(esc(conceptoVisible(t)), pregunta)}
     <span class="num texto-2" style="font-size:15px;margin-top:-8px">${imp.texto}</span>
-    ${esManual(t) ? '<p class="nota">Lo apuntaste a mano. Cuando importes el extracto del banco, se juntará con su movimiento sin repetirse.</p>' : ''}
+    ${esManual(t) ? (gemeloEnBanco(t, E.txs) ? `<p class="nota" style="background:var(--fondo);border-radius:12px;padding:10px 12px"><b>¿Repetido?</b> El banco ya tiene «${esc(gemeloEnBanco(t, E.txs).descripcion)}» del ${etiquetaDia(gemeloEnBanco(t, E.txs).fecha, E.mes).toLowerCase()} con el mismo importe. Si es el mismo, borra este.</p>` : '<p class="nota">Lo apuntaste a mano. Cuando importes el extracto del banco, se juntará con su movimiento sin repetirse.</p>') : ''}
     ${t.cuenta === 'previsto' ? '<p class="nota" style="background:var(--fondo);border-radius:12px;padding:10px 12px"><b>Previsto:</b> lo ha apuntado la app por tus movimientos fijos. Cuando importes el extracto se juntará con el de verdad y se quedará con su importe. Si este mes no llega, bórralo.</p>' : ''}
     ${t.pendiente ? '<p class="nota" style="background:var(--fondo);border-radius:12px;padding:10px 12px"><b>Retenido:</b> el banco aún no lo ha cobrado del todo. Ya cuenta en tus gastos; cuando lo cobre, al importar el siguiente extracto se convertirá en el movimiento definitivo.</p>' : ''}
     ${opciones.length ? `<div class="rejilla-cats">${opciones.map(c => `<button type="button" data-accion="poner-categoria" data-id="${esc(t.id)}" data-cat="${esc(c.bd)}" aria-pressed="${!rev && c.bd === t.categoria}">${ficha(c)}${esc(c.nombre)}</button>`).join('')}</div>

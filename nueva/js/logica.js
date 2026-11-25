@@ -80,14 +80,14 @@ export const CATEGORIAS = [
   { id: 'coche_compartido', nombre: 'Coche compartido', bd: '🚗 Coche compartido', icono: 'coche', tipo: 'ingreso', compensa: 'gasolina' },
   { id: 'bizum_recibido', nombre: 'Bizum recibido', bd: '📱 Bizum recibido', icono: 'movil', tipo: 'ingreso', generica: true },
   { id: 'ingresos', nombre: 'Otros ingresos', bd: '💰 Ingresos', icono: 'ingreso', tipo: 'ingreso' },
-  { id: 'reenviado', nombre: 'Dinero de paso', bd: '↩️ Reenviado', icono: 'paso', tipo: 'gasto' },
+  { id: 'reenviado', nombre: 'Dinero de paso', bd: '↩️ Reenviado', icono: 'paso', tipo: 'ambos' },
   { id: 'traspaso', nombre: 'Traspaso entre tus cuentas', bd: '🔄 Traspaso', icono: 'devolver', tipo: 'ambos' },
   { id: 'liquidacion', nombre: 'Liquidación de tarjeta', bd: '💳 Liquidación tarjeta', icono: 'tarjeta', tipo: 'liquidacion_tarjeta' }
 ];
 export const BD = { OTROS: '🔧 Otros', MENSUALIDAD: '💰 Mensualidad', REENVIO: '↩️ Reenviado', TRASPASO: '🔄 Traspaso' };
 // Las que salen primero al apuntar a mano
-export const RAPIDAS_GASTO = ['comida', 'ocio', 'transporte', 'gasolina', 'ropa', 'deporte', 'suscripciones', 'alquiler', 'salud', 'estudios', 'regalo', 'otros', 'traspaso'];
-export const RAPIDAS_INGRESO = ['mensualidad', 'nomina', 'devolucion', 'regalo_recibido', 'ventas', 'coche_compartido', 'ingresos', 'traspaso'];
+export const RAPIDAS_GASTO = ['comida', 'ocio', 'transporte', 'gasolina', 'ropa', 'deporte', 'suscripciones', 'alquiler', 'salud', 'estudios', 'regalo', 'otros', 'reenviado', 'traspaso'];
+export const RAPIDAS_INGRESO = ['mensualidad', 'nomina', 'devolucion', 'regalo_recibido', 'ventas', 'coche_compartido', 'ingresos', 'reenviado', 'traspaso'];
 export const SERIES_GRAFICO = CATEGORIAS.filter(c => c.color);
 
 const PORBD = new Map(CATEGORIAS.map(c => [c.bd, c]));
@@ -114,13 +114,15 @@ export function tinteCategoria(c) {
 }
 
 // ─── DINERO DEL MES ───
-// «Dinero de paso» (↩️ Reenviado): llega y se reenvía a otra persona. No es gasto y se descuenta de lo ingresado.
+// «Dinero de paso» (↩️ Reenviado): dinero que no es tuyo, te llega para pagar o reenviar algo. Se puede marcar lo que llega,
+// lo que sale o las dos cosas. Nada de lo marcado cuenta como ingreso ni como gasto: en cada mes se compensan, y si sale más
+// de lo que llegó marcado (p. ej. la parte del alquiler que viene dentro de la mensualidad) la diferencia se resta de lo ingresado.
 // «Traspaso entre tus cuentas» (🔄 Traspaso): tu dinero cambia de sitio (efectivo ahorrado al banco, cajero a la hucha…).
 // No es ingreso ni gasto: solo mueve saldo entre las cuentas de «Tu dinero».
 export const esTraspaso = t => t.categoria === BD.TRASPASO;
-export const esPaso = t => t.tipo === 'gasto' && t.categoria === BD.REENVIO;
+export const esPaso = t => (t.tipo === 'gasto' || t.tipo === 'ingreso') && t.categoria === BD.REENVIO;
 export const esGasto = t => t.tipo === 'gasto' && t.categoria !== BD.REENVIO && !esTraspaso(t);
-export const esIngreso = t => t.tipo === 'ingreso' && !esTraspaso(t);
+export const esIngreso = t => t.tipo === 'ingreso' && t.categoria !== BD.REENVIO && !esTraspaso(t);
 const esMensualidad = t => t.tipo === 'ingreso' && t.categoria === BD.MENSUALIDAD;
 
 // La mensualidad y el dinero de paso de los 3 últimos días del mes cuentan para el mes siguiente
@@ -135,9 +137,11 @@ export function mesEfectivo(t) {
 export function resumenMes(txs, ym) {
   const movs = txs.filter(t => mesEfectivo(t) === ym);
   const gastos = movs.filter(esGasto), ingresos = movs.filter(esIngreso), paso = movs.filter(esPaso);
-  const totalGastos = sumar(gastos), ingresosBrutos = sumar(ingresos), totalPaso = sumar(paso);
+  const pasoLlega = sumar(paso.filter(t => t.tipo === 'ingreso')), pasoSale = sumar(paso.filter(t => t.tipo === 'gasto'));
+  // totalPaso > 0: salió más de lo que llegó marcado (se resta de lo ingresado); < 0: llegó y aún no ha salido
+  const totalGastos = sumar(gastos), ingresosBrutos = sumar(ingresos), totalPaso = Math.round((pasoSale - pasoLlega) * 100) / 100;
   const ingresado = ingresosBrutos - totalPaso;
-  return { ym, movs, gastos, ingresos, paso, totalGastos, ingresosBrutos, totalPaso, ingresado, queda: ingresado - totalGastos };
+  return { ym, movs, gastos, ingresos, paso, pasoLlega, pasoSale, totalGastos, ingresosBrutos, totalPaso, ingresado, queda: ingresado - totalGastos };
 }
 
 // Agrupa movimientos por categoría, de mayor a menor importe

@@ -70,13 +70,21 @@ function abrirEdicion(ctx, t) {
   const opciones = opcionesCategoria(t);
   const imp = importeMovimiento(t);
   const bizum = esBizum(t);
+  const otros = iguales(E, t).length;
+  // Al clasificar algo por revisar se recuerda por defecto. Al cambiar uno que ya tenía categoría (p. ej. una transferencia
+  // de casa que esta vez es dinero de paso) solo cambia ese, salvo que se marque la casilla.
+  const recordarMarcado = rev && !bizum;
+  const textoRecordar = bizum ? 'Usar esta categoría siempre para los Bizum de esta persona'
+    : rev ? 'Recordar para los próximos movimientos de este comercio'
+    : `Cambiar también ${otros ? `${otros === 1 ? 'el otro igual' : `los otros ${otros} iguales`} y ` : ''}los próximos de este concepto`;
   const pregunta = !rev ? esc(actual.nombre) : bizum ? (t.tipo === 'ingreso' ? '¿De qué es este Bizum?' : '¿Para qué era este Bizum?') : '¿Qué es este movimiento?';
   abrirHoja(`${cabeceraHoja(esc(conceptoVisible(t)), pregunta)}
     <span class="num texto-2" style="font-size:15px;margin-top:-8px">${imp.texto}</span>
     ${t.cuenta === CUENTA_MANUAL ? '<p class="nota">Lo apuntaste a mano. Cuando importes el extracto del banco, se juntará con su movimiento sin repetirse.</p>' : ''}
     ${t.pendiente ? '<p class="nota" style="background:var(--fondo);border-radius:12px;padding:10px 12px"><b>Retenido:</b> el banco aún no lo ha cobrado del todo. Ya cuenta en tus gastos; cuando lo cobre, al importar el siguiente extracto se convertirá en el movimiento definitivo.</p>' : ''}
     ${opciones.length ? `<div class="rejilla-cats">${opciones.map(c => `<button type="button" data-accion="poner-categoria" data-id="${esc(t.id)}" data-cat="${esc(c.bd)}" aria-pressed="${!rev && c.bd === t.categoria}">${ficha(c)}${esc(c.nombre)}</button>`).join('')}</div>
-    <label class="casilla"><input type="checkbox" id="recordar"${bizum ? '' : ' checked'}> ${bizum ? 'Usar esta categoría siempre para los Bizum de esta persona' : 'Recordar para los próximos movimientos de este comercio'}</label>` : '<p class="nota">Es el cargo mensual de la tarjeta: sus compras ya están contadas una a una.</p>'}
+    <label class="casilla"><input type="checkbox" id="recordar"${recordarMarcado ? ' checked' : ''}> <span>${esc(textoRecordar)}</span></label>
+    ${!rev && !bizum ? '<p class="nota" style="margin-top:-10px">Si no la marcas, solo cambia este movimiento.</p>' : ''}` : '<p class="nota">Es el cargo mensual de la tarjeta: sus compras ya están contadas una a una.</p>'}
     <div class="par">
       <label class="campo">Fecha<input type="date" value="${t.fecha}" data-cambio="fecha-mov" data-id="${esc(t.id)}"></label>
       <label class="campo">Forma de pago<select data-cambio="medio-mov" data-id="${esc(t.id)}">
@@ -87,6 +95,11 @@ function abrirEdicion(ctx, t) {
 }
 
 const buscarTx = (E, id) => E.txs.find(t => String(t.id) === String(id));
+// Otros movimientos del mismo concepto que cambiarían con él si se recuerda: los que estaban sin clasificar o en su misma categoría
+const iguales = (E, t) => {
+  const clave = claveConcepto(t.descripcion);
+  return E.txs.filter(x => x !== t && x.tipo === t.tipo && (x.categoria === BD.OTROS || x.categoria === t.categoria) && claveConcepto(x.descripcion) === clave);
+};
 
 export const acciones = {
   'filtro': (ctx, el) => { ctx.E.filtro = el.dataset.valor; ctx.pintar(); },
@@ -102,13 +115,13 @@ export const acciones = {
     const recordar = document.getElementById('recordar')?.checked && nueva !== BD.TRASPASO;
     // Si se recuerda, cambian también los del mismo concepto que estaban sin clasificar o en la misma categoría
     const clave = claveConcepto(t.descripcion);
-    const iguales = recordar ? E.txs.filter(x => x !== t && x.tipo === t.tipo && (x.categoria === BD.OTROS || x.categoria === t.categoria) && claveConcepto(x.descripcion) === clave) : [];
+    const mismos = recordar ? iguales(E, t) : [];
     cerrarHoja();
-    if (!await D.actualizarMovimientos([t.id, ...iguales.map(x => x.id)], { categoria: nueva }, 'cambiar la categoría')) return;
-    [t, ...iguales].forEach(x => { x.categoria = nueva; });
+    if (!await D.actualizarMovimientos([t.id, ...mismos.map(x => x.id)], { categoria: nueva }, 'cambiar la categoría')) return;
+    [t, ...mismos].forEach(x => { x.categoria = nueva; });
     if (recordar && await D.guardarRegla(t.descripcion, nueva)) E.reglas[clave] = nueva;
     const nombre = infoCategoria(nueva).nombre;
-    toast(iguales.length ? `${nombre}: ${iguales.length + 1} movimientos cambiados. Lo recordaremos.` : recordar ? `Guardado en ${nombre}. Lo recordaremos.` : `Guardado en ${nombre}`);
+    toast(mismos.length ? `${nombre}: ${mismos.length + 1} movimientos cambiados. Lo recordaremos.` : recordar ? `Guardado en ${nombre}. Lo recordaremos.` : `Guardado en ${nombre} (solo este)`);
     ctx.pintar();
     if (nueva === BD.TRASPASO && anterior !== BD.TRASPASO) preguntarTraspaso(ctx, t);
     else if (anterior === BD.TRASPASO && nueva !== BD.TRASPASO) preguntarTraspaso(ctx, t, true);

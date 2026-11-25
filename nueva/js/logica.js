@@ -250,7 +250,7 @@ export const MEDIOS = { tarjeta: 'Tarjeta', transferencia: 'Transferencia', bizu
 
 // ─── TU DINERO (saldos de cuentas, aparte de los ingresos y gastos del mes) ───
 export const TIPOS_CUENTA = { efectivo: ['Efectivo', 'cartera'], ahorro: ['Ahorro', 'escudo'], banco: ['Banco', 'banco'], inversion: ['Inversión', 'tendencia'] };
-export const totalCuentas = (cuentas, txs = []) => cuentas.reduce((s, c) => s + saldoDisponible(c, txs).disponible, 0);
+export const totalCuentas = (cuentas, txs = []) => cuentas.reduce((s, c) => s + saldoDisponible(c, txs, cuentas).disponible, 0);
 const NOMBRES_CUENTA = { bankinter: 'Bankinter', bbva: 'BBVA', santander: 'Santander', caixabank: 'CaixaBank', ing: 'ING', revolut: 'Revolut', n26: 'N26', efectivo: 'Efectivo', generico: 'Otro banco', apple_pay: 'Apple Pay', manual: 'Apuntado a mano', previsto: 'Previsto' };
 export const formaDePago = t => t.cuenta === 'apple_pay' ? 'Apple Pay' : MEDIOS[t.medio] || 'Transferencia';
 
@@ -293,12 +293,29 @@ export function conciliarRetenidos(definitivos, retenidosArchivo, guardados, cue
 }
 
 // Saldo de una cuenta de banco descontando lo retenido (como el «saldo disponible» del banco)
-export function saldoDisponible(cuenta, txs) {
+// y sumando lo apuntado después del último extracto (ver apuntadoSinExtracto)
+export function saldoDisponible(cuenta, txs, cuentas = [cuenta]) {
   const saldo = parseFloat(cuenta.saldo || 0);
-  if (!cuenta.clave) return { saldo, retenido: 0, disponible: saldo };
+  if (!cuenta.clave) return { saldo, retenido: 0, apuntado: 0, disponible: saldo };
   const ret = txs.filter(t => t.pendiente && t.cuenta === cuenta.clave);
   const retenido = sumar(ret.filter(t => t.tipo === 'gasto')) - sumar(ret.filter(t => t.tipo === 'ingreso'));
-  return { saldo, retenido, disponible: saldo - retenido };
+  const apuntado = apuntadoSinExtracto(cuenta, cuentas, txs);
+  return { saldo, retenido, apuntado, disponible: saldo - retenido + apuntado };
+}
+
+// Lo apuntado a mano (tarjeta, Bizum, transferencia…) o con Apple Pay que aún no ha llegado en un extracto también mueve el
+// dinero del banco: se suma (ingresos) o se resta (gastos) en la cuenta de banco con el extracto más reciente, hasta que el
+// siguiente extracto lo traiga. Lo apuntado a mano sigue como 'manual' hasta que se junta con el banco; se cuenta desde 7 días
+// antes de la fecha del saldo, por si el banco lo carga más tarde. Lo de Apple Pay, desde el día siguiente. Ni el efectivo ni lo previsto.
+export function apuntadoSinExtracto(cuenta, cuentas, txs) {
+  const principal = cuentas.filter(c => c.clave).sort((a, b) => String(b.fecha_saldo).localeCompare(String(a.fecha_saldo)))[0];
+  if (!principal || principal.id !== cuenta.id) return 0;
+  const d = new Date(principal.fecha_saldo + 'T12:00:00'); d.setDate(d.getDate() - 7);
+  const desdeManual = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const total = txs.filter(t => (t.tipo === 'ingreso' || t.tipo === 'gasto')
+      && ((t.cuenta === CUENTA_MANUAL && t.fecha > desdeManual) || (t.cuenta === 'apple_pay' && t.fecha > principal.fecha_saldo)))
+    .reduce((s, t) => s + (t.tipo === 'ingreso' ? 1 : -1) * parseFloat(t.importe), 0);
+  return Math.round(total * 100) / 100;
 }
 
 // Movimientos de un extracto que ya entraron por Apple Pay: mismo importe y fecha del banco entre 0 y 4 días después.
@@ -377,14 +394,16 @@ export function emparejarApuntados(nuevos, txs, extracto) {
         const dif = Math.abs(+g.importe - +n.importe) / +g.importe, mismaCat = n.categoria === g.categoria;
         const generica = SIN_CLASIFICAR.has(n.categoria) || n.categoria === '💰 Ingresos';
         if (dif > 0.5 || !(mismoImporte || mismaCat || generica)) return;
-        posibles.push({ i, j, seguro: mismoImporte || (mismaCat && dif <= 0.2) || (generica && dif <= 0.1 && Math.abs(d) <= 5), puntos: Math.abs(d) / 3 + (mismoImporte ? 0 : 1 + dif * 4) - (mismaCat ? 3 : 0) - (comun ? 2 : 0) });
+        posibles.push({ i, j, exacto: mismoImporte, seguro: mismoImporte || (mismaCat && dif <= 0.2) || (generica && dif <= 0.1 && Math.abs(d) <= 5), puntos: Math.abs(d) / 3 + (mismoImporte ? 0 : 1 + dif * 4) - (mismaCat ? 3 : 0) - (comun ? 2 : 0) });
         return;
       }
       if (!mismoImporte || d < -3 || d > 7) return;
-      posibles.push({ i, j, seguro: g.cuenta === CUENTA_MANUAL, puntos: Math.abs(d) + (g.medio && n.medio && g.medio !== n.medio ? 3 : 0) - (comun ? 3 : 0) + (g.cuenta === CUENTA_MANUAL ? 0 : 0.5) });
+      posibles.push({ i, j, exacto: true, seguro: g.cuenta === CUENTA_MANUAL, puntos: Math.abs(d) + (g.medio && n.medio && g.medio !== n.medio ? 3 : 0) - (comun ? 3 : 0) + (g.cuenta === CUENTA_MANUAL ? 0 : 0.5) });
     });
   });
-  posibles.sort((a, b) => a.puntos - b.puntos);
+  // Antes que nada, las de importe exacto (p. ej. una transferencia apuntada a mano no debe perder su movimiento del banco
+  // frente a un previsto de importe parecido); después, las seguras; y entre iguales, las de menos puntos
+  posibles.sort((a, b) => (b.exacto - a.exacto) || (b.seguro - a.seguro) || a.puntos - b.puntos);
   const usadosN = new Set(), usadosG = new Set(), pares = [];
   posibles.forEach(({ i, j, seguro }) => {
     if (usadosN.has(i) || usadosG.has(j)) return;

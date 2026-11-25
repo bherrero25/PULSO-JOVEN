@@ -37,8 +37,10 @@ export function datosDemo() {
     mov(`${anterior}-${String(diasDelMes(anterior) - 1).padStart(2, '0')}`, 'Transferencia de casa', paso ? 470 : 350, 'ingreso', '💰 Mensualidad', 'transferencia');
     if (paso) mov(dia(2), 'Bizum alquiler compañero', 120, 'gasto', '↩️ Reenviado', 'bizum');
     mov(dia(20), 'Transferencia Bar La Esquina', i === 4 ? 420 : 320, 'ingreso', '💰 Nómina', 'transferencia');
-    mov(dia(6 + Math.floor(r() * 5)), 'Bizum de Marta', 12.5 + Math.round(r() * 30), 'ingreso', '📱 Bizum recibido', 'bizum');
-    mov(dia(17 + Math.floor(r() * 5)), 'Bizum de Pablo', 8 + Math.round(r() * 25), 'ingreso', '📱 Bizum recibido', 'bizum');
+    // Los Bizum de meses pasados ya tienen categoría; los de este mes están por clasificar
+    mov(dia(6 + Math.floor(r() * 5)), 'Bizum de Marta', 12.5 + Math.round(r() * 30), 'ingreso', i ? '🤝 Devolución' : '📱 Bizum recibido', 'bizum');
+    mov(dia(17 + Math.floor(r() * 5)), 'Bizum de Pablo', 8 + Math.round(r() * 25), 'ingreso', i ? '🎁 Regalo recibido' : '📱 Bizum recibido', 'bizum');
+    mov(dia(12 + Math.floor(r() * 5)), 'Bizum a Lucía', 6 + Math.round(r() * 12), 'gasto', i ? '🍔 Comida' : '📱 Bizum enviado', 'bizum');
     for (const [categoria, medio, comercios] of GASTOS) {
       for (const [nombre, min, max, veces] of comercios) {
         const n = categoria === '🎉 Ocio' && i === 4 ? veces + 2 : veces; // en verano, más ocio
@@ -59,5 +61,9 @@ export function datosDemo() {
     { id: 'm2', nombre: 'Portátil nuevo', emoji: '💻', objetivo: 900, ahorrado: 260, fecha_limite: null },
     { id: 'm3', nombre: 'Colchón para imprevistos', emoji: '🛟', objetivo: 1000, ahorrado: 520, fecha_limite: null }
   ];
-  return { txs, presupuestos, metas, reglas: {} };
+  const cuentas = [
+    { id: 'c1', nombre: 'Bankinter', tipo: 'banco', clave: 'bankinter', saldo: 1234.56, fecha_saldo: hoyISO(-4) },
+    { id: 'c2', nombre: 'Efectivo ahorrado', tipo: 'efectivo', clave: null, saldo: 600, fecha_saldo: hoyISO(-10) }
+  ];
+  return { txs, presupuestos, metas, reglas: {}, cuentas };
 }

@@ -59,10 +59,13 @@ function extracto(E) {
           <div class="dato"><small style="color:var(--texto-3)">Ya estaban</small><b class="num">${imp.txs.length - imp.nuevas.length}</b></div>
         </div>
         ${imp.deApplePay ? `<p class="nota">De los que ya estaban, ${imp.deApplePay} ${imp.deApplePay === 1 ? 'entró' : 'entraron'} con Apple Pay (mismo importe y fecha cercana), así que no se repiten.</p>` : ''}
+        ${imp.saldo ? `<div style="display:flex;justify-content:space-between;gap:10px;background:var(--fondo);border-radius:12px;padding:10px 12px;font-size:14px">
+          <span>Saldo de ${esc(nombreCuenta(imp.banco))} el ${fechaCorta(imp.saldo.fecha)}</span><b class="num">${imp.saldo.valor < 0 ? '−' : ''}${fmt(imp.saldo.valor)}</b></div>` : ''}
         ${imp.nuevas.length ? `<div>${imp.nuevas.slice(0, 6).map(t => { const c = infoCategoria(t.categoria); return `<div class="fila">${ficha(c, 'peq')}<span class="cuerpo"><span class="concepto" style="font-size:14px">${esc(t.descripcion)}</span><span class="detalle">${fechaCorta(t.fecha)} · ${esc(c.nombre)}</span></span><span class="importe num${t.tipo === 'ingreso' ? ' positivo' : ''}" style="font-size:14px">${fmt(t.tipo === 'ingreso' ? +t.importe : -t.importe, true)}</span></div>`; }).join('')}
           ${imp.nuevas.length > 6 ? `<p class="nota" style="padding-top:8px">y ${imp.nuevas.length - 6} más</p>` : ''}</div>` : '<p class="nota">Todos los movimientos de este archivo ya estaban guardados.</p>'}
       </section>
-      ${imp.nuevas.length ? `<button type="button" class="boton" data-accion="confirmar-importacion"${imp.guardando ? ' disabled' : ''}>${imp.guardando ? 'Guardando…' : `Importar ${imp.nuevas.length} ${imp.nuevas.length === 1 ? 'movimiento' : 'movimientos'}`}</button>` : ''}
+      ${imp.nuevas.length || (imp.saldo && E.cuentas) ? `<button type="button" class="boton" data-accion="confirmar-importacion"${imp.guardando ? ' disabled' : ''}>${imp.guardando ? 'Guardando…'
+        : imp.nuevas.length ? `Importar ${imp.nuevas.length} ${imp.nuevas.length === 1 ? 'movimiento' : 'movimientos'}` : `Actualizar el saldo de ${esc(nombreCuenta(imp.banco))}`}</button>` : ''}
       <button type="button" class="boton suave" data-accion="cancelar-importacion">${imp.nuevas.length ? 'Cancelar' : 'Elegir otro archivo'}</button>
       <p class="nota">Después podrás cambiar la categoría de cualquiera; la app aprenderá de tus cambios.</p>`;
   }
@@ -172,8 +175,9 @@ export const acciones = {
       ctx.pintar();
       return;
     }
-    toast(`${guardadas.length} movimientos importados`);
-    location.hash = '#/movimientos';
+    const saldoNuevo = imp.saldo && await actualizarSaldo(E, imp.banco, imp.saldo);
+    toast((guardadas.length ? `${guardadas.length} movimientos importados` : 'No había movimientos nuevos') + (saldoNuevo ? ` · saldo de ${nombreCuenta(imp.banco)} actualizado` : ''));
+    location.hash = guardadas.length ? '#/movimientos' : '#/inicio';
   }
 };
 
@@ -228,6 +232,17 @@ function hojaApplePay(codigo) {
     ${paso(7, 'Pulsa <b>OK</b>. Paga con Apple Pay en una tienda y el gasto aparecerá en Movimientos. La primera vez en cada comercio puede salir «Sin categoría»: dásela y la app la recordará.')}
     <p class="nota">Si algún nombre no coincide en tu iPhone, haz una captura y pregunta. Tu código solo sirve para apuntar gastos en tu cuenta, no para ver nada.</p>
     <button type="button" class="boton suave peq" data-accion="cambiar-codigo">Cambiar mi código</button>`, 'Atajo de Apple Pay');
+}
+
+// Guarda el saldo del banco que trae el extracto, salvo que ya hubiera uno más reciente (de otro extracto posterior)
+async function actualizarSaldo(E, banco, saldo) {
+  if (!E.cuentas || banco === 'generico') return false;
+  const actual = E.cuentas.find(c => c.clave === banco);
+  if (actual && actual.fecha_saldo > saldo.fecha) return false;
+  const fila = await D.guardarSaldoBanco(banco, actual?.nombre || nombreCuenta(banco), saldo.valor, saldo.fecha);
+  if (!fila) return false;
+  E.cuentas = [...E.cuentas.filter(c => c.clave !== banco), fila];
+  return true;
 }
 
 // La cuenta que más aparece en los movimientos (para lo que se apunta a mano con tarjeta)

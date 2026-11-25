@@ -1,7 +1,7 @@
 // Inicio: de un vistazo, lo que te queda, lo que ha entrado y salido, cómo van los presupuestos y la meta más cercana
 
 import { ic } from '../iconos.js';
-import { esc, fmt, fmt0, nombreMes, resumenMes, ritmoDelMes, estadoPresupuestos, porRevisar, gastoHastaDia, sumarMeses, porCategoria, hoyISO } from '../logica.js';
+import { esc, fmt, fmt0, nombreMes, resumenMes, ritmoDelMes, estadoPresupuestos, porRevisar, gastoHastaDia, sumarMeses, porCategoria, hoyISO, fechaCorta, TIPOS_CUENTA, totalCuentas } from '../logica.js';
 import { selectorMes, filaMovimiento, ficha, barraPresupuesto, textoEstado, inicial } from '../componentes.js';
 
 export function render(E) {
@@ -10,12 +10,13 @@ export function render(E) {
   const mes = nombreMes(E.mes, { año: false }).toLowerCase();
   const pctGastado = R.ingresado > 0 ? Math.round(R.totalGastos / R.ingresado * 100) : 0;
   let etiqueta, sub;
+  // Balance del mes: lo que ha entrado menos lo que se ha gastado (no es el saldo de la cuenta: eso está en «Tu dinero»)
   if (ritmo.abierto) {
-    etiqueta = R.queda >= 0 ? 'Te queda este mes' : 'Este mes vas en negativo';
+    etiqueta = 'Balance mensual';
     sub = R.queda > 0 ? `Puedes gastar ${fmt(R.queda / ritmo.quedan)} al día · ${ritmo.quedan === 1 ? 'queda 1 día' : `quedan ${ritmo.quedan} días`}` : 'Has gastado más de lo que ha entrado';
   } else {
-    etiqueta = R.queda >= 0 ? `Te sobró en ${mes}` : `En ${mes} gastaste más de lo que entró`;
-    sub = R.queda > 0 ? 'Mes cerrado · puedes pasarlo a una meta' : 'Mes cerrado';
+    etiqueta = `Balance de ${mes}`;
+    sub = R.queda > 0 ? 'Mes cerrado · puedes pasarlo a una meta' : 'Mes cerrado · gastaste más de lo que entró';
   }
   const nRevisar = R.movs.filter(t => porRevisar(t, E.reglas)).length;
   const pres = estadoPresupuestos(E.presupuestos, E.txs, E.mes);
@@ -72,6 +73,8 @@ export function render(E) {
     </section>
   </div>
 
+  ${tarjetaDinero(E)}
+
   ${nRevisar ? `<a href="#/movimientos" class="aviso-revisar" data-accion="ir-revisar">${ic('alerta')}<span><b>${nRevisar} ${nRevisar === 1 ? 'movimiento' : 'movimientos'}</b> sin categoría</span><b style="display:flex;align-items:center">Revisar${ic('derecha', 'ic-s')}</b></a>` : ''}
 
   <div class="rejilla-auto">
@@ -106,6 +109,30 @@ export function render(E) {
       ${ultimos.length ? ultimos.map(t => filaMovimiento(t, E)).join('') : `<p class="vacio">Aún no hay movimientos en ${mes}.<br><a href="#/anadir" style="font-weight:600;text-decoration:underline">Añade el primero</a></p>`}
     </section>
   </div>`;
+}
+
+// «Tu dinero»: lo que tienes en cada sitio (saldo del banco según el último extracto, efectivo, ahorro) y el total
+function tarjetaDinero(E) {
+  const cab = `<div class="fila-titulo"><h2 class="h2">Tu dinero</h2>${E.cuentas && E.cuentas.length ? '<button type="button" class="enlace" data-accion="gestionar-cuentas">Gestionar</button>' : ''}</div>`;
+  if (E.cuentas === null) {
+    return `<section class="tarjeta" aria-label="Tu dinero">${cab}<p class="nota">Para ver cuánto tienes en total falta preparar la base de datos: hay que ejecutar en Supabase el texto <b>sql/2026-11-cuentas.sql</b> del proyecto.</p></section>`;
+  }
+  if (!E.cuentas.length) {
+    return `<section class="tarjeta" aria-label="Tu dinero">${cab}
+      <p class="nota">Apunta cuánto tienes. El saldo del banco se pone solo al importar el extracto; el efectivo y los ahorros los añades tú. No cuenta como ingreso de ningún mes.</p>
+      <button type="button" class="boton suave peq" data-accion="editar-cuenta" data-id="">${ic('mas')}Añadir efectivo o ahorro</button></section>`;
+  }
+  const filas = [...E.cuentas].sort((a, b) => parseFloat(b.saldo) - parseFloat(a.saldo)).map(c => {
+    const [tipo, icono] = TIPOS_CUENTA[c.tipo] || TIPOS_CUENTA.efectivo;
+    return `<button type="button" class="fila" data-accion="editar-cuenta" data-id="${esc(c.id)}">
+      <span class="ficha">${ic(icono)}</span>
+      <span class="cuerpo"><span class="concepto">${esc(c.nombre)}</span><span class="detalle">${tipo} · a ${fechaCorta(c.fecha_saldo)}</span></span>
+      <span class="importe num">${parseFloat(c.saldo) < 0 ? '−' : ''}${fmt(c.saldo)}</span></button>`;
+  }).join('');
+  const total = totalCuentas(E.cuentas);
+  return `<section class="tarjeta" aria-label="Tu dinero" style="gap:6px">${cab}
+    <div style="display:flex;align-items:baseline;gap:8px"><span class="cifra-m num">${total < 0 ? '−' : ''}${fmt(total)}</span><span class="nota">en total</span></div>
+    <div class="lista-cuentas">${filas}</div></section>`;
 }
 
 // La meta sin terminar con la fecha más próxima (o, si ninguna tiene fecha, la más avanzada)

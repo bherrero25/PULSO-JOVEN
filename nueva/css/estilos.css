@@ -154,6 +154,7 @@ button.fila:hover { background: #FAFAFB; }
 .campo input:focus, .campo select:focus { outline: none; border-color: var(--tinta); }
 .par { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .fila-flex, .rejilla-auto { display: flex; flex-direction: column; gap: 12px; }
+.lista-cuentas { display: flex; flex-direction: column; }
 .vacio { text-align: center; color: var(--texto-3); font-size: 14px; padding: 28px 12px; }
 
 /* ─── AÑADIR ─── */
@@ -262,6 +263,8 @@ button.fila:hover { background: #FAFAFB; }
   #toast, #aviso-error { bottom: 24px; left: calc(var(--lateral-w) + 24px); }
   .rejilla-auto { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; align-items: start; }
   .fila-flex { flex-direction: row; flex-wrap: wrap; gap: 16px; align-items: stretch; }
+  .lista-cuentas { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); column-gap: 28px; }
+  .lista-cuentas .fila:last-child { border-bottom: 1px solid var(--linea-suave); }
   .fila-flex > * { flex: 1 1 200px; }
   .fila-flex > .ancha { flex: 2 1 420px; }
   .solo-movil { display: none !important; }

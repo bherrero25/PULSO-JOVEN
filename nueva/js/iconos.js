@@ -55,7 +55,9 @@ const SIMBOLOS = {
   dado: '<rect x="4" y="4" width="16" height="16" rx="3"/><circle cx="9" cy="9" r=".9"/><circle cx="15" cy="15" r=".9"/><circle cx="15" cy="9" r=".9"/><circle cx="9" cy="15" r=".9"/>',
   tarjeta: '<rect x="3" y="5.5" width="18" height="13" rx="2"/><path d="M3 10h18M7 15h3"/>',
   escudo: '<path d="M12 3 4.5 6v5.5c0 4.8 3.2 8 7.5 9.5 4.3-1.5 7.5-4.7 7.5-9.5V6z"/>',
-  ingreso: '<path d="M17 7 7 17M7 9v8h8"/>'
+  ingreso: '<path d="M17 7 7 17M7 9v8h8"/>',
+  devolver: '<path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3M4.5 4v4h4"/>',
+  etiqueta: '<path d="M3.5 12.5V4h8.5l9 9-8.5 8.5z"/><circle cx="8" cy="8.5" r="1.2"/>'
 };
 
 export const SPRITE = '<svg aria-hidden="true" style="position:absolute;width:0;height:0;overflow:hidden"><defs>' +

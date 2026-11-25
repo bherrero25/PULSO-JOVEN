@@ -68,12 +68,15 @@ export const CATEGORIAS = [
   { id: 'tecnologia', nombre: 'Tecnología', bd: '📱 Tecnología', icono: 'portatil', tipo: 'gasto' },
   { id: 'regalo', nombre: 'Regalos', bd: '🎁 Regalo', icono: 'regalo', tipo: 'gasto' },
   { id: 'apuestas', nombre: 'Apuestas', bd: '🎲 Apuestas', icono: 'dado', tipo: 'gasto' },
-  { id: 'bizum_enviado', nombre: 'Bizum enviado', bd: '📱 Bizum enviado', icono: 'movil', tipo: 'gasto' },
+  { id: 'bizum_enviado', nombre: 'Bizum enviado', bd: '📱 Bizum enviado', icono: 'movil', tipo: 'gasto', generica: true },
   { id: 'cargo_tarjeta', nombre: 'Cargo de tarjeta', bd: '💳 Cargo tarjeta', icono: 'tarjeta', tipo: 'gasto' },
   { id: 'otros', nombre: 'Otros', bd: '🔧 Otros', icono: 'otros', tipo: 'gasto' },
   { id: 'mensualidad', nombre: 'Mensualidad', bd: '💰 Mensualidad', icono: 'familia', tipo: 'ingreso' },
   { id: 'nomina', nombre: 'Trabajo', bd: '💰 Nómina', icono: 'trabajo', tipo: 'ingreso' },
-  { id: 'bizum_recibido', nombre: 'Bizum recibido', bd: '📱 Bizum recibido', icono: 'movil', tipo: 'ingreso' },
+  { id: 'devolucion', nombre: 'Devoluciones', bd: '🤝 Devolución', icono: 'devolver', tipo: 'ingreso' },
+  { id: 'regalo_recibido', nombre: 'Regalos', bd: '🎁 Regalo recibido', icono: 'regalo', tipo: 'ingreso' },
+  { id: 'ventas', nombre: 'Ventas', bd: '🏷️ Ventas', icono: 'etiqueta', tipo: 'ingreso' },
+  { id: 'bizum_recibido', nombre: 'Bizum recibido', bd: '📱 Bizum recibido', icono: 'movil', tipo: 'ingreso', generica: true },
   { id: 'ingresos', nombre: 'Otros ingresos', bd: '💰 Ingresos', icono: 'ingreso', tipo: 'ingreso' },
   { id: 'reenviado', nombre: 'Dinero de paso', bd: '↩️ Reenviado', icono: 'paso', tipo: 'gasto' },
   { id: 'liquidacion', nombre: 'Liquidación de tarjeta', bd: '💳 Liquidación tarjeta', icono: 'tarjeta', tipo: 'liquidacion_tarjeta' }
@@ -81,7 +84,7 @@ export const CATEGORIAS = [
 export const BD = { OTROS: '🔧 Otros', MENSUALIDAD: '💰 Mensualidad', REENVIO: '↩️ Reenviado' };
 // Las que salen primero al apuntar a mano
 export const RAPIDAS_GASTO = ['comida', 'ocio', 'transporte', 'gasolina', 'ropa', 'deporte', 'suscripciones', 'alquiler', 'salud', 'estudios', 'regalo', 'otros'];
-export const RAPIDAS_INGRESO = ['mensualidad', 'nomina', 'bizum_recibido', 'ingresos'];
+export const RAPIDAS_INGRESO = ['mensualidad', 'nomina', 'devolucion', 'regalo_recibido', 'ventas', 'ingresos'];
 export const SERIES_GRAFICO = CATEGORIAS.filter(c => c.color);
 
 const PORBD = new Map(CATEGORIAS.map(c => [c.bd, c]));
@@ -216,8 +219,11 @@ export function categoriaConAprendizaje(descripcion, tipo, reglas) {
   return categoriaAutomatica(descripcion, tipo);
 }
 
-// Un movimiento está «por revisar» si cayó en Otros y nadie le ha dado aún categoría a ese concepto
-export const porRevisar = (t, reglas) => t.tipo === 'gasto' && t.categoria === BD.OTROS && !(claveConcepto(t.descripcion) in reglas);
+// Un movimiento está «por revisar» si no tiene una categoría real (Otros, o Bizum sin más) y nadie se la ha dado aún a ese concepto.
+// El Bizum es la forma de pago: su categoría es para qué era (comida, ocio…) o de dónde viene (trabajo, regalo, devolución…).
+const SIN_CLASIFICAR = new Set([BD.OTROS, '📱 Bizum enviado', '📱 Bizum recibido']);
+export const porRevisar = (t, reglas) => (t.tipo === 'gasto' || t.tipo === 'ingreso') && SIN_CLASIFICAR.has(t.categoria) && !(claveConcepto(t.descripcion) in reglas);
+export const esBizum = t => t.medio === 'bizum' || /bizum/i.test(t.descripcion || '');
 
 export function medioAutomatico(descripcion) {
   const d = (descripcion || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
@@ -228,6 +234,10 @@ export function medioAutomatico(descripcion) {
 }
 
 export const MEDIOS = { tarjeta: 'Tarjeta', transferencia: 'Transferencia', bizum: 'Bizum', efectivo: 'Efectivo' };
+
+// ─── TU DINERO (saldos de cuentas, aparte de los ingresos y gastos del mes) ───
+export const TIPOS_CUENTA = { efectivo: ['Efectivo', 'cartera'], ahorro: ['Ahorro', 'escudo'], banco: ['Banco', 'banco'], inversion: ['Inversión', 'tendencia'] };
+export const totalCuentas = cuentas => cuentas.reduce((s, c) => s + parseFloat(c.saldo || 0), 0);
 const NOMBRES_CUENTA = { bankinter: 'Bankinter', bbva: 'BBVA', santander: 'Santander', caixabank: 'CaixaBank', ing: 'ING', revolut: 'Revolut', n26: 'N26', efectivo: 'Efectivo', generico: 'Otro banco', apple_pay: 'Apple Pay' };
 export const formaDePago = t => t.cuenta === 'apple_pay' ? 'Apple Pay' : MEDIOS[t.medio] || 'Transferencia';
 

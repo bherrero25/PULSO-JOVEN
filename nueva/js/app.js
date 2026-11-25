@@ -10,11 +10,12 @@ import * as movimientos from './pantallas/movimientos.js';
 import * as anadir from './pantallas/anadir.js';
 import * as resumen from './pantallas/resumen.js';
 import * as planes from './pantallas/planes.js';
+import * as dinero from './pantallas/dinero.js';
 
 // Estado de la app: datos de la persona y lo que tiene elegido en pantalla
 const E = {
   usuario: null, nombre: '', cargado: false,
-  txs: [], presupuestos: [], metas: [], reglas: {},
+  txs: [], presupuestos: [], metas: [], reglas: {}, cuentas: null,
   meses: [mesActual()], mes: mesActual(), pantalla: 'inicio',
   filtro: 'todos', q: '',
   tabAnadir: 'mano', nuevo: anadir.nuevoMovimiento(), importacion: null,
@@ -160,7 +161,7 @@ const generales = {
 };
 
 const ctx = { E, pintar };
-const ACCIONES = { ...generales, ...movimientos.acciones, ...anadir.acciones, ...resumen.acciones, ...planes.acciones };
+const ACCIONES = { ...generales, ...movimientos.acciones, ...anadir.acciones, ...resumen.acciones, ...planes.acciones, ...dinero.acciones };
 const ENTRADAS = { ...movimientos.entradas, ...anadir.entradas, ...planes.entradas };
 const CAMBIOS = { ...movimientos.cambios, ...anadir.cambios };
 

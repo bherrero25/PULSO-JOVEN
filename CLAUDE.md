@@ -53,6 +53,8 @@ Seguros, leasing, bonus anual, hipoteca, hijos ni patrimonio complejo.
 
 - Rediseño «Tinta y lima» según el croquis, publicado aparte en `…/PULSO-JOVEN/nueva/` mientras `app.html` sigue en uso. Misma base de datos y mismo formato de datos (categorías con emoji, `↩️ Reenviado` = «dinero de paso»).
 - Sin compilación: módulos ES en `nueva/js/` → `logica.js` (cálculos puros), `datos.js` (Supabase y modo demo), `importar.js` (extractos), `pantallas/*.js` (una por pantalla) y `app.js` (estado, rutas `#/…` y acciones con `data-accion`, `data-entrada`, `data-cambio`). Modo demo con `?demo`.
+- «Tu dinero»: `sql/2026-11-cuentas.sql` crea `pj_cuentas` (saldos por cuenta, aparte de ingresos y gastos). Las de banco (`clave` = 'bankinter'…) toman el saldo de la columna Saldo del extracto al importar; las de efectivo o ahorro se apuntan a mano. Si la tabla no existe, la app funciona sin esa tarjeta. La cifra grande de Inicio es el «Balance mensual» (ingresado − gastado del mes), no el saldo.
+- Bizum = forma de pago, no categoría: «📱 Bizum enviado/recibido» (lo que pone `categoriaAutomatica`) cuentan como «por revisar» y se reclasifican en categorías reales; hay categorías de ingreso Devoluciones, Regalos y Ventas.
 - Atajo de Apple Pay: `sql/2026-11-atajo-apple-pay.sql` crea `pj_codigos_atajo` y la función `pj_apuntar_pago(codigo, importe, comercio)`, que el atajo de iPhone llama por REST. Los pagos entran con `cuenta = 'apple_pay'` y en «🔧 Otros»; la app los clasifica al abrirse y, al importar un extracto, descarta los que coinciden en importe con fecha 0–4 días después.
 
 ## Pendiente antes de venderla

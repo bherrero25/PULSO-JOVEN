@@ -117,6 +117,8 @@ export function analizarExtracto(filas, { reglas, hayTarjeta }) {
   const cF = col('fecha', /^date$/, /^data operacio$/, /^started date$/);
   const cD = col('concepto', 'descripci', 'payee', /^description$/);
   const cI = col('importe', /^amount( \(eur\))?$/, /^import$/);
+  const cS = col(/^saldo/, /^disponible$/, /^balance$/);
+  const saldos = []; // saldo tras cada movimiento, en el orden del archivo
   for (const f of filas.slice(inicio)) {
     if (f.every(c => !c)) continue;
     let fecha, descripcion, bruto;
@@ -133,11 +135,21 @@ export function analizarExtracto(filas, { reglas, hayTarjeta }) {
     }
     if (!fecha || !descripcion || isNaN(bruto) || bruto === 0) continue;
     if (banco === 'revolut' && String(f[8] || '').toLowerCase() !== 'completed') continue;
+    const saldo = parsearImporte(banco === 'bbva' ? f[6] : cS >= 0 ? f[cS] : '');
+    if (!isNaN(saldo)) saldos.push({ fecha, valor: saldo });
     // El cargo agrupado de la tarjeta solo se compensa si también se importan sus compras; un «recobro» siempre es gasto
     const d = normal(descripcion);
     const esLiq = hayTarjeta && /liquidacion tarjeta|tarjeta credito|pago tarjeta|recibo tarjeta|recibo visa|visa clasica/.test(d) && !/recobro/.test(d);
     const tipo = esLiq ? 'liquidacion_tarjeta' : bruto < 0 ? 'gasto' : 'ingreso';
     txs.push({ fecha, descripcion, importe: Math.abs(bruto), tipo, categoria: esLiq ? '💳 Liquidación tarjeta' : categoriaConAprendizaje(descripcion, tipo, reglas), medio: medioAutomatico(descripcion), cuenta: banco });
   }
-  return { tipo: 'cuenta', banco, txs };
+  return { tipo: 'cuenta', banco, txs, saldo: saldoFinal(saldos) };
+}
+
+// Saldo tras el último movimiento. Los bancos ordenan el archivo de más nuevo a más antiguo o al revés:
+// se mira qué punta tiene la fecha más reciente y, dentro de ese día, se coge el movimiento de esa punta.
+function saldoFinal(saldos) {
+  if (!saldos.length) return null;
+  const descendente = saldos[0].fecha >= saldos[saldos.length - 1].fecha;
+  return descendente ? saldos[0] : saldos[saldos.length - 1];
 }

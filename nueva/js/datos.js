@@ -81,9 +81,19 @@ export async function cargarTodo(usuario) {
     ]);
     const reglas = {};
     filasReglas.forEach(r => { reglas[claveConcepto(r.concepto)] = r.categoria; });
-    return { txs, presupuestos, metas, reglas };
+    return { txs, presupuestos, metas, reglas, cuentas: await cargarCuentas() };
   } catch (error) {
     avisarError(error, 'cargar tus datos');
+    return null;
+  }
+}
+
+// null si aún no existe la tabla (sql/2026-11-cuentas.sql sin ejecutar): la app sigue funcionando sin «Tu dinero»
+async function cargarCuentas() {
+  try {
+    return await leerTodas(() => sb.from('pj_cuentas').select('*').eq('user_id', uid).order('creada').order('id'));
+  } catch (error) {
+    if (!faltaTabla(error)) avisarError(error, 'cargar tus cuentas');
     return null;
   }
 }
@@ -184,6 +194,31 @@ export async function cambiarCodigoAtajo() {
   if (demo) return null;
   const { data, error } = await sb.from('pj_codigos_atajo').update({ codigo: crypto.randomUUID() }).eq('user_id', uid).select('codigo').single();
   return avisarError(error, 'cambiar tu código') ? null : data.codigo;
+}
+
+// ─── TU DINERO ───
+// Cuentas a mano (efectivo, ahorro…): se crean o cambian con el saldo de hoy
+export async function guardarCuenta({ id, nombre, tipo, saldo, fecha_saldo }) {
+  const fila = { nombre, tipo, saldo, fecha_saldo };
+  if (demo) return { ...fila, id: id || 'd' + idDemo++ };
+  const { data, error } = id
+    ? await sb.from('pj_cuentas').update(fila).eq('id', id).select().single()
+    : await sb.from('pj_cuentas').insert({ user_id: uid, ...fila }).select().single();
+  return avisarError(error, 'guardar la cuenta') ? null : data;
+}
+
+// Saldo del banco leído del extracto: una cuenta por banco (clave = 'bankinter', 'bbva'…)
+export async function guardarSaldoBanco(clave, nombre, saldo, fecha_saldo) {
+  if (demo) return { id: 'd' + idDemo++, clave, nombre, tipo: 'banco', saldo, fecha_saldo };
+  const { data, error } = await sb.from('pj_cuentas')
+    .upsert({ user_id: uid, clave, nombre, tipo: 'banco', saldo, fecha_saldo }, { onConflict: 'user_id,clave' }).select().single();
+  return avisarError(error, 'guardar el saldo del banco') ? null : data;
+}
+
+export async function borrarCuenta(id) {
+  if (demo) return true;
+  const { error } = await sb.from('pj_cuentas').delete().eq('id', id);
+  return !avisarError(error, 'quitar la cuenta');
 }
 
 export async function borrarMeta(id) {

@@ -115,6 +115,46 @@ prueba('fijos: el día 31 en noviembre es el 30', () => assert.deepEqual(L.previ
 prueba('fijos: crea los meses que faltan', () => assert.equal(L.previstosPendientes([{ ...fijo, ultimo: '2026-07-31' }], '2026-12-02').length, 4));
 prueba('fijos: uno inactivo no crea nada', () => assert.equal(L.previstosPendientes([{ ...fijo, ultimo: '2026-07-31', activo: false }], '2026-12-02').length, 0));
 
+// ── Nombres limpios y forma de pago ──
+const limpio = (descripcion, tipo = 'gasto', cuenta = 'bankinter') => L.nombreLimpio({ descripcion, tipo, cuenta });
+prueba('nombres: quita «COMPRA TARJ.», el número de tarjeta y la ciudad de una marca conocida', () => assert.equal(limpio('COMPRA TARJ. 5402XXXXXXXX1234 MERCADONA VALENCIA'), 'Mercadona'));
+prueba('nombres: marcas detrás de pasarelas y referencias', () => {
+  assert.equal(limpio('COMPRA EN AMZN Mktp ES*AB12CD34E'), 'Amazon');
+  assert.equal(limpio('PAYPAL *STEAMGAMES'), 'Steam (PayPal)');
+  assert.equal(limpio('SUMUP *BAR PEPE'), 'Bar Pepe');
+  assert.equal(limpio('RECIBO NETFLIX.COM'), 'Netflix');
+  assert.equal(limpio('100 MONTADITOS VALENCIA'), '100 Montaditos');
+});
+prueba('nombres: transferencias y Bizum dicen de quién o a quién, con tildes', () => {
+  assert.equal(limpio('TRANSF INM /JOSE MARTINEZ PEREZ', 'ingreso'), 'Transferencia de José Martínez Pérez');
+  assert.equal(limpio('TRANSFERENCIA A FAVOR DE ANA MARTINEZ'), 'Transferencia a Ana Martínez');
+  assert.equal(limpio('BIZUM DE LUCIA GARCIA', 'ingreso'), 'Bizum de Lucía García');
+  assert.equal(limpio('PAGO BIZUM A LUCIA'), 'Bizum a Lucía');
+});
+prueba('nombres: casos especiales y fechas', () => {
+  assert.equal(limpio('REINTEGRO CAJERO 4B 14/11'), 'Retirada en cajero');
+  assert.equal(limpio('LIQUIDACION TARJETA CREDITO', 'liquidacion_tarjeta'), 'Liquidación de la tarjeta');
+  assert.equal(limpio('INGRESO EFECTIVO OFICINA 0123', 'ingreso'), 'Ingreso en efectivo');
+  assert.equal(limpio('DEVOLUCION COMPRA ZARA', 'ingreso'), 'Devolución Zara');
+  assert.equal(limpio('BAR PEPE 14/11/26'), 'Bar Pepe');
+  assert.equal(limpio('CAFETERIA EL PUERTO'), 'Cafetería el Puerto');
+});
+prueba('nombres: lo escrito a mano, lo previsto y el efectivo no se tocan', () => {
+  assert.equal(limpio('cena en mercadona', 'gasto', 'manual'), 'cena en mercadona');
+  assert.equal(limpio('MENSUALIDAD', 'ingreso', 'previsto'), 'MENSUALIDAD');
+  assert.equal(limpio('[Efectivo] Café', 'gasto', 'efectivo'), 'Café');
+});
+prueba('forma de pago: tarjeta, recibo, transferencia, Bizum, Apple Pay y efectivo', () => {
+  assert.deepEqual([['COMPRA TARJ. 5402XXXX MERCADONA', 'gasto'], ['RECIBO NETFLIX.COM', 'gasto'], ['TRANSF INM /JUAN', 'ingreso'], ['BIZUM A ANA', 'gasto'],
+    ['COMPRA APPLE PAY CAFETERIA', 'gasto'], ['REINTEGRO CAJERO', 'gasto'], ['MERCADONA', 'gasto'], ['INTERESES', 'ingreso']].map(([d, t]) => L.medioAutomatico(d, t)),
+    ['tarjeta', 'recibo', 'transferencia', 'bizum', 'apple_pay', 'efectivo', 'tarjeta', 'transferencia']);
+});
+prueba('forma de pago: lo importado antes como «transferencia» se enseña con la forma correcta', () => {
+  assert.equal(L.formaDePago({ descripcion: 'MERCADONA', tipo: 'gasto', medio: 'transferencia', cuenta: 'bankinter' }), 'Tarjeta');
+  assert.equal(L.formaDePago({ descripcion: 'TRANSF A JUAN', tipo: 'gasto', medio: 'transferencia', cuenta: 'bankinter' }), 'Transferencia');
+  assert.equal(L.formaDePago({ descripcion: 'Alquiler', tipo: 'gasto', medio: 'transferencia', cuenta: 'manual' }), 'Transferencia');
+});
+
 for (const f of fallos) console.log(`  ✗ ${f}`);
 console.log(`${fallos.length ? '✗' : '✓'} Cálculos (logica.js): ${bien} comprobaciones bien, ${fallos.length} mal`);
 process.exit(fallos.length ? 1 : 0);

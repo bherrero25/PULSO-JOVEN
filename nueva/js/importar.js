@@ -81,7 +81,7 @@ function leerRetenidos(filas, previa, finBloque, banco, reglas) {
     const fecha = parsearFecha(f[cF]), descripcion = String(f[cD] || '').trim(), bruto = parsearImporte(f[cI]);
     if (!fecha || !descripcion || isNaN(bruto) || bruto === 0) continue;
     const tipo = bruto < 0 ? 'gasto' : 'ingreso';
-    lista.push({ fecha, descripcion, importe: Math.abs(bruto), tipo, categoria: categoriaConAprendizaje(descripcion, tipo, reglas), medio: medioAutomatico(descripcion), cuenta: banco, pendiente: true });
+    lista.push({ fecha, descripcion, importe: Math.abs(bruto), tipo, categoria: categoriaConAprendizaje(descripcion, tipo, reglas), medio: medioAutomatico(descripcion, tipo), cuenta: banco, pendiente: true });
   }
   return lista;
 }
@@ -178,7 +178,7 @@ export function analizarExtracto(filas, { reglas, hayTarjeta }) {
     const d = normal(descripcion);
     const esLiq = hayTarjeta && /liquidacion tarjeta|tarjeta credito|pago tarjeta|recibo tarjeta|recibo visa|visa clasica/.test(d) && !/recobro/.test(d);
     const tipo = esLiq ? 'liquidacion_tarjeta' : bruto < 0 ? 'gasto' : 'ingreso';
-    txs.push({ fecha, descripcion, importe: Math.abs(bruto), tipo, categoria: esLiq ? '💳 Liquidación tarjeta' : categoriaConAprendizaje(descripcion, tipo, reglas), medio: medioAutomatico(descripcion), cuenta: banco });
+    txs.push({ fecha, descripcion, importe: Math.abs(bruto), tipo, categoria: esLiq ? '💳 Liquidación tarjeta' : categoriaConAprendizaje(descripcion, tipo, reglas), medio: medioAutomatico(descripcion, tipo), cuenta: banco });
   }
   const numero = leerCuentaArchivo(filas, previa >= 0 ? previa : inicio - 1);
   return { tipo: 'cuenta', banco, txs, saldo: saldoFinal(saldos), retenidos: leerRetenidos(filas, previa, inicio - 1, banco, reglas), fin: numero?.fin || null, entidad: numero?.entidad || null };

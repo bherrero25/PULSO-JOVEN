@@ -49,7 +49,7 @@ with sync_playwright() as p:
     pg.fill('input[data-entrada="buscar"]', 'mercadona'); pg.wait_for_timeout(150)
     res.comprobar(pg.locator('#lista-movs .fila:has-text("Comida")').count() == antes - 1, 'y solo cambia ese movimiento')
     pg.fill('input[data-entrada="buscar"]', ''); pg.click('[data-accion="filtro"][data-valor="revisar"]'); pg.wait_for_timeout(150)
-    pg.locator('#lista-movs .fila:has-text("TPV")').first.click(); pg.wait_for_selector('.hoja-panel')
+    pg.locator('#lista-movs .fila:has-text("Zaragoza")').first.click(); pg.wait_for_selector('.hoja-panel')
     res.comprobar(pg.is_checked('#recordar'), 'al clasificar algo por revisar, «recordar» viene marcada')
     b.close()
 

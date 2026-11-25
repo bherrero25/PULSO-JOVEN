@@ -21,7 +21,7 @@ Si sale **✗**, algo se ha roto: no se publica hasta arreglarlo. Las capturas d
 
 | Archivo | Qué comprueba |
 |---|---|
-| `prueba_logica.mjs` | Los cálculos sin navegador: dinero de paso, traspasos, juntar lo apuntado con el extracto, varias cuentas, número de cuenta del extracto, «Tu dinero», movimientos fijos |
+| `prueba_logica.mjs` | Los cálculos sin navegador: dinero de paso, traspasos, juntar lo apuntado con el extracto, varias cuentas, número de cuenta del extracto, «Tu dinero», movimientos fijos, nombres limpios y forma de pago |
 | `prueba_recorrido.py` | Todas las pantallas en móvil y ordenador (demo): clasificar, buscar, apuntar, importar, resumen, presupuesto, metas, inversión |
 | `prueba_sesion.py` | Con sesión: más de 1.000 movimientos, reglas aprendidas, altas, presupuestos y aviso si falla al guardar |
 | `prueba_registro.py` | «Crear cuenta» en la app nueva y en la antigua con las tres respuestas de Supabase |
@@ -33,6 +33,7 @@ Si sale **✗**, algo se ha roto: no se publica hasta arreglarlo. Las capturas d
 | `prueba_apuntar.py` | Botones de apuntar rápido y textos que se adaptan a Bizum y transferencia |
 | `prueba_fijos.py` | Movimientos fijos: configurarlos, crear el previsto sin repetir y juntarlo con el real |
 | `prueba_cuentas.py` | Varias cuentas: número del extracto, cuenta nueva, traspaso entre cuentas, cuenta al apuntar y filtro |
+| `prueba_nombres.py` | Nombres limpios en la lista, concepto original al abrir, buscador y forma de pago al importar |
 | `prueba_icono.py` | Manifiesto e iconos |
 | `sql/ejecutar_sql.sh` | Los textos de `sql/` en una base desechable: se pueden repetir y cada persona solo ve lo suyo |
 

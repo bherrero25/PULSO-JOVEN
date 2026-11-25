@@ -1,7 +1,7 @@
 // Piezas que se repiten en varias pantallas
 
 import { ic } from './iconos.js';
-import { esc, fmt, infoCategoria, tinteCategoria, porRevisar, esPaso, esTraspaso, formaDePago, nombreMes, mesActual, cuentasBanco, esManual, destinoManual } from './logica.js';
+import { esc, fmt, infoCategoria, tinteCategoria, porRevisar, esPaso, esTraspaso, formaDePago, nombreMes, mesActual, cuentasBanco, esManual, destinoManual, nombreLimpio } from './logica.js';
 
 const ENLACES = [
   ['inicio', 'Inicio', 'inicio'],
@@ -53,7 +53,8 @@ export function selectorMes(E, { peq = false } = {}) {
 
 export const ficha = (cat, clase = '') => `<span class="ficha ${clase}" style="background:${tinteCategoria(cat)}">${ic(cat.icono, clase.includes('peq') ? 'ic-s' : '')}</span>`;
 
-export const conceptoVisible = t => String(t.descripcion || '').replace(/^\[Efectivo\]\s*/, '');
+// Lo que se enseña de un movimiento: el nombre limpio (el concepto original del banco se ve al abrirlo)
+export const conceptoVisible = t => nombreLimpio(t);
 
 export function importeMovimiento(t) {
   if (t.tipo === 'liquidacion_tarjeta') return { texto: '≈ ' + fmt(t.importe), clase: '' };

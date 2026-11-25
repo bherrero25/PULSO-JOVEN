@@ -44,7 +44,7 @@ function desglose(E, c) {
     const g = gemeloEnBanco(t, E.txs);
     return `<div style="display:flex;flex-direction:column;gap:2px;padding-left:10px;border-left:2px solid var(--linea);font-size:12.5px;color:var(--texto-2)">
       <div style="display:flex;justify-content:space-between;gap:8px"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${fechaCorta(t.fecha)} · ${esc(conceptoVisible(t))}</span><span class="num" style="white-space:nowrap">${fmt(t.tipo === 'ingreso' ? +t.importe : -t.importe, true)}</span></div>
-      ${g ? `<span style="color:var(--critico-texto)">Parece repetido: el banco ya tiene «${esc(g.descripcion)}» del ${fechaCorta(g.fecha)}.</span>
+      ${g ? `<span style="color:var(--critico-texto)">Parece repetido: el banco ya tiene «${esc(conceptoVisible(g))}» del ${fechaCorta(g.fecha)}.</span>
         <button type="button" class="enlace" style="align-self:flex-start;font-size:12.5px" data-accion="quitar-repetido" data-id="${esc(t.id)}" data-gemelo="${esc(g.id)}" data-cuenta="${esc(c.id)}">Es el mismo: quitar el apuntado</button>` : ''}
     </div>`;
   };
@@ -105,7 +105,7 @@ export const acciones = {
     const { E } = ctx;
     const t = E.txs.find(x => String(x.id) === el.dataset.id), g = E.txs.find(x => String(x.id) === el.dataset.gemelo);
     if (!t || !g) return;
-    if (!await confirmar('¿Quitar el apuntado a mano?', `«${esc(conceptoVisible(t))}» (${fmt(t.importe)}) ya está en el banco como «${esc(g.descripcion)}». Se queda el del banco${porRevisar(g, E.reglas) && !porRevisar(t, E.reglas) ? `, con la categoría ${esc(infoCategoria(t.categoria).nombre)}` : ''}.`, 'Quitar')) { hojaCuenta(E, el.dataset.cuenta); return; }
+    if (!await confirmar('¿Quitar el apuntado a mano?', `«${esc(conceptoVisible(t))}» (${fmt(t.importe)}) ya está en el banco como «${esc(conceptoVisible(g))}». Se queda el del banco${porRevisar(g, E.reglas) && !porRevisar(t, E.reglas) ? `, con la categoría ${esc(infoCategoria(t.categoria).nombre)}` : ''}.`, 'Quitar')) { hojaCuenta(E, el.dataset.cuenta); return; }
     if (porRevisar(g, E.reglas) && !porRevisar(t, E.reglas) && await D.actualizarMovimientos([g.id], { categoria: t.categoria }, 'pasar la categoría al movimiento del banco')) g.categoria = t.categoria;
     if (!await D.borrarMovimiento(t.id)) return;
     E.txs.splice(E.txs.indexOf(t), 1);

@@ -238,21 +238,106 @@ const SIN_CLASIFICAR = new Set([BD.OTROS, '📱 Bizum enviado', '📱 Bizum reci
 export const porRevisar = (t, reglas) => (t.tipo === 'gasto' || t.tipo === 'ingreso') && SIN_CLASIFICAR.has(t.categoria) && !(claveConcepto(t.descripcion) in reglas);
 export const esBizum = t => t.medio === 'bizum' || /bizum/i.test(t.descripcion || '');
 
-export function medioAutomatico(descripcion) {
-  const d = (descripcion || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+// Forma de pago a partir del concepto del banco. Lo que no dice nada: un gasto suele ser una compra con tarjeta y un
+// ingreso, una transferencia.
+export function medioAutomatico(descripcion, tipo) {
+  const d = (descripcion || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   if (/bizum/.test(d)) return 'bizum';
-  if (/recibo visa|visa clasica|tarjeta|liquidacion tarjeta/.test(d)) return 'tarjeta';
-  if (/efectivo|cajero/.test(d)) return 'efectivo';
-  return 'transferencia';
+  if (/apple ?pay/.test(d)) return 'apple_pay';
+  if (/recibo visa|visa clasica|liquidacion tarjeta/.test(d)) return 'tarjeta';
+  if (/efectivo|cajero|reintegro/.test(d)) return 'efectivo';
+  if (/\b(recibo|adeudo|domiciliaci|cuota)\b/.test(d)) return 'recibo';
+  if (/transf|traspaso|nomina|\babono\b|\bsepa\b|\bdevolucion\b/.test(d)) return 'transferencia';
+  if (/tarj|\bcompra|\btpv\b|pago (con|en)|contactless|google ?pay|\d{4}[x*]{4,}/.test(d)) return 'tarjeta';
+  return tipo === 'ingreso' ? 'transferencia' : tipo === 'gasto' ? 'tarjeta' : 'transferencia';
 }
 
-export const MEDIOS = { tarjeta: 'Tarjeta', transferencia: 'Transferencia', bizum: 'Bizum', efectivo: 'Efectivo', apple_pay: 'Apple Pay' };
+// ─── NOMBRES LIMPIOS ───
+// El concepto del banco se guarda tal cual (sirve para no duplicar y para lo aprendido); en pantalla se enseña limpio:
+// sin «COMPRA TARJ. 5402XXXX», números de tarjeta, fechas ni referencias, con el nombre de la marca si se reconoce y en
+// mayúsculas y minúsculas. Lo escrito a mano, lo previsto y el efectivo se enseñan como se escribieron.
+const MARCAS = [
+  [/mercadona/, 'Mercadona'], [/carrefour/, 'Carrefour'], [/\blidl\b/, 'Lidl'], [/\baldi\b/, 'Aldi'], [/(^|\s)dia(\s|$)|supermercados dia/, 'Dia'],
+  [/eroski/, 'Eroski'], [/alcampo/, 'Alcampo'], [/\bconsum\b/, 'Consum'], [/hipercor/, 'Hipercor'], [/supercor/, 'Supercor'], [/corte ?ingles/, 'El Corte Inglés'],
+  [/ahorramas/, 'Ahorramás'], [/bon ?preu/, 'Bonpreu'], [/caprabo/, 'Caprabo'], [/\bcondis\b/, 'Condis'],
+  [/prime ?video/, 'Prime Video'], [/amazon prime/, 'Amazon Prime'], [/amazon|amzn/, 'Amazon'], [/netflix/, 'Netflix'], [/spotify/, 'Spotify'], [/disney/, 'Disney+'],
+  [/youtube/, 'YouTube'], [/\bhbo\b/, 'HBO Max'], [/apple\.com|itunes|\bapple\b/, 'Apple'], [/google play/, 'Google Play'], [/\bgoogle\b/, 'Google'], [/playstation|\bpsn\b/, 'PlayStation'],
+  [/\bsteam/, 'Steam'], [/nintendo/, 'Nintendo'], [/glovo/, 'Glovo'], [/uber ?eats/, 'Uber Eats'], [/\buber\b/, 'Uber'], [/cabify/, 'Cabify'], [/\bbolt\b/, 'Bolt'],
+  [/just ?eat/, 'Just Eat'], [/deliveroo/, 'Deliveroo'], [/renfe/, 'Renfe'], [/\biryo\b/, 'Iryo'], [/ouigo/, 'Ouigo'], [/\balsa\b/, 'Alsa'], [/blablacar/, 'BlaBlaCar'],
+  [/ryanair/, 'Ryanair'], [/vueling/, 'Vueling'], [/iberia/, 'Iberia'], [/booking/, 'Booking'], [/airbnb/, 'Airbnb'],
+  [/repsol/, 'Repsol'], [/cepsa|moeve/, 'Cepsa'], [/(^|\s)bp(\s|$)/, 'BP'], [/\bgalp\b/, 'Galp'], [/\bshell\b/, 'Shell'], [/ballenoil/, 'Ballenoil'], [/plenoil/, 'Plenoil'], [/petroprix/, 'Petroprix'],
+  [/\bzara\b/, 'Zara'], [/primark/, 'Primark'], [/\bmango\b/, 'Mango'], [/(^|\s)h ?(&|y) ?m(\s|$)|hm\.com/, 'H&M'], [/pull ?(&|and|y)? ?bear/, 'Pull&Bear'], [/bershka/, 'Bershka'],
+  [/stradivarius/, 'Stradivarius'], [/decathlon/, 'Decathlon'], [/shein/, 'Shein'], [/aliexpress/, 'AliExpress'], [/vinted/, 'Vinted'], [/wallapop/, 'Wallapop'],
+  [/mc ?donald/, "McDonald's"], [/burger king/, 'Burger King'], [/telepizza/, 'Telepizza'], [/(100|cien) montaditos/, '100 Montaditos'], [/\bkfc\b/, 'KFC'], [/starbucks/, 'Starbucks'],
+  [/foster/, "Foster's Hollywood"], [/goiko/, 'Goiko'], [/domino/, "Domino's"], [/media ?markt/, 'MediaMarkt'], [/\bfnac\b/, 'Fnac'], [/\bikea\b/, 'IKEA'], [/leroy ?merlin/, 'Leroy Merlin'],
+  [/primor/, 'Primor'], [/druni/, 'Druni'], [/sephora/, 'Sephora'], [/vodafone/, 'Vodafone'], [/movistar|telefonica/, 'Movistar'], [/\borange\b/, 'Orange'], [/\bdigi\b/, 'Digi'],
+  [/simyo/, 'Simyo'], [/\blowi\b/, 'Lowi'], [/yoigo/, 'Yoigo'], [/jazztel/, 'Jazztel'], [/pepephone/, 'Pepephone']
+];
+const MENUDAS = new Set(['de', 'del', 'la', 'las', 'el', 'los', 'y', 'a', 'en', 'al', 'con', 'por']);
+// Tildes que los bancos quitan: comercios, nombres y apellidos frecuentes
+const TILDES = Object.fromEntries(('cafetería librería panadería frutería carnicería pescadería peluquería papelería pastelería cervecería heladería droguería ferretería lavandería ' +
+  'gestoría óptica clínica médico música informática electrónica energía teléfono nómina crédito café jardín estación autoescuela·autoescuela ' +
+  'garcía martínez lópez pérez gonzález rodríguez fernández sánchez gómez díaz hernández jiménez álvarez ramírez muñoz martín ' +
+  'lucía maría rubén ramón josé ángel andrés adrián sofía raúl iván óscar mónica verónica tomás nicolás jesús inés belén ' +
+  'málaga cádiz córdoba león almería jaén cáceres ávila castellón logroño').split(' ').filter(w => !w.includes('·')).map(w => [w.normalize('NFD').replace(/[\u0300-\u036f]/g, ''), w]));
+const titulo = s => s.toLowerCase().split(/\s+/).filter(Boolean).map((w, i) => {
+  if (i && MENUDAS.has(w)) return w;
+  if (/\d/.test(w) || (w.length <= 4 && !/[aeiouáéíóú]/.test(w) && /^[a-z]+$/.test(w))) return w.toUpperCase(); // números y siglas
+  const p = TILDES[w] || w;
+  return p.charAt(0).toUpperCase() + p.slice(1);
+}).join(' ');
+
+export function nombreLimpio(t) {
+  const original = String(t.descripcion || '').replace(/^\[Efectivo\]\s*/, '').trim();
+  if (!original || esManual(t) || t.cuenta === CUENTA_PREVISTO || t.cuenta === 'efectivo') return original;
+  let s = ' ' + original + ' ';
+  s = s.replace(/\b\d{4,6}[X*·]{4,}\d{0,4}\b|\b[X*]{4,}\d{2,4}\b/gi, ' ')         // número de tarjeta tapado
+    .replace(/\b\d{1,2}[\/.-]\d{1,2}(?:[\/.-]\d{2,4})?\b|\b\d{1,2}:\d{2}(?::\d{2})?\b/g, ' ') // fechas y horas
+    .replace(/\s+/g, ' ').trim();
+  for (let i = 0; i < 4; i++) {                                                         // lo que no es el nombre, al principio
+    const antes = s;
+    s = s.replace(/^(compra(s)?(\s+tarj(eta)?\.?)?(\s+(internet|online|en))?|pago(\s+(con|en))?(\s+tarj(eta)?\.?)?|pago movil( en)?|cargo( tarjeta)?|tpv|apple ?pay|google ?pay|contactless|operacion tarjeta|adeudo( de)?|recibo( de)?|domiciliacion|cuota|tarj(eta)?\.?)\b[\s:.\-/*]*/i, '').trim();
+    if (s === antes) break;
+  }
+  let pago = '';
+  const proc = s.match(/^(paypal|pp|sumup|sum ?up|i?zettle|sq|square|stripe|sp|tst|myp)\s*[*_]\s*/i);
+  if (proc) { if (/^p(aypal|p)/i.test(proc[1])) pago = ' (PayPal)'; s = s.slice(proc[0].length); }
+  const d = s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const sentido = t.tipo === 'ingreso' ? 'de' : 'a';
+  let m = d.match(/^(pago\s+)?bizum\s*(enviado|recibido)?\s*(de|a|desde|para)?\s*/);
+  if (m) { const r = titulo(s.slice(m[0].length)); return r ? `Bizum ${sentido} ${r}` : 'Bizum'; }
+  m = d.match(/^(transf(erencia)?|trans|traspaso|tr)\.?\s*(inm(ediata)?|sepa|recibida|emitida|periodica)?\s*[\/:.-]?\s*(a favor de|de|desde|a|para)?\s*/);
+  if (m && (m[1] !== 'tr' || m[0].length > 3)) {
+    const r = titulo(s.slice(m[0].length).replace(/^[\s\/:.-]+/, ''));
+    const tipo = m[1] === 'traspaso' ? 'Traspaso' : 'Transferencia';
+    return r ? `${tipo} ${sentido} ${r}` : tipo;
+  }
+  if (/reintegro|retirada|cajero/.test(d)) return 'Retirada en cajero';
+  if (/liquidacion tarjeta|recibo visa|visa clasica/.test(d)) return 'Liquidación de la tarjeta';
+  if (/ingreso (de |en )?efectivo/.test(d)) return 'Ingreso en efectivo';
+  const devolucion = /devolucion|reembolso/.test(d) ? 'Devolución ' : '';
+  const marca = MARCAS.find(([re]) => re.test(d));
+  if (marca) return devolucion + marca[1] + pago;
+  s = s.replace(/^\d{2,4}\s+(?=\D)/, '')                                               // número de tienda suelto
+    .replace(/\.(com|es|eu|net|org|io)(\/\S*)?(?=\s|$)/gi, ' ')                 // dominios
+    .replace(/[*_]+/g, ' ')
+    .replace(/\b(?=[a-z]*\d)(?=\d*[a-z])[a-z\d]{5,}\b|\b\d{5,}\b|\b(ref|nº|n\.)\s*\S+/gi, ' ') // referencias
+    .replace(/\b(s\.?\s?a\.?|s\.?\s?l\.?(u\.?)?)\s*$/i, ' ')                          // S.A., S.L.
+    .replace(/\s+/g, ' ').replace(/^[\s,.\-/]+|[\s,.\-/]+$/g, '');
+  if (!s) return titulo(original);
+  return (/[a-zñáéíóú]/.test(s) ? s : titulo(s)) + pago;
+}
+
+
+export const MEDIOS = { tarjeta: 'Tarjeta', transferencia: 'Transferencia', bizum: 'Bizum', efectivo: 'Efectivo', apple_pay: 'Apple Pay', recibo: 'Recibo' };
+// Los movimientos importados antes de mejorar la detección quedaron como «transferencia»: si el concepto dice otra cosa, se usa esa
+export const medioDe = t => t.medio === 'transferencia' && t.tipo === 'gasto' && esClaveBanco(t.cuenta) ? medioAutomatico(t.descripcion, t.tipo) : (t.medio || 'transferencia');
 
 // ─── TU DINERO (saldos de cuentas, aparte de los ingresos y gastos del mes) ───
 export const TIPOS_CUENTA = { efectivo: ['Efectivo', 'cartera'], ahorro: ['Ahorro', 'escudo'], banco: ['Banco', 'banco'], inversion: ['Inversión', 'tendencia'] };
 export const totalCuentas = (cuentas, txs = []) => cuentas.reduce((s, c) => s + saldoDisponible(c, txs, cuentas).disponible, 0);
 const NOMBRES_CUENTA = { bankinter: 'Bankinter', bbva: 'BBVA', santander: 'Santander', caixabank: 'CaixaBank', ing: 'ING', revolut: 'Revolut', n26: 'N26', efectivo: 'Efectivo', generico: 'Otro banco', apple_pay: 'Apple Pay', manual: 'Apuntado a mano', previsto: 'Previsto' };
-export const formaDePago = t => t.cuenta === 'apple_pay' ? 'Apple Pay' : MEDIOS[t.medio] || 'Transferencia';
+export const formaDePago = t => t.cuenta === 'apple_pay' ? 'Apple Pay' : MEDIOS[medioDe(t)] || 'Transferencia';
 
 // Pagos que llegan del atajo de Apple Pay sin clasificar: se les pone la categoría aprendida o la automática.
 // Devuelve { categoría: [ids] } con los que hay que cambiar.
@@ -391,7 +476,7 @@ export function cuentaParaExtracto(cuentas, txs, { banco, fin, entidad, movs }) 
 export function detectarTraspasos(nuevos, txs, clave, clavesBanco) {
   const otras = new Set([...clavesBanco].filter(c => c !== clave));
   if (!otras.size) return { pares: [] };
-  const valido = t => (t.tipo === 'gasto' || t.tipo === 'ingreso') && !t.pendiente && t.medio !== 'tarjeta' && t.medio !== 'apple_pay' && t.categoria !== '💳 Liquidación tarjeta';
+  const valido = t => (t.tipo === 'gasto' || t.tipo === 'ingreso') && !t.pendiente && !['tarjeta', 'apple_pay', 'recibo'].includes(medioDe(t)) && t.categoria !== '💳 Liquidación tarjeta';
   const libres = txs.filter(t => otras.has(t.cuenta) && valido(t));
   const posibles = [];
   nuevos.forEach((n, i) => {

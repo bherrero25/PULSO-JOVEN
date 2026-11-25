@@ -2,7 +2,7 @@
 
 import { ic } from '../iconos.js';
 import { esc, fmt, fmt0, nombreMes, resumenMes, ritmoDelMes, estadoPresupuestos, porRevisar, gastoHastaDia, sumarMeses, porCategoria, hoyISO, fechaCorta, TIPOS_CUENTA, totalCuentas, saldoDisponible } from '../logica.js';
-import { selectorMes, filaMovimiento, ficha, barraPresupuesto, textoEstado, inicial } from '../componentes.js';
+import { selectorMes, filaMovimiento, ficha, barraPresupuesto, textoEstado, inicial, conceptoVisible } from '../componentes.js';
 
 // Botones para apuntar a mano en dos toques: abren el formulario ya preparado
 const RAPIDOS = [['gasto', 'tarjeta', 'Gasto', 'menos'], ['ingreso', 'transferencia', 'Ingreso', 'mas'], ['gasto', 'bizum', 'Bizum', 'movil'], ['gasto', 'transferencia', 'Transferencia', 'banco']];
@@ -66,7 +66,7 @@ export function render(E) {
     <section class="tarjeta solo-ordenador" aria-label="Gastado">
       <span class="sub">Gastado</span>
       <span class="cifra-m num">${fmt(-R.totalGastos, true)}</span>
-      <span class="nota">${R.gastos.length} gastos${mayor ? ` · el mayor: ${esc(mayor.descripcion)}, ${fmt(mayor.importe)}` : ''}</span>
+      <span class="nota">${R.gastos.length} gastos${mayor ? ` · el mayor: ${esc(conceptoVisible(mayor))}, ${fmt(mayor.importe)}` : ''}</span>
       ${antHastaHoy > 0 ? `<span class="nota" style="font-weight:600;color:${difGasto <= 0 ? 'var(--positivo)' : 'var(--critico-texto)'}">${difGasto <= 0 ? '▼' : '▲'} ${fmt(Math.abs(difGasto))} ${difGasto <= 0 ? 'menos' : 'más'} que ${nombreMes(anterior, { año: false }).toLowerCase()} ${ritmo.abierto ? 'a estas alturas' : ''}</span>` : ''}
     </section>
     <section class="tarjeta solo-ordenador" aria-label="Ahorro">

@@ -1,7 +1,7 @@
 // Movimientos: lista del mes con buscador y filtros; al tocar uno se puede cambiar su categoría, fecha o forma de pago
 
 import { ic } from '../iconos.js';
-import { esc, fmt, resumenMes, porRevisar, etiquetaDia, infoCategoria, CATEGORIAS, claveConcepto, MEDIOS, BD, esGasto, esIngreso, esBizum, CUENTA_MANUAL, esManual, cuentasBanco, cuentaManual, cuentaPrincipal, gemeloEnBanco } from '../logica.js';
+import { esc, fmt, resumenMes, porRevisar, etiquetaDia, infoCategoria, CATEGORIAS, claveConcepto, MEDIOS, BD, esGasto, esIngreso, esBizum, CUENTA_MANUAL, esManual, cuentasBanco, cuentaManual, cuentaPrincipal, gemeloEnBanco, medioDe } from '../logica.js';
 import { preguntarTraspaso } from './dinero.js';
 import { selectorMes, filaMovimiento, ficha, conceptoVisible, importeMovimiento } from '../componentes.js';
 import { abrirHoja, cerrarHoja, cabeceraHoja, toast, confirmar } from '../ui.js';
@@ -22,7 +22,7 @@ function deLaCuenta(E, t) {
 function visibles(E) {
   const q = E.q.trim().toLowerCase();
   return resumenMes(E.txs, E.mes).movs.filter(t => {
-    if (q && !String(t.descripcion).toLowerCase().includes(q)) return false;
+    if (q && !String(t.descripcion).toLowerCase().includes(q) && !conceptoVisible(t).toLowerCase().includes(q)) return false;
     if (!deLaCuenta(E, t)) return false;
     if (E.filtro === 'gastos') return t.tipo !== 'ingreso';
     if (E.filtro === 'ingresos') return t.tipo === 'ingreso';
@@ -100,7 +100,8 @@ function abrirEdicion(ctx, t) {
   const pregunta = !rev ? esc(actual.nombre) : bizum ? (t.tipo === 'ingreso' ? '¿De qué es este Bizum?' : '¿Para qué era este Bizum?') : '¿Qué es este movimiento?';
   abrirHoja(`${cabeceraHoja(esc(conceptoVisible(t)), pregunta)}
     <span class="num texto-2" style="font-size:15px;margin-top:-8px">${imp.texto}</span>
-    ${esManual(t) ? (gemeloEnBanco(t, E.txs) ? `<p class="nota" style="background:var(--fondo);border-radius:12px;padding:10px 12px"><b>¿Repetido?</b> El banco ya tiene «${esc(gemeloEnBanco(t, E.txs).descripcion)}» del ${etiquetaDia(gemeloEnBanco(t, E.txs).fecha, E.mes).toLowerCase()} con el mismo importe. Si es el mismo, borra este.</p>` : '<p class="nota">Lo apuntaste a mano. Cuando importes el extracto del banco, se juntará con su movimiento sin repetirse.</p>') : ''}
+    ${conceptoVisible(t) !== String(t.descripcion || '').trim() ? `<span class="nota" style="margin-top:-10px;word-break:break-word">Concepto original: ${esc(t.descripcion)}</span>` : ''}
+    ${esManual(t) ? (gemeloEnBanco(t, E.txs) ? `<p class="nota" style="background:var(--fondo);border-radius:12px;padding:10px 12px"><b>¿Repetido?</b> El banco ya tiene «${esc(conceptoVisible(gemeloEnBanco(t, E.txs)))}» del ${etiquetaDia(gemeloEnBanco(t, E.txs).fecha, E.mes).toLowerCase()} con el mismo importe. Si es el mismo, borra este.</p>` : '<p class="nota">Lo apuntaste a mano. Cuando importes el extracto del banco, se juntará con su movimiento sin repetirse.</p>') : ''}
     ${t.cuenta === 'previsto' ? '<p class="nota" style="background:var(--fondo);border-radius:12px;padding:10px 12px"><b>Previsto:</b> lo ha apuntado la app por tus movimientos fijos. Cuando importes el extracto se juntará con el de verdad y se quedará con su importe. Si este mes no llega, bórralo.</p>' : ''}
     ${t.pendiente ? '<p class="nota" style="background:var(--fondo);border-radius:12px;padding:10px 12px"><b>Retenido:</b> el banco aún no lo ha cobrado del todo. Ya cuenta en tus gastos; cuando lo cobre, al importar el siguiente extracto se convertirá en el movimiento definitivo.</p>' : ''}
     ${opciones.length ? `<div class="rejilla-cats">${opciones.map(c => `<button type="button" data-accion="poner-categoria" data-id="${esc(t.id)}" data-cat="${esc(c.bd)}" aria-pressed="${!rev && c.bd === t.categoria}">${ficha(c)}${esc(c.nombre)}</button>`).join('')}</div>
@@ -109,7 +110,7 @@ function abrirEdicion(ctx, t) {
     <div class="par">
       <label class="campo">Fecha<input type="date" value="${t.fecha}" data-cambio="fecha-mov" data-id="${esc(t.id)}"></label>
       <label class="campo">Forma de pago<select data-cambio="medio-mov" data-id="${esc(t.id)}">
-        ${Object.entries(MEDIOS).map(([k, v]) => `<option value="${k}"${(t.medio || 'transferencia') === k ? ' selected' : ''}>${v}</option>`).join('')}
+        ${Object.entries(MEDIOS).map(([k, v]) => `<option value="${k}"${medioDe(t) === k ? ' selected' : ''}>${v}</option>`).join('')}
       </select></label>
     </div>
     <button type="button" class="boton peligro peq" data-accion="borrar-mov" data-id="${esc(t.id)}">${ic('papelera')}Borrar movimiento</button>`, 'Editar movimiento');

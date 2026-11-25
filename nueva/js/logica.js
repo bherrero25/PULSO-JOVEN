@@ -243,7 +243,7 @@ export const MEDIOS = { tarjeta: 'Tarjeta', transferencia: 'Transferencia', bizu
 // ─── TU DINERO (saldos de cuentas, aparte de los ingresos y gastos del mes) ───
 export const TIPOS_CUENTA = { efectivo: ['Efectivo', 'cartera'], ahorro: ['Ahorro', 'escudo'], banco: ['Banco', 'banco'], inversion: ['Inversión', 'tendencia'] };
 export const totalCuentas = (cuentas, txs = []) => cuentas.reduce((s, c) => s + saldoDisponible(c, txs).disponible, 0);
-const NOMBRES_CUENTA = { bankinter: 'Bankinter', bbva: 'BBVA', santander: 'Santander', caixabank: 'CaixaBank', ing: 'ING', revolut: 'Revolut', n26: 'N26', efectivo: 'Efectivo', generico: 'Otro banco', apple_pay: 'Apple Pay' };
+const NOMBRES_CUENTA = { bankinter: 'Bankinter', bbva: 'BBVA', santander: 'Santander', caixabank: 'CaixaBank', ing: 'ING', revolut: 'Revolut', n26: 'N26', efectivo: 'Efectivo', generico: 'Otro banco', apple_pay: 'Apple Pay', manual: 'Apuntado a mano' };
 export const formaDePago = t => t.cuenta === 'apple_pay' ? 'Apple Pay' : MEDIOS[t.medio] || 'Transferencia';
 
 // Pagos que llegan del atajo de Apple Pay sin clasificar: se les pone la categoría aprendida o la automática.
@@ -305,6 +305,46 @@ export function separarYaApuntados(nuevos, txs) {
   });
   return { quedan, repetidos };
 }
+// Lo apuntado a mano que saldrá en el banco (tarjeta, Bizum, transferencia o un ingreso de efectivo) se guarda con cuenta 'manual'.
+// Al importar el extracto se junta con su movimiento del banco en vez de repetirse.
+export const CUENTA_MANUAL = 'manual';
+
+// Empareja movimientos nuevos del extracto con lo que ya estaba apuntado: mismo tipo e importe y fecha del banco
+// entre 3 días antes y 7 después. Si hay varios posibles, gana la fecha más cercana, la misma forma de pago y alguna palabra en común.
+// - seguro: era un apuntado a mano (cuenta 'manual');
+// - dudoso: es un movimiento de ese mismo banco, dentro de las fechas del extracto, que no aparece en él
+//   (lo apuntado a mano antes de existir la marca 'manual'); se pregunta antes de juntarlo.
+export function emparejarApuntados(nuevos, txs, extracto) {
+  if (!nuevos.length || !extracto.length) return { quedan: nuevos, pares: [] };
+  const enExtracto = new Set(extracto.map(claveMovimiento));
+  const cuentas = new Set(extracto.map(t => t.cuenta));
+  const fechas = extracto.map(t => t.fecha).sort();
+  const desde = fechas[0], hasta = fechas[fechas.length - 1];
+  const candidatos = txs.filter(t => (t.tipo === 'gasto' || t.tipo === 'ingreso') && !t.pendiente && (t.cuenta === CUENTA_MANUAL
+    || (cuentas.has(t.cuenta) && t.fecha >= desde && t.fecha <= hasta && !enExtracto.has(claveMovimiento(t)))));
+  const palabras = s => new Set(String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').split(/[^a-z0-9ñ]+/).filter(p => p.length >= 4));
+  const posibles = [];
+  nuevos.forEach((n, i) => {
+    const pn = palabras(n.descripcion);
+    candidatos.forEach((g, j) => {
+      if (g.tipo !== n.tipo || Math.abs(+g.importe - +n.importe) >= 0.005) return;
+      const d = diasEntre(g.fecha, n.fecha);
+      if (d < -3 || d > 7) return;
+      const comun = [...palabras(g.descripcion)].some(p => pn.has(p));
+      posibles.push({ i, j, puntos: Math.abs(d) + (g.medio && n.medio && g.medio !== n.medio ? 3 : 0) - (comun ? 3 : 0) + (g.cuenta === CUENTA_MANUAL ? 0 : 0.5) });
+    });
+  });
+  posibles.sort((a, b) => a.puntos - b.puntos);
+  const usadosN = new Set(), usadosG = new Set(), pares = [];
+  posibles.forEach(({ i, j }) => {
+    if (usadosN.has(i) || usadosG.has(j)) return;
+    usadosN.add(i); usadosG.add(j);
+    pares.push({ guardado: candidatos[j], banco: nuevos[i], seguro: candidatos[j].cuenta === CUENTA_MANUAL });
+  });
+  pares.sort((a, b) => b.banco.fecha.localeCompare(a.banco.fecha));
+  return { quedan: nuevos.filter((_, i) => !usadosN.has(i)), pares };
+}
+
 export function nombreCuenta(c) {
   if (!c || c === 'principal') return 'Cuenta';
   if (c.endsWith('_tarjeta')) return (NOMBRES_CUENTA[c.slice(0, -8)] || c.slice(0, -8)) + ' · tarjeta';

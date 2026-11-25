@@ -1,7 +1,7 @@
 // Movimientos: lista del mes con buscador y filtros; al tocar uno se puede cambiar su categoría, fecha o forma de pago
 
 import { ic } from '../iconos.js';
-import { esc, fmt, resumenMes, porRevisar, etiquetaDia, infoCategoria, CATEGORIAS, claveConcepto, MEDIOS, BD, esGasto, esIngreso, esBizum } from '../logica.js';
+import { esc, fmt, resumenMes, porRevisar, etiquetaDia, infoCategoria, CATEGORIAS, claveConcepto, MEDIOS, BD, esGasto, esIngreso, esBizum, CUENTA_MANUAL } from '../logica.js';
 import { preguntarTraspaso } from './dinero.js';
 import { selectorMes, filaMovimiento, ficha, conceptoVisible, importeMovimiento } from '../componentes.js';
 import { abrirHoja, cerrarHoja, cabeceraHoja, toast, confirmar } from '../ui.js';
@@ -73,6 +73,7 @@ function abrirEdicion(ctx, t) {
   const pregunta = !rev ? esc(actual.nombre) : bizum ? (t.tipo === 'ingreso' ? '¿De qué es este Bizum?' : '¿Para qué era este Bizum?') : '¿Qué es este movimiento?';
   abrirHoja(`${cabeceraHoja(esc(conceptoVisible(t)), pregunta)}
     <span class="num texto-2" style="font-size:15px;margin-top:-8px">${imp.texto}</span>
+    ${t.cuenta === CUENTA_MANUAL ? '<p class="nota">Lo apuntaste a mano. Cuando importes el extracto del banco, se juntará con su movimiento sin repetirse.</p>' : ''}
     ${t.pendiente ? '<p class="nota" style="background:var(--fondo);border-radius:12px;padding:10px 12px"><b>Retenido:</b> el banco aún no lo ha cobrado del todo. Ya cuenta en tus gastos; cuando lo cobre, al importar el siguiente extracto se convertirá en el movimiento definitivo.</p>' : ''}
     ${opciones.length ? `<div class="rejilla-cats">${opciones.map(c => `<button type="button" data-accion="poner-categoria" data-id="${esc(t.id)}" data-cat="${esc(c.bd)}" aria-pressed="${!rev && c.bd === t.categoria}">${ficha(c)}${esc(c.nombre)}</button>`).join('')}</div>
     <label class="casilla"><input type="checkbox" id="recordar"${bizum ? '' : ' checked'}> ${bizum ? 'Usar esta categoría siempre para los Bizum de esta persona' : 'Recordar para los próximos movimientos de este comercio'}</label>` : '<p class="nota">Es el cargo mensual de la tarjeta: sus compras ya están contadas una a una.</p>'}
@@ -135,8 +136,12 @@ export const cambios = {
   },
   'medio-mov': async (ctx, el) => {
     const t = buscarTx(ctx.E, el.dataset.id);
-    if (!await D.actualizarMovimientos([t.id], { medio: el.value }, 'cambiar la forma de pago')) { el.value = t.medio || 'transferencia'; return; }
-    t.medio = el.value;
+    // Lo apuntado a mano en efectivo no sale en el banco; con otra forma de pago sí, y se juntará con el extracto
+    const cambios = { medio: el.value };
+    if (t.cuenta === CUENTA_MANUAL && el.value === 'efectivo' && t.categoria !== BD.TRASPASO) cambios.cuenta = 'efectivo';
+    else if (t.cuenta === 'efectivo' && el.value !== 'efectivo') cambios.cuenta = CUENTA_MANUAL;
+    if (!await D.actualizarMovimientos([t.id], cambios, 'cambiar la forma de pago')) { el.value = t.medio || 'transferencia'; return; }
+    Object.assign(t, cambios);
     toast('Forma de pago cambiada');
     ctx.pintar();
   }

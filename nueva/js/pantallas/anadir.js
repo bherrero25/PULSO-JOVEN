@@ -1,8 +1,8 @@
 // Añadir: a mano con teclado, subiendo el extracto del banco o (más adelante) de forma automática
 
 import { ic } from '../iconos.js';
-import { esc, fmt, hoyISO, fechaCorta, RAPIDAS_GASTO, RAPIDAS_INGRESO, categoriaPorId, MEDIOS, nombreCuenta, infoCategoria, separarYaApuntados, conciliarRetenidos, porRevisar } from '../logica.js';
-import { ficha } from '../componentes.js';
+import { esc, fmt, hoyISO, fechaCorta, RAPIDAS_GASTO, RAPIDAS_INGRESO, categoriaPorId, MEDIOS, nombreCuenta, infoCategoria, separarYaApuntados, conciliarRetenidos, porRevisar, emparejarApuntados, CUENTA_MANUAL } from '../logica.js';
+import { ficha, conceptoVisible } from '../componentes.js';
 import { toast, abrirHoja, cabeceraHoja, confirmar } from '../ui.js';
 import * as D from '../datos.js';
 import { leerFilas, analizarExtracto } from '../importar.js';
@@ -51,14 +51,18 @@ function extracto(E) {
   const imp = E.importacion;
   if (imp && imp.txs) {
     const fechas = [...imp.txs, ...imp.retenidosNuevos].map(t => t.fecha).sort();
-    const aImportar = [...imp.nuevas, ...imp.retenidosNuevos];
-    const hayCambios = aImportar.length || imp.cobrados.length || imp.caducados.length || (imp.saldo && E.cuentas);
+    const pares = imp.pares || [];
+    const separados = pares.filter(x => !x.unir).map(x => x.banco), unir = pares.filter(x => x.unir);
+    const aImportar = [...imp.nuevas, ...separados.filter(t => !t.pendiente), ...imp.retenidosNuevos, ...separados.filter(t => t.pendiente)];
+    const nNuevos = imp.nuevas.length + separados.filter(t => !t.pendiente).length;
+    const listaNuevos = [...imp.nuevas, ...imp.retenidosNuevos];
+    const hayCambios = aImportar.length || unir.length || imp.cobrados.length || imp.caducados.length || (imp.saldo && E.cuentas);
     return `<section class="tarjeta" style="border:1px solid var(--linea-2)">
         <div style="display:flex;align-items:center;gap:10px">${'<span class="ficha">' + ic('banco') + '</span>'}
           <div style="display:flex;flex-direction:column;gap:2px"><b style="font-size:16px">${esc(nombreCuenta(imp.banco))} · ${imp.tipo === 'tarjeta' ? 'tarjeta' : imp.tipo === 'efectivo' ? 'efectivo' : 'cuenta'}</b>
-          <span class="nota">${imp.txs.length} movimientos${imp.retenidos?.length ? ` y ${imp.retenidos.length} retenidos` : ''} del ${fechaCorta(fechas[0])} al ${fechaCorta(fechas[fechas.length - 1])}</span></div></div>
+          <span class="nota">${imp.txs.length} movimientos${imp.retenidos?.length ? ` y ${imp.retenidos.length} ${imp.retenidos.length === 1 ? 'retenido' : 'retenidos'}` : ''} del ${fechaCorta(fechas[0])} al ${fechaCorta(fechas[fechas.length - 1])}</span></div></div>
         <div class="dos-col">
-          <div class="dato"><small style="color:var(--texto-3)">Nuevos</small><b class="num">${imp.nuevas.length}</b></div>
+          <div class="dato"><small style="color:var(--texto-3)">Nuevos</small><b class="num">${nNuevos}</b></div>
           <div class="dato"><small style="color:var(--texto-3)">Ya estaban</small><b class="num">${imp.yaEstaban}</b></div>
         </div>
         ${imp.retenidosNuevos.length || imp.cobrados.length || imp.caducados.length ? `<div style="background:var(--fondo);border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:8px;font-size:13px;line-height:1.45;color:#33393F">
@@ -66,15 +70,17 @@ function extracto(E) {
           ${imp.cobrados.length ? `<span><b>${imp.cobrados.length} ${imp.cobrados.length === 1 ? 'retenido ya cobrado' : 'retenidos ya cobrados'}</b>: se ${imp.cobrados.length === 1 ? 'convierte' : 'convierten'} en el movimiento definitivo, con la categoría que tenía.</span>` : ''}
           ${imp.caducados.length ? `<span><b>${imp.caducados.length} ${imp.caducados.length === 1 ? 'retenido que ya no aparece' : 'retenidos que ya no aparecen'}</b> (${imp.caducados.length === 1 ? 'anulado' : 'anulados'} o con otro importe): se ${imp.caducados.length === 1 ? 'quita' : 'quitan'}.</span>` : ''}
         </div>` : ''}
+        ${bloquePares(pares, true)}${bloquePares(pares, false)}
         ${imp.retenidosSinColumna ? `<p class="nota">Este extracto trae ${imp.retenidosSinColumna} ${imp.retenidosSinColumna === 1 ? 'movimiento retenido' : 'movimientos retenidos'}. Para incluirlos, hay que ejecutar en Supabase el texto <b>sql/2026-11-retenidos.sql</b>.</p>` : ''}
         ${imp.deApplePay ? `<p class="nota">De los que ya estaban, ${imp.deApplePay} ${imp.deApplePay === 1 ? 'entró' : 'entraron'} con Apple Pay (mismo importe y fecha cercana), así que no se repiten.</p>` : ''}
         ${imp.saldo ? `<div style="display:flex;justify-content:space-between;gap:10px;background:var(--fondo);border-radius:12px;padding:10px 12px;font-size:14px">
           <span>Saldo de ${esc(nombreCuenta(imp.banco))} el ${fechaCorta(imp.saldo.fecha)}</span><b class="num">${imp.saldo.valor < 0 ? '−' : ''}${fmt(imp.saldo.valor)}</b></div>` : ''}
-        ${aImportar.length ? `<div>${aImportar.slice(0, 6).map(t => { const c = infoCategoria(t.categoria); return `<div class="fila">${ficha(c, 'peq')}<span class="cuerpo"><span class="concepto" style="font-size:14px">${esc(t.descripcion)}</span><span class="detalle">${fechaCorta(t.fecha)} · ${esc(c.nombre)}${t.pendiente ? ' <span class="retenido">Retenido</span>' : ''}</span></span><span class="importe num${t.tipo === 'ingreso' ? ' positivo' : ''}" style="font-size:14px">${fmt(t.tipo === 'ingreso' ? +t.importe : -t.importe, true)}</span></div>`; }).join('')}
-          ${aImportar.length > 6 ? `<p class="nota" style="padding-top:8px">y ${aImportar.length - 6} más</p>` : ''}</div>` : '<p class="nota">Todos los movimientos de este archivo ya estaban guardados.</p>'}
+        ${listaNuevos.length ? `<div>${listaNuevos.slice(0, 6).map(t => { const c = infoCategoria(t.categoria); return `<div class="fila">${ficha(c, 'peq')}<span class="cuerpo"><span class="concepto" style="font-size:14px">${esc(t.descripcion)}</span><span class="detalle">${fechaCorta(t.fecha)} · ${esc(c.nombre)}${t.pendiente ? ' <span class="retenido">Retenido</span>' : ''}</span></span><span class="importe num${t.tipo === 'ingreso' ? ' positivo' : ''}" style="font-size:14px">${fmt(t.tipo === 'ingreso' ? +t.importe : -t.importe, true)}</span></div>`; }).join('')}
+          ${listaNuevos.length > 6 ? `<p class="nota" style="padding-top:8px">y ${listaNuevos.length - 6} más</p>` : ''}</div>` : `<p class="nota">${pares.length ? 'No hay más movimientos nuevos en este archivo.' : 'Todos los movimientos de este archivo ya estaban guardados.'}</p>`}
       </section>
       ${hayCambios ? `<button type="button" class="boton" data-accion="confirmar-importacion"${imp.guardando ? ' disabled' : ''}>${imp.guardando ? 'Guardando…'
         : aImportar.length ? `Importar ${aImportar.length} ${aImportar.length === 1 ? 'movimiento' : 'movimientos'}`
+        : unir.length ? `Juntar ${unir.length === 1 ? 'el movimiento' : `los ${unir.length} movimientos`} con lo que apuntaste`
         : imp.cobrados.length || imp.caducados.length ? 'Actualizar los retenidos' : `Actualizar el saldo de ${esc(nombreCuenta(imp.banco))}`}</button>` : ''}
       <button type="button" class="boton suave" data-accion="cancelar-importacion">${hayCambios ? 'Cancelar' : 'Elegir otro archivo'}</button>
       <p class="nota">Después podrás cambiar la categoría de cualquiera; la app aprenderá de tus cambios.</p>`;
@@ -93,6 +99,25 @@ function extracto(E) {
       <div><b>3</b><span>Revisa lo que hemos encontrado y confirma. Lo repetido no se duplica.</span></div>
     </div>
     <p class="nota">Probado con Bankinter. BBVA, Santander, CaixaBank, ING, Revolut y N26 se reconocen por el formato de su archivo. Para el efectivo, <a href="../plantilla-efectivo-pulso.xlsx" style="text-decoration:underline">descarga la plantilla</a>.</p>`;
+}
+
+// Movimientos del extracto que coinciden con algo que ya habías apuntado.
+// Seguros (apuntados a mano): se juntan salvo que digas que no. Dudosos (posibles repetidos): solo si lo marcas.
+function bloquePares(pares, seguros) {
+  const lista = pares.map((x, i) => ({ ...x, i })).filter(x => x.seguro === seguros);
+  if (!lista.length) return '';
+  const n = lista.length;
+  const intro = seguros
+    ? `<b>${n === 1 ? 'Ya lo habías apuntado tú' : `${n} ya los habías apuntado tú`}</b>: no se ${n === 1 ? 'repite' : 'repiten'}. ${n === 1 ? 'Se queda' : 'Se quedan'} con tu categoría y ${n === 1 ? 'toma' : 'toman'} la fecha y el concepto del banco.`
+    : `<b>${n === 1 ? '¿Ya lo tenías?' : `${n} posibles repetidos`}</b> Mismo importe y fecha parecida a algo que ya tenías guardado. ${n === 1 ? 'Márcalo si es' : 'Marca los que sean'} lo mismo y no se ${n === 1 ? 'repetirá' : 'repetirán'}; si no, ${n === 1 ? 'entra' : 'entran'} como ${n === 1 ? 'nuevo' : 'nuevos'}.`;
+  return `<div style="background:var(--fondo);border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:4px;font-size:13px;line-height:1.45;color:#33393F">
+    <span>${intro}</span>
+    ${lista.map(({ guardado: g, banco: b, unir, i }) => `<div style="border-top:1px solid var(--linea);margin-top:6px;padding-top:6px">
+      <div class="fila" style="padding:4px 0">${ficha(infoCategoria(g.categoria), 'peq')}<span class="cuerpo"><span class="concepto" style="font-size:14px">${esc(b.descripcion)}</span><span class="detalle">${fechaCorta(b.fecha)} · en el banco${b.pendiente ? ' <span class="retenido">Retenido</span>' : ''}</span></span>
+        <span class="importe num${b.tipo === 'ingreso' ? ' positivo' : ''}" style="font-size:14px">${fmt(b.tipo === 'ingreso' ? +b.importe : -b.importe, true)}</span></div>
+      <label class="casilla" style="min-height:36px;font-size:13px"><input type="checkbox" data-cambio="par-unir" data-i="${i}"${unir ? ' checked' : ''}> <span>Es «${esc(conceptoVisible(g))}», ${seguros ? 'que apuntaste' : 'que ya tenías,'} el ${fechaCorta(g.fecha)}</span></label>
+    </div>`).join('')}
+  </div>`;
 }
 
 function automatico() {
@@ -139,7 +164,8 @@ export const acciones = {
     const importe = parseFloat(n.importe.replace(',', '.'));
     if (!importe) { toast('Escribe el importe con el teclado'); return; }
     const cat = categoriaPorId(n.cat);
-    const cuenta = n.medio === 'efectivo' ? 'efectivo' : cuentaHabitual(E.txs);
+    // Lo pagado en efectivo no sale en el banco; lo demás (y meter efectivo en el banco) se juntará con el extracto
+    const cuenta = n.medio === 'efectivo' && cat.id !== 'traspaso' ? 'efectivo' : CUENTA_MANUAL;
     const tx = { fecha: n.fecha || hoyISO(), descripcion: n.concepto.trim() || cat.nombre, importe, tipo: n.tipo, categoria: cat.bd, medio: n.medio, cuenta };
     const fila = await D.insertarMovimiento(tx);
     if (!fila) return;
@@ -177,7 +203,9 @@ export const acciones = {
     // Se vuelve a comprobar contra lo guardado por si se ha importado algo mientras tanto (por ejemplo, desde otra pestaña)
     let claves;
     try { claves = await D.clavesGuardadas(E.txs); } catch (error) { D.avisarError(error, 'comprobar qué movimientos tenías ya'); imp.guardando = false; ctx.pintar(); return; }
-    const nuevas = [...imp.nuevas, ...imp.retenidosNuevos].filter(t => !claves.has(D.claveMovimiento(t)));
+    const pares = imp.pares || [];
+    const separados = pares.filter(x => !x.unir).map(x => x.banco);
+    const nuevas = [...imp.nuevas, ...imp.retenidosNuevos, ...separados].filter(t => !claves.has(D.claveMovimiento(t)));
     const { guardadas, error } = await D.insertarMovimientos(nuevas);
     E.txs.push(...guardadas);
     E.txs.sort((a, b) => b.fecha.localeCompare(a.fecha));
@@ -194,6 +222,15 @@ export const acciones = {
       if (porRevisar(retenido, E.reglas) && !porRevisar(definitivo, E.reglas)) cambios.categoria = definitivo.categoria;
       if (await D.actualizarMovimientos([retenido.id], cambios, 'actualizar un movimiento retenido')) { Object.assign(retenido, cambios); cobrados++; }
     }
+    // Lo apuntado a mano toma la fecha, el concepto y la cuenta del banco (así la próxima importación ya lo reconoce)
+    // y conserva su categoría y su forma de pago
+    let unidos = 0;
+    for (const { guardado, banco } of pares.filter(x => x.unir)) {
+      const cambios = { fecha: banco.fecha, descripcion: banco.descripcion, cuenta: banco.cuenta };
+      if (E.conRetenidos) cambios.pendiente = !!banco.pendiente;
+      if (porRevisar(guardado, E.reglas) && !porRevisar(banco, E.reglas)) cambios.categoria = banco.categoria;
+      if (await D.actualizarMovimientos([guardado.id], cambios, 'juntar lo que apuntaste con el movimiento del banco')) { Object.assign(guardado, cambios); unidos++; }
+    }
     let quitados = 0;
     if (imp.caducados.length && await D.borrarMovimientos(imp.caducados.map(t => t.id), 'quitar los retenidos que ya no aparecen')) {
       E.txs = E.txs.filter(t => !imp.caducados.includes(t));
@@ -203,11 +240,12 @@ export const acciones = {
     const saldoNuevo = imp.saldo && await actualizarSaldo(E, imp.banco, imp.saldo);
     const partes = [];
     if (guardadas.length) partes.push(`${guardadas.length} movimientos importados`);
+    if (unidos) partes.push(`${unidos} ${unidos === 1 ? 'apuntado a mano juntado' : 'apuntados a mano juntados'} con el banco`);
     if (cobrados) partes.push(`${cobrados} ${cobrados === 1 ? 'retenido actualizado' : 'retenidos actualizados'}`);
     if (quitados) partes.push(`${quitados} ${quitados === 1 ? 'retenido quitado' : 'retenidos quitados'}`);
     if (saldoNuevo) partes.push(`saldo de ${nombreCuenta(imp.banco)} actualizado`);
     toast(partes.length ? partes.join(' · ') : 'No había nada nuevo');
-    location.hash = guardadas.length || cobrados ? '#/movimientos' : '#/inicio';
+    location.hash = guardadas.length || cobrados || unidos ? '#/movimientos' : '#/inicio';
   }
 };
 
@@ -218,6 +256,10 @@ export const entradas = {
 };
 
 export const cambios = {
+  'par-unir': (ctx, el) => {
+    const x = ctx.E.importacion?.pares?.[+el.dataset.i];
+    if (x) { x.unir = el.checked; ctx.pintar(); }
+  },
   'archivo': async (ctx, el) => {
     const { E } = ctx;
     const archivo = el.files[0];
@@ -235,8 +277,13 @@ export const cambios = {
         const guardadas = new Set(E.txs.map(D.claveMovimiento));
         const def = separarYaApuntados(c.definitivos.filter(t => !guardadas.has(D.claveMovimiento(t))), E.txs);
         const ret = separarYaApuntados(c.retenidosNuevos.filter(t => !guardadas.has(D.claveMovimiento(t))), E.txs);
+        // Lo apuntado a mano que ahora sale en el extracto se junta con su movimiento del banco
+        const m = r.tipo === 'efectivo' ? { quedan: [...def.quedan, ...ret.quedan], pares: [] }
+          : emparejarApuntados([...def.quedan, ...ret.quedan], E.txs, [...r.txs, ...retenidos]);
+        const nuevas = m.quedan.filter(t => !t.pendiente);
         E.importacion = {
-          ...r, nuevas: def.quedan, retenidosNuevos: ret.quedan, cobrados: c.cobrados, caducados: c.caducados,
+          ...r, nuevas, retenidosNuevos: m.quedan.filter(t => t.pendiente), cobrados: c.cobrados, caducados: c.caducados,
+          pares: m.pares.map(x => ({ ...x, unir: x.seguro })),
           deApplePay: def.repetidos.length + ret.repetidos.length,
           yaEstaban: r.txs.length - def.quedan.length - c.cobrados.length,
           retenidosSinColumna: E.conRetenidos ? 0 : (r.retenidos || []).length
@@ -282,11 +329,4 @@ async function actualizarSaldo(E, banco, saldo) {
   if (!fila) return false;
   E.cuentas = [...E.cuentas.filter(c => c.clave !== banco), fila];
   return true;
-}
-
-// La cuenta que más aparece en los movimientos (para lo que se apunta a mano con tarjeta)
-function cuentaHabitual(txs) {
-  const n = {};
-  txs.forEach(t => { if (t.cuenta && t.cuenta !== 'efectivo') n[t.cuenta] = (n[t.cuenta] || 0) + 1; });
-  return Object.entries(n).sort((a, b) => b[1] - a[1])[0]?.[0] || 'efectivo';
 }

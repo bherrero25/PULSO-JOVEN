@@ -17,6 +17,7 @@ create table if not exists public.pj_cuentas (
 );
 
 alter table public.pj_cuentas enable row level security;
+revoke all on table public.pj_cuentas from anon; -- sin sesión no hace falta (ver sql/2026-11-seguridad.sql)
 
 drop policy if exists "pj_cuentas: ver las propias" on public.pj_cuentas;
 drop policy if exists "pj_cuentas: crear las propias" on public.pj_cuentas;

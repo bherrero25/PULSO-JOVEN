@@ -74,6 +74,8 @@ Seguros, leasing, bonus anual, hipoteca, hijos ni patrimonio complejo.
 - El concepto de un Bizum o una transferencia lo escribe quien lo envía y llega en el extracto: todo dato que se pinte en HTML va con `esc()` (app nueva, `app.html` e `informe.html`), y `toast`/`mostrarAviso` usan `textContent`. Las tres páginas comparten origen (`bherrero25.github.io`) y sesión de Supabase en `localStorage`, así que un fallo en cualquiera expone la sesión de las otras. `pruebas/prueba_seguridad.py` lo comprueba.
 - `sql/revision-seguridad.sql` (solo lee): una fila por tabla/función/vista del esquema público con ✅/⚠️/❌ (RLS activado, políticas con `auth.uid()`, nada abierto con `true`, funciones con permisos especiales con `search_path` fijo).
 - En el repositorio público solo está la clave publicable (`sb_publishable_…`), nunca la de servicio.
+- `sql/2026-11-seguridad.sql`: quita a `anon` (sin sesión) todo permiso sobre las tablas y secuencias `pj_…` (la app siempre usa `authenticated`; el atajo funciona porque `pj_apuntar_pago` es `security definer`). Las tablas nuevas deben incluir `revoke all … from anon`. Revisión de nov. 2026: todas las tablas `pj_` con RLS y políticas por `auth.uid()`, Security Advisor sin errores.
+- El proyecto de Supabase lo comparte otra app (tablas `diet_plan_meals`, `exercise_logs`, `food_logs`, `profiles` y la función `handle_new_user`, con aviso de `search_path`): comparten usuarios (auth). No tocar sus objetos desde aquí. `pj_categorias` existe pero la app no la usa.
 
 ## Pruebas
 
@@ -83,7 +85,8 @@ Seguros, leasing, bonus anual, hipoteca, hijos ni patrimonio complejo.
 ## Pendiente antes de venderla
 
 - [ ] Atajo de Apple Pay compartible por enlace de iCloud (a medias, nov. 2026): un atajo suelto no ve los campos de la transacción (no hay tipo «Transaction»). Falta probar con un pago real si la automatización de Wallet, eligiendo un atajo ya instalado, le pasa importe y comercio como texto; si no, plan B: en la automatización, una acción «Text» con Amount y Merchant y «Run Shortcut». El atajo compartido llevará dirección, apikey y una pregunta de importación para el código.
-- [ ] Revisar a fondo RLS (cada usuario solo ve lo suyo)
+- [x] Revisar a fondo RLS (cada usuario solo ve lo suyo) — nov. 2026, ver «Seguridad»
+- [ ] Proyecto de Supabase propio para Pulso Joven (ahora comparte base y usuarios con otra app de dieta/ejercicio)
 - [ ] Probar importación con otros bancos (solo probado Bankinter)
 - [ ] Cobro del plan Pro (la portada lo anuncia, no existe)
 - [ ] Política de privacidad y condiciones (RGPD)

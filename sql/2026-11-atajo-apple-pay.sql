@@ -12,6 +12,7 @@ create table if not exists public.pj_codigos_atajo (
 );
 
 alter table public.pj_codigos_atajo enable row level security;
+revoke all on table public.pj_codigos_atajo from anon; -- sin sesión no hace falta (ver sql/2026-11-seguridad.sql)
 
 drop policy if exists "pj_codigos_atajo: ver el propio" on public.pj_codigos_atajo;
 drop policy if exists "pj_codigos_atajo: crear el propio" on public.pj_codigos_atajo;

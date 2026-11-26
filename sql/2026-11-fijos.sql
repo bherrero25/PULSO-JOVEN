@@ -20,6 +20,7 @@ create table if not exists public.pj_fijos (
 );
 
 alter table public.pj_fijos enable row level security;
+revoke all on table public.pj_fijos from anon; -- sin sesión no hace falta (ver sql/2026-11-seguridad.sql)
 
 drop policy if exists "pj_fijos: ver los propios" on public.pj_fijos;
 drop policy if exists "pj_fijos: crear los propios" on public.pj_fijos;

@@ -1275,7 +1275,7 @@ function renderTxs(txs) {
   const sel = document.getElementById('filtrar-cat');
   if (sel) {
     const val = sel.value;
-    sel.innerHTML = '<option value="">Todas las categorías</option>' + cats.map(c => `<option value="${c}" ${c === val ? 'selected' : ''}>${c}</option>`).join('');
+    sel.innerHTML = '<option value="">Todas las categorías</option>' + cats.map(c => `<option value="${esc(c)}" ${c === val ? 'selected' : ''}>${esc(c)}</option>`).join('');
   }
   filtrarTxs();
 }
@@ -1345,9 +1345,9 @@ function renderListaTxs(txs) {
   el.innerHTML = txs.map(t => `
     <div class="tx-row" id="tx-row-${t.id}">
       <div class="tx-left">
-        <div class="tx-icon">${getIconoCat(t.categoria)}</div>
+        <div class="tx-icon">${esc(getIconoCat(t.categoria))}</div>
         <div>
-          <div class="tx-desc">${t.descripcion}${t.tipo === 'liquidacion_tarjeta' ? '<span class="badge-liq">compensado</span>' : ''}</div>
+          <div class="tx-desc">${esc(t.descripcion)}${t.tipo === 'liquidacion_tarjeta' ? '<span class="badge-liq">compensado</span>' : ''}</div>
           <div class="tx-meta">
             <input type="date" value="${t.fecha}" onchange="cambiarFecha('${t.id}', this.value)" style="background:transparent;border:none;border-bottom:1px solid var(--border);color:var(--text3);font-size:11px;font-family:'DM Sans',sans-serif;outline:none;padding:1px 0;cursor:pointer;">
             <select onchange="cambiarMedio('${t.id}', this.value)" style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:2px 6px;color:var(--text3);font-size:10px;font-family:'DM Sans',sans-serif;outline:none;margin-left:6px;">
@@ -1356,12 +1356,12 @@ function renderListaTxs(txs) {
               <option value="bizum" ${t.medio==='bizum'?'selected':''}>📱 Bizum</option>
               <option value="efectivo" ${t.medio==='efectivo'?'selected':''}>💵 Efectivo</option>
             </select>
-            ${t.cuenta && t.cuenta !== 'principal' ? `<span style="font-size:9px;background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:1px 6px;margin-left:4px;color:var(--text3);">${t.cuenta}</span>` : ''}
+            ${t.cuenta && t.cuenta !== 'principal' ? `<span style="font-size:9px;background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:1px 6px;margin-left:4px;color:var(--text3);">${esc(t.cuenta)}</span>` : ''}
           </div>
           <div style="display:flex;align-items:center;gap:6px;margin-top:4px;flex-wrap:wrap;">
             <select onchange="cambiarCategoriaSelect('${t.id}', this)" style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:3px 6px;color:var(--text2);font-size:11px;font-family:'DM Sans',sans-serif;outline:none;">
               ${CATS.map(c => `<option value="${c}" ${c === t.categoria ? 'selected' : ''}>${c}</option>`).join('')}
-              ${!CATS.includes(t.categoria) ? `<option value="${t.categoria}" selected>${t.categoria}</option>` : ''}
+              ${!CATS.includes(t.categoria) ? `<option value="${esc(t.categoria)}" selected>${esc(t.categoria)}</option>` : ''}
             </select>
             <input id="cat-custom-${t.id}" placeholder="Escribe categoría..." onkeydown="if(event.key==='Enter')guardarCatCustom('${t.id}',this.value)" style="display:none;background:var(--surface);border:1px solid rgba(200,241,53,0.3);border-radius:8px;padding:3px 8px;color:var(--text);font-size:11px;font-family:'DM Sans',sans-serif;outline:none;width:140px;">
           </div>
@@ -1433,8 +1433,8 @@ function renderInicio(txs) {
   el.innerHTML = ultimas.map(t => `
     <div class="tx-mini">
       <div class="tx-mini-left">
-        <div class="tx-mini-icon">${getIconoCat(t.categoria)}</div>
-        <div><div class="tx-mini-desc">${t.descripcion}</div><div class="tx-mini-cat">${t.categoria.split(' ').slice(1).join(' ')}</div></div>
+        <div class="tx-mini-icon">${esc(getIconoCat(t.categoria))}</div>
+        <div><div class="tx-mini-desc">${esc(t.descripcion)}</div><div class="tx-mini-cat">${esc(t.categoria.split(' ').slice(1).join(' '))}</div></div>
       </div>
       <div class="tx-mini-amount ${t.tipo === 'gasto' ? 'neg' : 'pos'}">${t.tipo === 'gasto' ? '−' : '+'}${fmt(t.importe)}</div>
     </div>`).join('');
@@ -1559,7 +1559,7 @@ async function cargarPresupuestos() {
     const etiqueta = pct >= 100 ? '⚠️ Superado' : pct >= 80 ? '⚡ Cuidado' : '✅ Bien';
     return `<div class="pres-row">
       <div class="pres-header">
-        <div class="pres-cat">${p.categoria}</div>
+        <div class="pres-cat">${esc(p.categoria)}</div>
         <div class="pres-nums">${fmt(gastado)} / ${fmt(p.limite)}</div>
       </div>
       <div class="pres-track"><div class="pres-fill ${estado}" style="width:${pct}%"></div></div>
@@ -1606,7 +1606,7 @@ async function cargarMetas() {
     const diasRestantes = m.fecha_limite ? Math.ceil((new Date(m.fecha_limite) - new Date()) / 86400000) : null;
     return `<div class="meta-card">
       <div class="meta-header">
-        <div class="meta-title"><span class="meta-emoji">${m.emoji}</span>${m.nombre}</div>
+        <div class="meta-title"><span class="meta-emoji">${esc(m.emoji)}</span>${esc(m.nombre)}</div>
         ${diasRestantes !== null ? `<div class="meta-date">Faltan ${diasRestantes} días</div>` : ''}
       </div>
       <div class="meta-track"><div class="meta-fill" style="width:${pct}%"></div></div>

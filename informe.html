@@ -175,6 +175,9 @@ function destruirGraficos() {
   chartInstances = {};
 }
 
+// El concepto de un movimiento puede venir de otra persona (el de un Bizum o una transferencia): siempre como texto
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
 async function cargarInforme() {
   destruirGraficos();
   const mes = document.getElementById('sel-mes').value;
@@ -354,8 +357,8 @@ async function cargarInforme() {
           ${txsMes.map(t => `
             <tr>
               <td style="color:var(--text3);white-space:nowrap">${fmtFecha(t.fecha)}</td>
-              <td>${t.descripcion}</td>
-              <td>${t.categoria || '—'}</td>
+              <td>${esc(t.descripcion)}</td>
+              <td>${esc(t.categoria || '—')}</td>
               <td style="color:var(--text3)">${t.medio === 'efectivo' ? '💵' : t.medio === 'tarjeta' ? '💳' : t.medio === 'bizum' ? '📱' : '🏦'} ${t.medio || 'transferencia'}</td>
               <td style="text-align:right" class="${t.tipo === 'gasto' ? 'amount-neg' : t.tipo === 'liquidacion_tarjeta' ? 'amount-liq' : 'amount-pos'}">
                 ${t.tipo === 'gasto' ? '−' : t.tipo === 'liquidacion_tarjeta' ? '≈' : '+'}${fmt(t.importe)}

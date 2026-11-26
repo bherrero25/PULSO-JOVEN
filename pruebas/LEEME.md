@@ -35,6 +35,7 @@ Si sale **✗**, algo se ha roto: no se publica hasta arreglarlo. Las capturas d
 | `prueba_cuentas.py` | Varias cuentas: número del extracto, cuenta nueva, traspaso entre cuentas, cuenta al apuntar y filtro |
 | `prueba_nombres.py` | Nombres limpios en la lista, concepto original al abrir, buscador y forma de pago al importar |
 | `prueba_icono.py` | Manifiesto e iconos |
+| `prueba_seguridad.py` | Conceptos, nombres y avisos con código dentro no se ejecutan en la app nueva, la antigua ni el informe |
 | `sql/ejecutar_sql.sh` | Los textos de `sql/` en una base desechable: se pueden repetir y cada persona solo ve lo suyo |
 
 ## Cómo están hechas

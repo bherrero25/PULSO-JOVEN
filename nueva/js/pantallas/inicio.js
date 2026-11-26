@@ -29,7 +29,7 @@ export function render(E) {
   const anterior = sumarMeses(E.mes, -1);
   const antHastaHoy = gastoHastaDia(E.txs, anterior, ritmo.dia);
   const difGasto = R.totalGastos - antHastaHoy;
-  const fuentes = porCategoria(R.ingresos).slice(0, 3).map(g => `${g.cat.nombre.toLowerCase()} ${fmt0(g.total)}`).join(' · ');
+  const fuentes = porCategoria(R.ingresos).slice(0, 3).map(g => `${esc(g.cat.nombre.toLowerCase())} ${fmt0(g.total)}`).join(' · ');
   const mayor = R.gastos.reduce((m, t) => !m || +t.importe > +m.importe ? t : m, null);
 
   const ultimos = [...R.movs].sort((a, b) => b.fecha.localeCompare(a.fecha)).slice(0, 5);

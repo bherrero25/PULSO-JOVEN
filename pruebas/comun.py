@@ -43,6 +43,7 @@ def _cdn(route):
     url = route.request.url
     if 'supabase-js' in url: return route.fulfill(path=os.path.join(LIBS, '@supabase/supabase-js/dist/umd/supabase.js'), content_type='text/javascript')
     if 'xlsx' in url: return route.fulfill(path=os.path.join(LIBS, 'xlsx/dist/xlsx.full.min.js'), content_type='text/javascript')
+    if 'chart.js' in url: return route.fulfill(path=os.path.join(LIBS, 'chart.js/dist/chart.umd.js'), content_type='text/javascript')
     route.abort()
 
 

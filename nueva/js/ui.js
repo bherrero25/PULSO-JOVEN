@@ -4,7 +4,8 @@ import { ic } from './iconos.js';
 
 export function mostrarAviso(texto) {
   const el = document.getElementById('aviso-error');
-  el.innerHTML = ic('alerta') + `<span>${texto}</span>`;
+  el.innerHTML = ic('alerta') + '<span></span>';
+  el.lastElementChild.textContent = texto; // siempre como texto, nunca como HTML
   el.classList.add('visible');
   el.onclick = () => el.classList.remove('visible');
   clearTimeout(mostrarAviso.t);
@@ -13,7 +14,8 @@ export function mostrarAviso(texto) {
 
 export function toast(texto) {
   const el = document.getElementById('toast');
-  el.innerHTML = `<span class="lima">${ic('ok')}</span><span>${texto}</span>`;
+  el.innerHTML = `<span class="lima">${ic('ok')}</span><span></span>`;
+  el.lastElementChild.textContent = texto; // siempre como texto: puede llevar nombres de cuentas, metas o movimientos
   el.classList.add('visible');
   clearTimeout(toast.t);
   toast.t = setTimeout(() => el.classList.remove('visible'), 2800);

@@ -215,14 +215,24 @@ export async function cambiarCodigoAtajo() {
 }
 
 // ─── TU DINERO ───
-// Cuentas a mano (efectivo, ahorro…): se crean o cambian con el saldo de hoy
-export async function guardarCuenta({ id, nombre, tipo, saldo, fecha_saldo }) {
+// Cuentas a mano (efectivo, ahorro…): se crean o cambian con el saldo de hoy. Una de banco añadida a mano lleva su clave
+// (banco·4 últimas cifras), para que su extracto la reconozca; la clave no se cambia después.
+export async function guardarCuenta({ id, nombre, tipo, saldo, fecha_saldo, clave }) {
   const fila = { nombre, tipo, saldo, fecha_saldo };
-  if (demo) return { ...fila, id: id || 'd' + idDemo++ };
+  if (demo) return { ...fila, id: id || 'd' + idDemo++, ...(id ? {} : { clave: clave || null, principal: false }) };
   const { data, error } = id
     ? await sb.from('pj_cuentas').update(fila).eq('id', id).select().single()
-    : await sb.from('pj_cuentas').insert({ user_id: uid, ...fila }).select().single();
+    : await sb.from('pj_cuentas').insert({ user_id: uid, ...fila, ...(clave ? { clave } : {}) }).select().single();
   return avisarError(error, 'guardar la cuenta') ? null : data;
+}
+
+// Cuenta principal: como mucho una por persona, así que primero se quita a las demás
+export async function marcarPrincipal(id) {
+  if (demo) return true;
+  let { error } = await sb.from('pj_cuentas').update({ principal: false }).eq('user_id', uid).neq('id', id);
+  if (avisarError(error, 'cambiar la cuenta principal')) return false;
+  ({ error } = await sb.from('pj_cuentas').update({ principal: true }).eq('id', id));
+  return !avisarError(error, 'cambiar la cuenta principal');
 }
 
 // Saldo del banco leído del extracto: una cuenta por banco (clave = 'bankinter', 'bbva'…)

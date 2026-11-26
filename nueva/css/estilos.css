@@ -43,6 +43,7 @@ h1, h2, h3, p { margin: 0; }
 .ic-s { width: 17px; height: 17px; }
 .ic-l { width: 24px; height: 24px; }
 .solo-lector { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+[hidden] { display: none !important; }
 .sin-scroll { scrollbar-width: none; }
 .sin-scroll::-webkit-scrollbar { display: none; }
 .cargando { display: flex; align-items: center; justify-content: center; min-height: 100vh; color: var(--texto-3); }

@@ -1,7 +1,7 @@
 // Añadir: a mano con teclado, subiendo el extracto del banco o (más adelante) de forma automática
 
 import { ic } from '../iconos.js';
-import { esc, fmt, hoyISO, fechaCorta, RAPIDAS_GASTO, RAPIDAS_INGRESO, categoriaPorId, MEDIOS, nombreCuenta, infoCategoria, conciliarRetenidos, porRevisar, emparejarApuntados, CUENTA_MANUAL, BD, cuentaParaExtracto, detectarTraspasos, cuentasBanco, cuentaManual, cuentaPrincipal, claveCuentaBanco, esClaveBanco } from '../logica.js';
+import { esc, fmt, hoyISO, fechaCorta, RAPIDAS_GASTO, RAPIDAS_INGRESO, categoriaPorId, MEDIOS, nombreCuenta, infoCategoria, conciliarRetenidos, porRevisar, emparejarApuntados, CUENTA_MANUAL, BD, cuentaParaExtracto, detectarTraspasos, cuentasBanco, cuentaManual, cuentaPrincipal, claveCuentaBanco, esClaveBanco, numeroDeClave, bancoDeClave } from '../logica.js';
 import { ficha, conceptoVisible } from '../componentes.js';
 import { toast, abrirHoja, cabeceraHoja, confirmar } from '../ui.js';
 import * as D from '../datos.js';
@@ -24,9 +24,9 @@ export function nuevoMovimiento({ tipo, medio } = {}) {
 function selectorCuenta(E, n) {
   const bancos = cuentasBanco(E.cuentas);
   if (bancos.length < 2 || n.medio === 'efectivo') return '';
-  const elegida = n.cuentaBanco || cuentaPrincipal(bancos).clave;
+  const principal = cuentaPrincipal(bancos).clave, elegida = n.cuentaBanco || principal;
   return `<label class="campo" style="gap:4px"><span class="solo-lector">Cuenta</span><select data-entrada="cuenta-nuevo" aria-label="Cuenta">
-    ${bancos.map(c => `<option value="${esc(c.clave)}"${c.clave === elegida ? ' selected' : ''}>Cuenta: ${esc(c.nombre)}</option>`).join('')}</select></label>`;
+    ${bancos.map(c => `<option value="${esc(c.clave)}"${c.clave === elegida ? ' selected' : ''}>Cuenta: ${esc(c.nombre)}${c.clave === principal ? ' (principal)' : ''}</option>`).join('')}</select></label>`;
 }
 
 function textosNuevo(n) {
@@ -384,10 +384,13 @@ export const cambios = {
     let destino;
     if (el.value === '__nueva') destino = { ...d.nuevaPropuesta, ...base };
     else {
-      const o = d.opciones.find(x => x.clave === el.value);
-      // La cuenta antigua sin número adopta el del archivo, si ninguna otra lo tiene ya
-      const numero = imp.bruto.fin && o.clave === imp.bruto.banco && !d.opciones.some(x => x.clave === claveCuentaBanco(imp.bruto.banco, imp.bruto.fin));
-      destino = { clave: o.clave, nombre: o.nombre, ...(numero ? { adoptar: claveCuentaBanco(imp.bruto.banco, imp.bruto.fin) } : {}), ...base };
+      const o = d.opciones.find(x => x.clave === el.value), fin = imp.bruto.fin;
+      // Adopta el número del archivo, si ninguna otra cuenta lo tiene ya: la cuenta antigua sin número, o una añadida a mano
+      // que aún no tiene extractos (por si se escribió mal el número)
+      const libre = fin && !cuentasBanco(E.cuentas).some(x => numeroDeClave(x.clave) === fin);
+      const puede = !numeroDeClave(o.clave) ? o.clave === imp.bruto.banco : !E.txs.some(t => t.cuenta === o.clave);
+      const adoptar = libre && puede ? claveCuentaBanco(bancoDeClave(o.clave), fin) : null;
+      destino = { clave: o.clave, nombre: o.nombre, ...(adoptar ? { adoptar } : {}), ...base };
     }
     E.importacion = prepararImportacion(E, imp.bruto, imp.retenidosBrutos, destino);
     ctx.pintar();

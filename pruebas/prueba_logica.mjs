@@ -65,7 +65,7 @@ prueba('juntar: lo apuntado para otra cuenta no se junta con este extracto', () 
 
 // ── Varias cuentas ──
 const movs = [{ fecha: '2026-11-10', descripcion: 'MERCADONA', importe: 20 }, { fecha: '2026-11-20', descripcion: 'NOMINA', importe: 900 }];
-const c = (clave, nombre, fecha_saldo = '2026-11-01') => ({ id: clave, clave, nombre, fecha_saldo });
+const c = (clave, nombre, fecha_saldo = '2026-11-01', extra = {}) => ({ id: clave, clave, nombre, fecha_saldo, ...extra });
 prueba('cuentas: sin cuentas y con número, cuenta nueva con el nombre del banco', () => {
   const r = L.cuentaParaExtracto([], [], { banco: 'bankinter', fin: '1234', movs });
   assert.equal(r.clave, 'bankinter·1234'); assert.ok(r.nueva); assert.equal(r.nombre, 'Bankinter');
@@ -78,9 +78,29 @@ prueba('cuentas: si la antigua no coincide, propone una nueva y pregunta', () =>
   const r = L.cuentaParaExtracto([c('bankinter', 'Bankinter')], [{ cuenta: 'bankinter', fecha: '2026-11-12', descripcion: 'ZARA', importe: 30 }], { banco: 'bankinter', fin: '1234', movs });
   assert.ok(r.nueva && r.preguntar);
 });
-prueba('cuentas: sin número y con dos cuentas del banco, pregunta', () => {
-  const r = L.cuentaParaExtracto([c('bbva', 'BBVA', '2026-11-20'), c('bbva·2', 'Ahorro', '2026-11-22')], [], { banco: 'bbva', fin: null, movs });
+prueba('cuentas: sin número y con dos cuentas del banco, pregunta (y propone la principal)', () => {
+  const r = L.cuentaParaExtracto([c('bbva', 'BBVA', '2026-11-20'), c('bbva·2', 'Ahorro', '2026-11-22', { principal: true })], [], { banco: 'bbva', fin: null, movs });
   assert.ok(r.preguntar); assert.equal(r.clave, 'bbva·2');
+});
+prueba('principal: la elegida; si no hay, la más antigua, aunque otra tenga el extracto más reciente', () => {
+  const vieja = c('bankinter·1234', 'Nómina', '2026-11-01', { creada: '2026-09-01' }), nueva = c('bankinter·5678', 'Ahorro', '2026-11-25', { creada: '2026-11-20' });
+  assert.equal(L.cuentaPrincipal([nueva, vieja]).clave, 'bankinter·1234');
+  assert.equal(L.cuentaPrincipal([vieja, { ...nueva, principal: true }]).clave, 'bankinter·5678');
+  assert.equal(L.cuentaPrincipal([{ clave: null, nombre: 'Efectivo' }]), null);
+});
+prueba('cuentas: una cuenta añadida a mano se reconoce por su número aunque el archivo sea de otro formato', () => {
+  const r = L.cuentaParaExtracto([c('bankinter·1234', 'Nómina'), c('bbva·5678', 'Cuenta joven')], [], { banco: 'generico', fin: '5678', entidad: '0182', movs });
+  assert.equal(r.clave, 'bbva·5678'); assert.ok(!r.nueva && !r.preguntar);
+});
+prueba('cuentas: archivo sin número de un banco sin cuentas, con una añadida a mano sin extracto: pregunta y la propone', () => {
+  const txs = [{ cuenta: 'bankinter·1234', fecha: '2026-11-02', descripcion: 'X', importe: 1 }];
+  const r = L.cuentaParaExtracto([c('bankinter·1234', 'Nómina'), c('bbva·5678', 'Cuenta joven')], txs, { banco: 'santander', fin: null, movs });
+  assert.ok(r.preguntar); assert.equal(r.clave, 'bbva·5678');
+  assert.deepEqual(r.opciones.map(o => o.clave), ['bbva·5678']);
+});
+prueba('cuentas: otro número con una cuenta sin extracto: propone una nueva pero pregunta', () => {
+  const r = L.cuentaParaExtracto([c('bbva·5678', 'Cuenta joven')], [], { banco: 'bbva', fin: '9999', movs });
+  assert.ok(r.nueva && r.preguntar); assert.ok(r.opciones.some(o => o.clave === 'bbva·5678'));
 });
 prueba('cuentas: banco desconocido toma el nombre de la entidad del IBAN', () => {
   assert.equal(L.cuentaParaExtracto([], [], { banco: 'generico', fin: '9876', entidad: '1465', movs }).nombre, 'ING');
@@ -130,6 +150,14 @@ prueba('nombres: transferencias y Bizum dicen de quién o a quién, con tildes',
   assert.equal(limpio('TRANSFERENCIA A FAVOR DE ANA MARTINEZ'), 'Transferencia a Ana Martínez');
   assert.equal(limpio('BIZUM DE LUCIA GARCIA', 'ingreso'), 'Bizum de Lucía García');
   assert.equal(limpio('PAGO BIZUM A LUCIA'), 'Bizum a Lucía');
+});
+prueba('nombres: los nombres que empiezan por A y «desde» no pierden letras', () => {
+  assert.equal(limpio('BIZUM ANA GARCIA', 'ingreso'), 'Bizum de Ana García');
+  assert.equal(limpio('TRANSFERENCIA ANTONIO PEREZ', 'ingreso'), 'Transferencia de Antonio Pérez');
+  assert.equal(limpio('TRASPASO DESDE CUENTA', 'ingreso'), 'Traspaso de Cuenta');
+  assert.equal(limpio('TRASPASO AHORRO'), 'Traspaso a Ahorro');
+  assert.equal(limpio('TRANSFERENCIA INMA GARCIA', 'ingreso'), 'Transferencia de Inma García');
+  assert.equal(limpio('TRANSPORTES METROPOLITANOS'), 'Transportes Metropolitanos');
 });
 prueba('nombres: casos especiales y fechas', () => {
   assert.equal(limpio('REINTEGRO CAJERO 4B 14/11'), 'Retirada en cajero');

@@ -15,7 +15,7 @@ export function pasos(E) {
   const lista = [{ titulo: 'Trae tus movimientos', hecho: conMovimientos(E), texto: 'Sube el extracto de tu banco (Excel o CSV) o apunta a mano lo que gastas.',
     botones: [{ href: '#/anadir?pestana=extracto', texto: 'Subir extracto' }, { href: '#/anadir?pestana=mano', texto: 'Apuntar a mano' }] }];
   if (E.cuentas) lista.push({ titulo: 'Cuánto tienes', hecho: E.cuentas.length > 0, texto: 'Añade lo que tienes en efectivo o ahorrado. El saldo del banco se pone solo al subir el extracto.',
-    botones: [{ accion: 'editar-cuenta', texto: 'Añadir efectivo o ahorro' }] });
+    botones: [{ accion: 'editar-cuenta', texto: 'Añadir una cuenta' }] });
   if (E.fijos) lista.push({ titulo: 'Lo que llega o pagas cada mes', hecho: E.fijos.length > 0, texto: 'La mensualidad, la nómina, una beca, el alquiler… Se apuntarán solos cada mes.',
     botones: [{ accion: 'gestionar-fijos', texto: 'Configurar' }] });
   lista.push({ titulo: 'Un presupuesto', hecho: E.presupuestos.length > 0, texto: 'Pon un límite a lo que más te importa controlar: comida, ocio, ropa…',

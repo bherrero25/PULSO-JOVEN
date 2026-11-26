@@ -198,7 +198,7 @@ const generales = {
 const ctx = { E, pintar };
 const ACCIONES = { ...generales, ...movimientos.acciones, ...anadir.acciones, ...resumen.acciones, ...planes.acciones, ...dinero.acciones, ...fijos.acciones, ...primeros.acciones };
 const ENTRADAS = { ...movimientos.entradas, ...anadir.entradas, ...planes.entradas };
-const CAMBIOS = { ...movimientos.cambios, ...anadir.cambios };
+const CAMBIOS = { ...movimientos.cambios, ...anadir.cambios, ...dinero.cambios };
 
 document.addEventListener('click', e => {
   const el = e.target.closest('[data-accion]');

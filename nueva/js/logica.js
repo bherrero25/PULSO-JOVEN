@@ -304,9 +304,10 @@ export function nombreLimpio(t) {
   if (proc) { if (/^p(aypal|p)/i.test(proc[1])) pago = ' (PayPal)'; s = s.slice(proc[0].length); }
   const d = s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   const sentido = t.tipo === 'ingreso' ? 'de' : 'a';
-  let m = d.match(/^(pago\s+)?bizum\s*(enviado|recibido)?\s*(de|a|desde|para)?\s*/);
+  // La preposición solo si va suelta: en «Bizum Ana» o «Traspaso desde…», la A y el «de» son parte de otra palabra
+  let m = d.match(/^(pago\s+)?bizum\s*(enviado|recibido)?\s*(?:(desde|para|de|a)(?=\s|$))?\s*/);
   if (m) { const r = titulo(s.slice(m[0].length)); return r ? `Bizum ${sentido} ${r}` : 'Bizum'; }
-  m = d.match(/^(transf(erencia)?|trans|traspaso|tr)\.?\s*(inm(ediata)?|sepa|recibida|emitida|periodica)?\s*[\/:.-]?\s*(a favor de|de|desde|a|para)?\s*/);
+  m = d.match(/^(transf(erencia)?|trans|traspaso|tr)(?=[\s.\/:-]|$)\.?\s*(?:(inm(ediata)?|sepa|recibida|emitida|periodica)(?=[\s.\/:-]|$))?\s*[\/:.-]?\s*(?:(a favor de|desde|para|de|a)(?=\s|$))?\s*/);
   if (m && (m[1] !== 'tr' || m[0].length > 3)) {
     const r = titulo(s.slice(m[0].length).replace(/^[\s\/:.-]+/, ''));
     const tipo = m[1] === 'traspaso' ? 'Traspaso' : 'Transferencia';
@@ -433,8 +434,21 @@ export const bancoDeClave = clave => String(clave || '').split('·')[0];
 export const cuentasBanco = cuentas => (cuentas || []).filter(c => c.clave);
 // Si el valor de «cuenta» de un movimiento es una cuenta de banco (y no efectivo, a mano, Apple Pay, previsto o tarjeta de crédito)
 export const esClaveBanco = c => !!c && !['manual', 'efectivo', 'apple_pay', 'previsto', 'principal'].includes(c) && !String(c).startsWith('manual:') && !String(c).endsWith('_tarjeta');
-// La cuenta de banco con el extracto más reciente: a ella va lo que no dice a qué cuenta pertenece
-export const cuentaPrincipal = cuentas => cuentasBanco(cuentas).sort((a, b) => String(b.fecha_saldo).localeCompare(String(a.fecha_saldo)))[0] || null;
+// La cuenta principal: la que elige cada persona (pj_cuentas.principal) o, si no ha elegido, la primera que tuvo (la más
+// antigua), que no cambia al subir el extracto de otra. Viene elegida al apuntar a mano, y a ella va lo que no dice a qué
+// cuenta pertenece (lo apuntado sin cuenta y los pagos de Apple Pay).
+export const cuentaPrincipal = cuentas => {
+  const bancos = cuentasBanco(cuentas);
+  return bancos.find(c => c.principal) || bancos.sort((a, b) => String(a.creada || '9').localeCompare(String(b.creada || '9')))[0] || null;
+};
+// Si la base de datos ya tiene la columna para elegirla (sql/2026-11-cuenta-principal.sql)
+export const sePuedeElegirPrincipal = cuentas => (cuentas || []).some(c => 'principal' in c);
+// Las 4 últimas cifras de la cuenta, si la clave las tiene ('bankinter·1234' → '1234')
+export const numeroDeClave = clave => (String(clave || '').match(/·(\d{4})$/) || [])[1] || null;
+// Bancos para añadir una cuenta a mano. La clave es la que pone la app al leer su extracto ('generico' para los demás);
+// en cualquier caso, el extracto la reconoce por sus 4 últimas cifras.
+export const BANCOS = [['bankinter', 'Bankinter'], ['bbva', 'BBVA'], ['santander', 'Santander'], ['caixabank', 'CaixaBank'], ['ing', 'ING'],
+  ['revolut', 'Revolut'], ['n26', 'N26'], ['generico', 'Otro banco']];
 const ENTIDADES = { '0128': 'Bankinter', '0182': 'BBVA', '0049': 'Santander', '2100': 'CaixaBank', '1465': 'ING', '0081': 'Sabadell', '0073': 'Openbank', '2085': 'Ibercaja', '2095': 'Kutxabank', '2103': 'Unicaja', '3058': 'Cajamar', '0239': 'EVO Banco' };
 
 // De qué cuenta es un extracto. Devuelve { clave, nombre, nueva, adoptar, preguntar, opciones }:
@@ -451,9 +465,15 @@ export function cuentaParaExtracto(cuentas, txs, { banco, fin, entidad, movs }) 
   };
   const nueva = { clave: libre(), nombre: delBanco.length ? `${nombreBanco}${fin ? ` ···${fin}` : ' (otra cuenta)'}` : nombreBanco, nueva: true };
   const opciones = delBanco.map(c => ({ clave: c.clave, nombre: c.nombre }));
+  // Cuentas añadidas a mano que aún no tienen ningún extracto: si no se sabe de cuál es el archivo, se ofrecen
+  const sinExtracto = cuentasBanco(cuentas).filter(c => !txs.some(t => t.cuenta === c.clave));
+  const conSinExtracto = [...opciones, ...sinExtracto.filter(c => !delBanco.includes(c)).map(c => ({ clave: c.clave, nombre: c.nombre }))];
   if (fin) {
     const exacta = delBanco.find(c => c.clave === claveCuentaBanco(banco, fin));
     if (exacta) return { clave: exacta.clave, nombre: exacta.nombre, opciones };
+    // Mismo número en una cuenta de otro banco: la añadida a mano con otro banco, o un archivo con un formato que no es el suyo
+    const porNumero = cuentasBanco(cuentas).filter(c => numeroDeClave(c.clave) === fin);
+    if (porNumero.length === 1) return { clave: porNumero[0].clave, nombre: porNumero[0].nombre, opciones };
     const antigua = delBanco.find(c => c.clave === banco);
     if (antigua) {
       // ¿Es la misma? Si la antigua tiene movimientos en esas fechas y ninguno coincide con el archivo, es otra cuenta
@@ -463,10 +483,14 @@ export function cuentaParaExtracto(cuentas, txs, { banco, fin, entidad, movs }) 
       const coincide = suyos.some(t => claves.has(claveMovimiento(t))), misma = !suyos.length || coincide;
       return { ...(misma ? { clave: banco, nombre: antigua.nombre, adoptar: claveCuentaBanco(banco, fin) } : nueva), preguntar: !coincide, opciones, nuevaPropuesta: nueva };
     }
-    return { ...nueva, opciones, nuevaPropuesta: nueva }; // otro número: es otra cuenta
+    // Otro número: es otra cuenta (si hay alguna añadida a mano sin extracto, se pregunta por si es esa)
+    return { ...nueva, opciones: conSinExtracto, preguntar: sinExtracto.length > 0, nuevaPropuesta: nueva };
   }
   if (delBanco.length === 1) return { clave: delBanco[0].clave, nombre: delBanco[0].nombre, opciones };
-  if (!delBanco.length) return { ...nueva, opciones, nuevaPropuesta: nueva };
+  if (!delBanco.length) {
+    if (!sinExtracto.length) return { ...nueva, opciones, nuevaPropuesta: nueva };
+    return { clave: sinExtracto[0].clave, nombre: sinExtracto[0].nombre, preguntar: true, opciones: conSinExtracto, nuevaPropuesta: nueva };
+  }
   const principal = cuentaPrincipal(delBanco);
   return { clave: principal.clave, nombre: principal.nombre, preguntar: true, opciones, nuevaPropuesta: nueva };
 }

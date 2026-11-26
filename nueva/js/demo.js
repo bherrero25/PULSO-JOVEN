@@ -68,8 +68,8 @@ export function datosDemo() {
     { id: 'm3', nombre: 'Colchón para imprevistos', emoji: '🛟', objetivo: 1000, ahorrado: 520, fecha_limite: null }
   ];
   const cuentas = [
-    { id: 'c1', nombre: 'Bankinter', tipo: 'banco', clave: 'bankinter', saldo: 1234.56, fecha_saldo: hoyISO(-4) },
-    { id: 'c2', nombre: 'Efectivo ahorrado', tipo: 'efectivo', clave: null, saldo: 600, fecha_saldo: hoyISO(-10) }
+    { id: 'c1', nombre: 'Bankinter', tipo: 'banco', clave: 'bankinter', saldo: 1234.56, fecha_saldo: hoyISO(-4), principal: false },
+    { id: 'c2', nombre: 'Efectivo ahorrado', tipo: 'efectivo', clave: null, saldo: 600, fecha_saldo: hoyISO(-10), principal: false }
   ];
   // Lo que le llega cada mes: ya están los de este mes, así que la demo no crea previstos al abrirse
   const fijos = [

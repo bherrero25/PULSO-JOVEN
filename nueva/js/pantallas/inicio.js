@@ -1,7 +1,7 @@
 // Inicio: de un vistazo, lo que te queda, lo que ha entrado y salido, cómo van los presupuestos y la meta más cercana
 
 import { ic } from '../iconos.js';
-import { esc, fmt, fmt0, nombreMes, resumenMes, ritmoDelMes, estadoPresupuestos, porRevisar, gastoHastaDia, sumarMeses, porCategoria, hoyISO, fechaCorta, TIPOS_CUENTA, totalCuentas, saldoDisponible } from '../logica.js';
+import { esc, fmt, fmt0, nombreMes, resumenMes, ritmoDelMes, estadoPresupuestos, porRevisar, gastoHastaDia, sumarMeses, porCategoria, hoyISO, fechaCorta, TIPOS_CUENTA, totalCuentas, saldoDisponible, cuentasBanco, cuentaPrincipal } from '../logica.js';
 import { selectorMes, filaMovimiento, ficha, barraPresupuesto, textoEstado, inicial, conceptoVisible } from '../componentes.js';
 import * as primeros from './primeros.js';
 import * as D from '../datos.js';
@@ -133,7 +133,7 @@ function tarjetaDinero(E) {
   if (!E.cuentas.length) {
     return `<section class="tarjeta" aria-label="Tu dinero">${cab}
       <p class="nota">Apunta cuánto tienes. El saldo del banco se pone solo al importar el extracto; el efectivo y los ahorros los añades tú. No cuenta como ingreso de ningún mes.</p>
-      <button type="button" class="boton suave peq" data-accion="editar-cuenta" data-id="">${ic('mas')}Añadir efectivo o ahorro</button></section>`;
+      <button type="button" class="boton suave peq" data-accion="editar-cuenta" data-id="">${ic('mas')}Añadir una cuenta</button></section>`;
   }
   const filas = [...E.cuentas].sort((a, b) => parseFloat(b.saldo) - parseFloat(a.saldo)).map(c => filaCuenta(c, E.txs, false, E.cuentas)).join('');
   const total = totalCuentas(E.cuentas, E.txs);
@@ -146,9 +146,10 @@ function tarjetaDinero(E) {
 export function filaCuenta(c, txs, conFlecha = false, cuentas = [c]) {
   const [tipo, icono] = TIPOS_CUENTA[c.tipo] || TIPOS_CUENTA.efectivo;
   const s = saldoDisponible(c, txs, cuentas);
+  const principal = c.clave && cuentasBanco(cuentas).length > 1 && cuentaPrincipal(cuentas)?.id === c.id;
   return `<button type="button" class="fila" data-accion="editar-cuenta" data-id="${esc(c.id)}">
     <span class="ficha">${ic(icono)}</span>
-    <span class="cuerpo"><span class="concepto">${esc(c.nombre)}</span><span class="detalle">${tipo} · a ${fechaCorta(c.fecha_saldo)}${s.retenido > 0 ? ` · ${fmt(s.retenido)} retenido` : ''}${s.apuntado ? ` · ${fmt(s.apuntado, true)} apuntado después` : ''}</span></span>
+    <span class="cuerpo"><span class="concepto">${esc(c.nombre)}</span><span class="detalle">${tipo}${principal ? ' · principal' : ''} · a ${fechaCorta(c.fecha_saldo)}${s.retenido > 0 ? ` · ${fmt(s.retenido)} retenido` : ''}${s.apuntado ? ` · ${fmt(s.apuntado, true)} apuntado después` : ''}</span></span>
     <span class="importe num">${s.disponible < 0 ? '−' : ''}${fmt(s.disponible)}</span>${conFlecha ? ic('derecha', 'ic-s') : ''}</button>`;
 }
 

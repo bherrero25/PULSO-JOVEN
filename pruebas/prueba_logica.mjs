@@ -98,6 +98,11 @@ prueba('cuentas: archivo sin número de un banco sin cuentas, con una añadida a
   assert.ok(r.preguntar); assert.equal(r.clave, 'bbva·5678');
   assert.deepEqual(r.opciones.map(o => o.clave), ['bbva·5678']);
 });
+prueba('cuentas: un banco desconocido sin número siempre pregunta, entre todas tus cuentas', () => {
+  const txs = [{ cuenta: 'generico·3333', fecha: '2026-11-02', descripcion: 'X', importe: 1 }, { cuenta: 'bankinter·1234', fecha: '2026-11-02', descripcion: 'Y', importe: 1 }];
+  const r = L.cuentaParaExtracto([c('bankinter·1234', 'Nómina'), c('generico·3333', 'Sabadell')], txs, { banco: 'generico', fin: null, movs });
+  assert.ok(r.preguntar); assert.equal(r.clave, 'generico·3333'); assert.equal(r.opciones.length, 2);
+});
 prueba('cuentas: otro número con una cuenta sin extracto: propone una nueva pero pregunta', () => {
   const r = L.cuentaParaExtracto([c('bbva·5678', 'Cuenta joven')], [], { banco: 'bbva', fin: '9999', movs });
   assert.ok(r.nueva && r.preguntar); assert.ok(r.opciones.some(o => o.clave === 'bbva·5678'));
@@ -134,6 +139,38 @@ prueba('fijos: un fijo nuevo empieza desde la próxima vez', () => assert.equal(
 prueba('fijos: el día 31 en noviembre es el 30', () => assert.deepEqual(L.previstosPendientes([{ ...fijo, ultimo: '2026-10-31' }], '2026-11-30').map(x => x.fecha), ['2026-11-30']));
 prueba('fijos: crea los meses que faltan', () => assert.equal(L.previstosPendientes([{ ...fijo, ultimo: '2026-07-31' }], '2026-12-02').length, 4));
 prueba('fijos: uno inactivo no crea nada', () => assert.equal(L.previstosPendientes([{ ...fijo, ultimo: '2026-07-31', activo: false }], '2026-12-02').length, 0));
+
+// ── Extractos de cualquier banco ──
+const I = await import('../nueva/js/importar.js');
+prueba('csv: separador ; , o tabulador, con comillas', () => {
+  assert.deepEqual(I.leerCSV('a;b;c\n1;"x;y";3')[1], ['1', 'x;y', '3']);
+  assert.deepEqual(I.leerCSV('a,b,c\n1,"2,50",3')[1], ['1', '2,50', '3']);
+  assert.deepEqual(I.leerCSV('a\tb\n1\t2')[1], ['1', '2']);
+});
+prueba('importes y fechas en los formatos de distintos bancos', () => {
+  assert.deepEqual(['1.234,56', '-12,30 €', '12,30-', '(5,00)', '1,234.56', '+45', 'Compra'].map(I.parsearImporte), [1234.56, -12.3, -12.3, -5, 1234.56, 45, NaN]);
+  assert.deepEqual(['25.09.2026', '25 sep 2026', '25-SEP-26', '2026/09/25', '31/02/2026'].map(I.parsearFecha), ['2026-09-25', '2026-09-25', '2026-09-25', '2026-09-25', null]);
+});
+const leer = texto => { const filas = I.leerCSV(texto); return { filas, p: I.proponerFormato(filas), r: I.analizarExtracto(filas, { reglas: {} }) }; };
+prueba('formato: Debe y Haber en dos columnas se leen solos, con el saldo y el IBAN de encima', () => {
+  const { p, r } = leer('Cuenta ES12 2103 0000 1111 2222 4321\n\nFecha;Fecha valor;Concepto;Debe;Haber;Saldo\n24/11/2026;24/11/2026;COMPRA;23,40;;1.476,60\n23/11/2026;23/11/2026;BIZUM DE ANA;;100,00;1.500,00');
+  assert.ok(p.seguro); assert.deepEqual([p.cargo, p.abono, p.saldo], [3, 4, 5]);
+  assert.deepEqual(r.txs.map(t => [t.tipo, t.importe]), [['gasto', 23.4], ['ingreso', 100]]);
+  assert.equal(r.saldo.valor, 1476.6); assert.equal(r.fin, '4321'); assert.equal(r.entidad, '2103');
+});
+prueba('formato: una columna D/H dice qué es gasto', () => {
+  const { r } = leer('Fecha\tDescripción\tCantidad\tD/H\n24.11.2026\tGASOLINERA\t40,00\tD\n23.11.2026\tBIZUM\t15,00\tH');
+  assert.deepEqual(r.txs.map(t => t.tipo), ['gasto', 'ingreso']);
+});
+prueba('formato: si no está claro (títulos raros, sin títulos o todo en positivo), pregunta', () => {
+  assert.ok(leer('F. Op.;Operación;Euros\n24/11/2026;CAFE;-3,50\n23/11/2026;NOMINA;600,00').r.necesitaFormato);
+  assert.ok(leer('24/11/2026;Gasolinera;-40,00;500,00\n23/11/2026;Super;-15,00;540,00').r.necesitaFormato);
+  assert.ok(leer('Fecha;Concepto;Importe\n24/11/2026;Gasolinera;40,00\n23/11/2026;Super;15,00').r.necesitaFormato);
+});
+prueba('formato: aunque pregunte, la propuesta acierta las columnas por lo que contienen', () => {
+  const { p } = leer('F. Op.;Operación;Euros;Tras op.\n24/11/2026;PAGO EN CAFETERIA LUNA;-3,50;812,40\n23/11/2026;NOMINA;600,00;815,90');
+  assert.deepEqual([p.fecha, p.concepto, p.importe, p.saldo], [0, 1, 2, 3]);
+});
 
 // ── Nombres limpios y forma de pago ──
 const limpio = (descripcion, tipo = 'gasto', cuenta = 'bankinter') => L.nombreLimpio({ descripcion, tipo, cuenta });

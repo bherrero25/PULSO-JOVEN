@@ -296,7 +296,7 @@ export function nombreLimpio(t) {
     .replace(/\s+/g, ' ').trim();
   for (let i = 0; i < 4; i++) {                                                         // lo que no es el nombre, al principio
     const antes = s;
-    s = s.replace(/^(compra(s)?(\s+tarj(eta)?\.?)?(\s+(internet|online|en))?|pago(\s+(con|en))?(\s+tarj(eta)?\.?)?|pago movil( en)?|cargo( tarjeta)?|tpv|apple ?pay|google ?pay|contactless|operacion tarjeta|adeudo( de)?|recibo( de)?|domiciliacion|cuota|tarj(eta)?\.?)\b[\s:.\-/*]*/i, '').trim();
+    s = s.replace(/^(compra(s)?(\s+tarj(eta)?\.?)?(\s+(internet|online|en))?|pago movil( en)?|pago(\s+(con|en))?(\s+tarj(eta)?\.?)?|cargo( tarjeta)?|tpv|apple ?pay|google ?pay|contactless|operacion tarjeta|adeudo( de)?|recibo( de)?|domiciliacion|cuota|tarj(eta)?\.?)\b[\s:.\-/*]*/i, '').trim();
     if (s === antes) break;
   }
   let pago = '';
@@ -485,6 +485,11 @@ export function cuentaParaExtracto(cuentas, txs, { banco, fin, entidad, movs }) 
     }
     // Otro número: es otra cuenta (si hay alguna añadida a mano sin extracto, se pregunta por si es esa)
     return { ...nueva, opciones: conSinExtracto, preguntar: sinExtracto.length > 0, nuevaPropuesta: nueva };
+  }
+  // Sin número y de un banco que no conocemos («generico» son muchos bancos distintos): se pregunta entre todas tus cuentas
+  if (banco === 'generico' && cuentasBanco(cuentas).length) {
+    const todas = cuentasBanco(cuentas).map(c => ({ clave: c.clave, nombre: c.nombre }));
+    return { ...(delBanco.length === 1 ? { clave: delBanco[0].clave, nombre: delBanco[0].nombre } : nueva), preguntar: true, opciones: todas, nuevaPropuesta: nueva };
   }
   if (delBanco.length === 1) return { clave: delBanco[0].clave, nombre: delBanco[0].nombre, opciones };
   if (!delBanco.length) {

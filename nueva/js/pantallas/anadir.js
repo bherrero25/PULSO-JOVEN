@@ -5,7 +5,7 @@ import { esc, fmt, hoyISO, fechaCorta, RAPIDAS_GASTO, RAPIDAS_INGRESO, categoria
 import { ficha, conceptoVisible } from '../componentes.js';
 import { toast, abrirHoja, cabeceraHoja, confirmar } from '../ui.js';
 import * as D from '../datos.js';
-import { leerFilas, analizarExtracto } from '../importar.js';
+import { leerFilas, analizarExtracto, leerConFormato, proponerFormato, columnasArchivo, guardarFormato } from '../importar.js';
 import { preguntarTraspaso, ajustarEfectivo } from './dinero.js';
 
 // ─── A MANO ───
@@ -87,6 +87,7 @@ function aMano(E) {
 
 function extracto(E) {
   const imp = E.importacion;
+  if (imp && imp.asistente) return asistenteColumnas(E);
   if (imp && imp.txs) {
     const fechas = [...imp.txs, ...imp.retenidosNuevos].map(t => t.fecha).sort();
     const pares = imp.pares || [];
@@ -100,7 +101,7 @@ function extracto(E) {
     const d = imp.destino, nombreDestino = d?.nombre || nombreCuenta(imp.banco);
     return `<section class="tarjeta" style="border:1px solid var(--linea-2)">
         <div style="display:flex;align-items:center;gap:10px">${'<span class="ficha">' + ic('banco') + '</span>'}
-          <div style="display:flex;flex-direction:column;gap:2px"><b style="font-size:16px">${esc(nombreCuenta(imp.banco))} · ${imp.tipo === 'tarjeta' ? 'tarjeta' : imp.tipo === 'efectivo' ? 'efectivo' : 'cuenta'}</b>
+          <div style="display:flex;flex-direction:column;gap:2px"><b style="font-size:16px">${esc(imp.banco === 'generico' && d?.nombre ? d.nombre : nombreCuenta(imp.banco))} · ${imp.tipo === 'tarjeta' ? 'tarjeta' : imp.tipo === 'efectivo' ? 'efectivo' : 'cuenta'}</b>
           <span class="nota">${imp.txs.length} ${imp.txs.length === 1 ? 'movimiento' : 'movimientos'}${imp.retenidos?.length ? ` y ${imp.retenidos.length} ${imp.retenidos.length === 1 ? 'retenido' : 'retenidos'}` : ''} del ${fechaCorta(fechas[0])} al ${fechaCorta(fechas[fechas.length - 1])}</span></div></div>
         ${d && E.cuentas ? bloqueCuenta(d) : ''}
         <div class="dos-col">
@@ -124,7 +125,7 @@ function extracto(E) {
         : unir.length ? `Juntar ${unir.length === 1 ? 'el movimiento' : `los ${unir.length} movimientos`} con lo que ya tenías`
         : imp.cobrados.length || imp.caducados.length ? 'Actualizar los retenidos' : `Actualizar el saldo de ${esc(nombreDestino)}`}</button>` : ''}
       <button type="button" class="boton suave" data-accion="cancelar-importacion">${hayCambios ? 'Cancelar' : 'Elegir otro archivo'}</button>
-      <p class="nota">Después podrás cambiar la categoría de cualquiera; la app aprenderá de tus cambios.</p>`;
+      <p class="nota">Después podrás cambiar la categoría de cualquiera; la app aprenderá de tus cambios.${imp.tipo === 'cuenta' && imp.filas ? ' ¿Las fechas, conceptos o importes no se ven bien? <button type="button" class="enlace" style="padding:0;font-size:inherit;text-decoration:underline" data-accion="elegir-columnas">Elige tú las columnas</button>.' : ''}</p>`;
   }
   return `<label class="zona-subir">
       <span class="ficha">${ic('subir', 'ic-l')}</span>
@@ -135,11 +136,52 @@ function extracto(E) {
     ${imp && imp.error ? `<p class="aviso-revisar" role="alert">${ic('alerta')}<span>${esc(imp.error)}</span></p>` : ''}
     ${imp && imp.leyendo ? '<p class="nota" style="text-align:center">Leyendo el archivo…</p>' : ''}
     <div class="pasos">
-      <div><b>1</b><span>Descarga los movimientos desde la web o la app de tu banco (en Excel).</span></div>
-      <div><b>2</b><span>Súbelo aquí. Reconocemos el formato solos.</span></div>
+      <div><b>1</b><span>Descarga los movimientos desde la web o la app de tu banco (en Excel o CSV).</span></div>
+      <div><b>2</b><span>Súbelo aquí. Si no reconocemos el formato, te preguntaremos qué es cada columna (solo la primera vez).</span></div>
       <div><b>3</b><span>Revisa lo que hemos encontrado y confirma. Lo repetido no se duplica.</span></div>
     </div>
-    <p class="nota">Probado con Bankinter. BBVA, Santander, CaixaBank, ING, Revolut y N26 se reconocen por el formato de su archivo. Para el efectivo, <a href="../plantilla-efectivo-pulso.xlsx" style="text-decoration:underline">descarga la plantilla</a>.</p>`;
+    <p class="nota">Vale cualquier banco. Bankinter, BBVA, Santander, CaixaBank, ING, Revolut y N26 se reconocen solos. Para el efectivo, <a href="../plantilla-efectivo-pulso.xlsx" style="text-decoration:underline">descarga la plantilla</a>.</p>`;
+}
+
+// ─── ASISTENTE DE COLUMNAS: para cualquier banco ───
+// Formato que se usa para leer: con dos columnas (cargo y abono) no cuentan el importe ni su signo, y al revés
+function formatoElegido(a) {
+  return a.modo === 'dos' ? { ...a.f, importe: -1, tipo: -1, invertir: false } : { ...a.f, cargo: -1, abono: -1 };
+}
+const recorta = (t, n) => t.length > n ? t.slice(0, n - 1) + '…' : t;
+
+function asistenteColumnas(E) {
+  const a = E.importacion.asistente, f = a.f, usado = formatoElegido(a);
+  const cols = columnasArchivo(a.filas, f);
+  const lectura = leerConFormato(a.filas, usado, { reglas: E.reglas });
+  const etiqueta = c => `${c.titulo || `Columna ${c.j + 1}`}${c.ejemplo ? ` · ${recorta(c.ejemplo, 24)}` : ''}`;
+  const elegir = (campo, texto, sinValor) => `<label class="campo" style="gap:4px">${texto}<select data-cambio="formato-campo" data-campo="${campo}">
+      ${sinValor ? `<option value="-1"${f[campo] < 0 ? ' selected' : ''}>${sinValor}</option>` : f[campo] < 0 ? '<option value="-1" selected>Elige una columna</option>' : ''}
+      ${cols.map(c => `<option value="${c.j}"${f[campo] === c.j ? ' selected' : ''}>${esc(etiqueta(c))}</option>`).join('')}</select></label>`;
+  const modo = (v, t) => `<button type="button" data-accion="formato-modo" data-valor="${v}" aria-pressed="${a.modo === v}">${t}</button>`;
+  const todoIngresos = a.modo === 'una' && usado.tipo < 0 && lectura.txs.length > 1 && lectura.txs.every(t => t.tipo === 'ingreso');
+  const ejemplos = lectura.txs.slice(0, 4).map(t => { const c = infoCategoria(t.categoria); return `<div class="fila">${ficha(c, 'peq')}<span class="cuerpo"><span class="concepto" style="font-size:14px">${esc(conceptoVisible(t))}</span><span class="detalle">${fechaCorta(t.fecha)} · ${esc(c.nombre)}</span></span><span class="importe num${t.tipo === 'ingreso' ? ' positivo' : ''}" style="font-size:14px">${fmt(t.tipo === 'ingreso' ? +t.importe : -t.importe, true)}</span></div>`; }).join('');
+  return `<section class="tarjeta" style="border:1px solid var(--linea-2);gap:14px">
+      <div style="display:flex;align-items:center;gap:10px"><span class="ficha">${ic('banco')}</span>
+        <div style="display:flex;flex-direction:column;gap:2px"><b style="font-size:16px">${a.primera ? 'No conocemos este formato' : 'Elige las columnas'}</b>
+        <span class="nota">${a.primera ? 'Dinos qué es cada columna. Solo hace falta la primera vez: lo recordaremos.' : 'Dinos qué es cada columna del archivo.'}</span></div></div>
+      <div class="par-ancho">${elegir('fecha', 'Fecha')}${elegir('concepto', 'Concepto')}</div>
+      <div style="display:flex;flex-direction:column;gap:6px"><span style="font-size:13px;font-weight:600;color:var(--texto-2)">Gastos e ingresos</span>
+        <div class="formas" role="group" aria-label="Gastos e ingresos">${modo('una', 'En una columna')}${modo('dos', 'En dos columnas')}</div></div>
+      ${a.modo === 'dos' ? `<div class="par-ancho">${elegir('cargo', 'Gastos (cargo, debe)')}${elegir('abono', 'Ingresos (abono, haber)')}</div>`
+        : `<div class="par-ancho">${elegir('importe', 'Importe')}${elegir('tipo', '¿Cómo se sabe si es gasto?', 'Lleva signo menos (−)')}</div>
+        <label class="casilla" style="min-height:36px;font-size:13px"><input type="checkbox" data-cambio="formato-invertir"${f.invertir ? ' checked' : ''}> <span>Cambiar el signo: los gastos vienen en positivo</span></label>`}
+      ${elegir('saldo', 'Saldo después de cada movimiento', 'El archivo no tiene saldo')}
+      <div style="background:var(--fondo);border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:4px">
+        <b style="font-size:13px">Así se leerá · ${lectura.txs.length} ${lectura.txs.length === 1 ? 'movimiento' : 'movimientos'}${lectura.saldo ? ` · saldo final ${lectura.saldo.valor < 0 ? '−' : ''}${fmt(lectura.saldo.valor)}` : ''}</b>
+        ${ejemplos || '<span class="nota">Con estas columnas no se lee ningún movimiento.</span>'}
+        ${lectura.malas ? `<span class="nota">${lectura.malas} ${lectura.malas === 1 ? 'fila con fecha no se ha podido leer' : 'filas con fecha no se han podido leer'} (sin concepto o sin importe).</span>` : ''}
+        ${todoIngresos ? '<span class="nota" style="color:var(--critico-texto)">Todos salen como ingresos. Si en tu banco los gastos vienen sin signo menos, marca «Cambiar el signo» o elige la columna que dice si es cargo o abono.</span>' : ''}
+      </div>
+      <label class="casilla" style="min-height:36px;font-size:13px"><input type="checkbox" data-cambio="formato-recordar"${a.recordar ? ' checked' : ''}> <span>Recordar estas columnas para los próximos extractos con este formato</span></label>
+    </section>
+    <button type="button" class="boton" data-accion="usar-formato">Seguir con estas columnas</button>
+    <button type="button" class="boton suave" data-accion="cancelar-importacion">Cancelar</button>`;
 }
 
 // De qué cuenta es el extracto: se pregunta si hay dudas; una cuenta nueva se puede nombrar
@@ -351,6 +393,29 @@ export const acciones = {
     if (saldoNuevo) partes.push(`saldo de ${d.nombre} actualizado`);
     toast(partes.length ? partes.join(' · ') : 'No había nada nuevo');
     location.hash = guardadas.length || cobrados || unidos ? '#/movimientos' : '#/inicio';
+  },
+  // Asistente de columnas
+  'elegir-columnas': (ctx) => {
+    const imp = ctx.E.importacion;
+    const f = imp.formato || { ...(proponerFormato(imp.filas) || { cabecera: -1, fecha: 0, concepto: 1, importe: 2, cargo: -1, abono: -1, saldo: -1, tipo: -1, invertir: false }), banco: imp.banco };
+    ctx.E.importacion = { asistente: { filas: imp.filas, f: { ...f }, modo: f.cargo >= 0 || f.abono >= 0 ? 'dos' : 'una', recordar: true, primera: false } };
+    ctx.pintar(); window.scrollTo(0, 0);
+  },
+  'formato-modo': (ctx, el) => {
+    const a = ctx.E.importacion.asistente, f = a.f;
+    a.modo = el.dataset.valor;
+    // Al pasar a dos columnas, se proponen la del importe y la siguiente
+    if (a.modo === 'dos' && f.cargo < 0 && f.abono < 0) { f.cargo = f.importe >= 0 ? f.importe : 0; f.abono = f.cargo + 1; }
+    if (a.modo === 'una' && f.importe < 0) f.importe = f.cargo >= 0 ? f.cargo : 0;
+    ctx.pintar();
+  },
+  'usar-formato': (ctx) => {
+    const { E } = ctx, a = E.importacion.asistente, f = formatoElegido(a);
+    if (f.fecha < 0 || f.concepto < 0 || (f.importe < 0 && f.cargo < 0 && f.abono < 0)) { toast('Elige la fecha, el concepto y el importe'); return; }
+    if (!leerConFormato(a.filas, f, { reglas: E.reglas }).txs.length) { toast('Con estas columnas no se lee ningún movimiento'); return; }
+    if (a.recordar) guardarFormato(a.filas, f);
+    E.importacion = importarFilas(E, a.filas, f);
+    ctx.pintar(); window.scrollTo(0, 0);
   }
 };
 
@@ -362,6 +427,9 @@ export const entradas = {
 };
 
 export const cambios = {
+  'formato-campo': (ctx, el) => { ctx.E.importacion.asistente.f[el.dataset.campo] = +el.value; ctx.pintar(); },
+  'formato-invertir': (ctx, el) => { ctx.E.importacion.asistente.f.invertir = el.checked; ctx.pintar(); },
+  'formato-recordar': (ctx, el) => { ctx.E.importacion.asistente.recordar = el.checked; },
   'par-unir': (ctx, el) => {
     const x = ctx.E.importacion?.pares?.[+el.dataset.i];
     if (x) { x.unir = el.checked; ctx.pintar(); }
@@ -372,19 +440,7 @@ export const cambios = {
     if (!archivo) return;
     E.importacion = { leyendo: true }; ctx.pintar();
     try {
-      const filas = await leerFilas(archivo);
-      const r = analizarExtracto(filas, { reglas: E.reglas, hayTarjeta: E.txs.some(t => String(t.cuenta || '').endsWith('_tarjeta')) });
-      // Los retenidos solo se incluyen si la base de datos tiene la columna «pendiente»
-      const retenidos = E.conRetenidos ? (r.retenidos || []) : [];
-      if (r.error) E.importacion = { error: r.error };
-      else if (!r.txs.length && !retenidos.length) E.importacion = { error: 'No hemos encontrado movimientos en este archivo.' };
-      else {
-        // Extracto de una cuenta: de qué cuenta es (sin la tabla de cuentas, como siempre: por el banco)
-        const destino = r.tipo !== 'cuenta' ? null
-          : E.cuentas ? cuentaParaExtracto(E.cuentas, E.txs, { banco: r.banco, fin: r.fin, entidad: r.entidad, movs: r.txs })
-          : { clave: r.banco };
-        E.importacion = prepararImportacion(E, r, retenidos, destino);
-      }
+      E.importacion = importarFilas(E, await leerFilas(archivo));
     } catch (e) {
       console.error(e);
       E.importacion = { error: 'No se ha podido leer el archivo. ¿Es un Excel o un CSV?' };
@@ -406,7 +462,7 @@ export const cambios = {
       const adoptar = libre && puede ? claveCuentaBanco(bancoDeClave(o.clave), fin) : null;
       destino = { clave: o.clave, nombre: o.nombre, ...(adoptar ? { adoptar } : {}), ...base };
     }
-    E.importacion = prepararImportacion(E, imp.bruto, imp.retenidosBrutos, destino);
+    E.importacion = { ...prepararImportacion(E, imp.bruto, imp.retenidosBrutos, destino), filas: imp.filas };
     ctx.pintar();
   },
   'traspaso-unir': (ctx, el) => {
@@ -414,6 +470,24 @@ export const cambios = {
     if (x) { x.unir = el.checked; ctx.pintar(); }
   }
 };
+
+// Lee un archivo ya convertido en filas: o pregunta las columnas (asistente) o prepara la vista previa
+function importarFilas(E, filas, formato) {
+  const r = analizarExtracto(filas, { reglas: E.reglas, hayTarjeta: E.txs.some(t => String(t.cuenta || '').endsWith('_tarjeta')), formato });
+  if (r.necesitaFormato) {
+    const f = r.propuesta;
+    return { asistente: { filas, f: { ...f }, modo: f.cargo >= 0 || f.abono >= 0 ? 'dos' : 'una', recordar: true, primera: true } };
+  }
+  // Los retenidos solo se incluyen si la base de datos tiene la columna «pendiente»
+  const retenidos = E.conRetenidos ? (r.retenidos || []) : [];
+  if (r.error) return { error: r.error };
+  if (!r.txs.length && !retenidos.length) return { error: 'No hemos encontrado movimientos en este archivo.' };
+  // Extracto de una cuenta: de qué cuenta es (sin la tabla de cuentas, como siempre: por el banco)
+  const destino = r.tipo !== 'cuenta' ? null
+    : E.cuentas ? cuentaParaExtracto(E.cuentas, E.txs, { banco: r.banco, fin: r.fin, entidad: r.entidad, movs: r.txs })
+    : { clave: r.banco };
+  return { ...prepararImportacion(E, r, retenidos, destino), filas };
+}
 
 // Todo lo que cambia al importar un extracto, calculado para la cuenta elegida (destino; null en tarjeta o efectivo):
 // retenidos cobrados o anulados, lo que ya estaba, lo que entró por Apple Pay, lo apuntado a mano y los traspasos entre cuentas.

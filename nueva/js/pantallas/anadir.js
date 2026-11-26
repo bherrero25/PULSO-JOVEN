@@ -5,7 +5,7 @@ import { esc, fmt, hoyISO, fechaCorta, RAPIDAS_GASTO, RAPIDAS_INGRESO, categoria
 import { ficha, conceptoVisible } from '../componentes.js';
 import { toast, abrirHoja, cabeceraHoja, confirmar } from '../ui.js';
 import * as D from '../datos.js';
-import { leerFilas, analizarExtracto, leerConFormato, proponerFormato, columnasArchivo, guardarFormato } from '../importar.js';
+import { leerFilas, analizarExtracto, leerConFormato, proponerFormato, columnasArchivo, firmaFormato, formatoParaGuardar, formatosLocales, guardarFormatoLocal } from '../importar.js';
 import { preguntarTraspaso, ajustarEfectivo } from './dinero.js';
 
 // ─── A MANO ───
@@ -409,11 +409,17 @@ export const acciones = {
     if (a.modo === 'una' && f.importe < 0) f.importe = f.cargo >= 0 ? f.cargo : 0;
     ctx.pintar();
   },
-  'usar-formato': (ctx) => {
+  'usar-formato': async (ctx) => {
     const { E } = ctx, a = E.importacion.asistente, f = formatoElegido(a);
     if (f.fecha < 0 || f.concepto < 0 || (f.importe < 0 && f.cargo < 0 && f.abono < 0)) { toast('Elige la fecha, el concepto y el importe'); return; }
     if (!leerConFormato(a.filas, f, { reglas: E.reglas }).txs.length) { toast('Con estas columnas no se lee ningún movimiento'); return; }
-    if (a.recordar) guardarFormato(a.filas, f);
+    // Se recuerda en la base de datos (vale en todos tus dispositivos) o, sin la tabla, en este dispositivo.
+    // Si no se puede guardar, el aviso ya ha salido y se sigue importando igual.
+    if (a.recordar) {
+      const firma = firmaFormato(a.filas, f), guardar = formatoParaGuardar(f);
+      if (!E.formatos) guardarFormatoLocal(firma, guardar);
+      else if (await D.guardarFormatoExtracto(firma, guardar)) E.formatos[firma] = guardar;
+    }
     E.importacion = importarFilas(E, a.filas, f);
     ctx.pintar(); window.scrollTo(0, 0);
   }
@@ -473,7 +479,7 @@ export const cambios = {
 
 // Lee un archivo ya convertido en filas: o pregunta las columnas (asistente) o prepara la vista previa
 function importarFilas(E, filas, formato) {
-  const r = analizarExtracto(filas, { reglas: E.reglas, hayTarjeta: E.txs.some(t => String(t.cuenta || '').endsWith('_tarjeta')), formato });
+  const r = analizarExtracto(filas, { reglas: E.reglas, hayTarjeta: E.txs.some(t => String(t.cuenta || '').endsWith('_tarjeta')), formato, formatos: E.formatos || formatosLocales() });
   if (r.necesitaFormato) {
     const f = r.propuesta;
     return { asistente: { filas, f: { ...f }, modo: f.cargo >= 0 || f.abono >= 0 ? 'dos' : 'una', recordar: true, primera: true } };

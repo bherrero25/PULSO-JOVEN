@@ -157,11 +157,11 @@ export function leerCuentaArchivo(filas, hasta) {
 }
 
 // Devuelve { tipo, banco, txs } o { error }. `hayTarjeta`: si ya hay movimientos de tarjeta de crédito importados.
-// Con un formato (elegido en el asistente de columnas) se lee con él; si no, con el recordado para ese archivo, con el del
-// banco si se reconoce, o con uno propuesto. Si no está claro, devuelve { necesitaFormato, propuesta } para preguntar.
-export function analizarExtracto(filas, { reglas, hayTarjeta, formato }) {
+// Con un formato (elegido en el asistente de columnas) se lee con él; si no, con el recordado para ese archivo (`formatos`,
+// { firma: formato }), con el del banco si se reconoce, o con uno propuesto. Si no está claro, devuelve { necesitaFormato, propuesta } para preguntar.
+export function analizarExtracto(filas, { reglas, hayTarjeta, formato, formatos }) {
   if (formato) return leerConFormato(filas, formato, { reglas, hayTarjeta });
-  const recordado = formatoRecordado(filas);
+  const recordado = formatoRecordado(filas, formatos || {});
   if (recordado) return leerConFormato(filas, recordado, { reglas, hayTarjeta });
   const { inicio, cabecera, banco, previa } = buscarCabecera(filas);
   if (inicio < 0 || (banco === 'generico' && !esPlantillaEfectivo(cabecera.map(normal)))) {
@@ -364,16 +364,16 @@ export function leerConFormato(filas, f, { reglas, hayTarjeta = false }) {
   return { tipo: 'cuenta', banco: f.banco || 'generico', txs, saldo: saldoFinal(saldos), retenidos: [], fin: numero?.fin || null, entidad: numero?.entidad || null, formato: f, malas };
 }
 
-// Formatos elegidos a mano, por su firma: se recuerdan en este dispositivo para los próximos extractos
+// Formatos elegidos a mano, por su firma. Se guardan en la base de datos (pj_formatos_extracto); sin esa tabla, en este
+// dispositivo (localStorage)
+export const formatoParaGuardar = f => { const { seguro, ...limpio } = f; return limpio; };
 const CLAVE_FORMATOS = 'pj_formatos_extracto';
-const formatosGuardados = () => { try { return JSON.parse(localStorage.getItem(CLAVE_FORMATOS)) || {}; } catch { return {}; } };
-export function guardarFormato(filas, f) {
-  const { seguro, ...limpio } = f;
-  try { localStorage.setItem(CLAVE_FORMATOS, JSON.stringify({ ...formatosGuardados(), [firmaFormato(filas, f)]: limpio })); return true; } catch { return false; }
+export const formatosLocales = () => { try { return JSON.parse(localStorage.getItem(CLAVE_FORMATOS)) || {}; } catch { return {}; } };
+export function guardarFormatoLocal(firma, f) {
+  try { localStorage.setItem(CLAVE_FORMATOS, JSON.stringify({ ...formatosLocales(), [firma]: formatoParaGuardar(f) })); return true; } catch { return false; }
 }
 // Busca en el archivo la fila de títulos de un formato recordado
-function formatoRecordado(filas) {
-  const guardados = formatosGuardados();
+function formatoRecordado(filas, guardados) {
   if (!Object.keys(guardados).length) return null;
   for (let i = 0; i < Math.min(filas.length, 60); i++) {
     const g = guardados[(filas[i] || []).map(normal).join('|')];

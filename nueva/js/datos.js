@@ -71,7 +71,7 @@ export async function salir() { if (!demo) await sb.auth.signOut(); }
 // ─── LECTURA ───
 // Devuelve todo lo de la persona, o null si falló (el aviso ya se ha mostrado)
 export async function cargarTodo(usuario) {
-  if (demo) return datosDemo();
+  if (demo) return { ...datosDemo(), formatos: {} };
   uid = usuario.id;
   try {
     const [txs, presupuestos, metas, filasReglas] = await Promise.all([
@@ -84,8 +84,8 @@ export async function cargarTodo(usuario) {
     filasReglas.forEach(r => { reglas[claveConcepto(r.concepto)] = r.categoria; });
     // Los retenidos necesitan la columna «pendiente» (sql/2026-11-retenidos.sql)
     const conRetenidos = txs.length ? 'pendiente' in txs[0] : !(await sb.from('pj_transacciones').select('pendiente').limit(1)).error;
-    const [cuentas, fijos] = await Promise.all([cargarCuentas(), cargarFijos()]);
-    return { txs, presupuestos, metas, reglas, cuentas, fijos, conRetenidos };
+    const [cuentas, fijos, formatos] = await Promise.all([cargarCuentas(), cargarFijos(), cargarFormatos()]);
+    return { txs, presupuestos, metas, reglas, cuentas, fijos, formatos, conRetenidos };
   } catch (error) {
     avisarError(error, 'cargar tus datos');
     return null;
@@ -110,6 +110,24 @@ async function cargarFijos() {
     if (!faltaTabla(error)) avisarError(error, 'cargar tus movimientos fijos');
     return null;
   }
+}
+
+// Formatos de extracto recordados ({ firma: formato }), o null si aún no existe la tabla
+// (sql/2026-11-formatos-extracto.sql sin ejecutar): entonces se recuerdan solo en el dispositivo
+async function cargarFormatos() {
+  try {
+    const filas = await leerTodas(() => sb.from('pj_formatos_extracto').select('id, firma, formato').eq('user_id', uid).order('firma').order('id'));
+    return Object.fromEntries(filas.map(f => [f.firma, f.formato]));
+  } catch (error) {
+    if (!faltaTabla(error)) avisarError(error, 'cargar los formatos de tus extractos');
+    return null;
+  }
+}
+export async function guardarFormatoExtracto(firma, formato) {
+  if (demo) return true;
+  const { error } = await sb.from('pj_formatos_extracto')
+    .upsert({ user_id: uid, firma, formato, actualizado: new Date().toISOString() }, { onConflict: 'user_id,firma' });
+  return !avisarError(error, 'recordar las columnas del extracto');
 }
 
 // Claves de todos los movimientos guardados, recién leídas, para no duplicar al importar

@@ -1,8 +1,9 @@
 """Extractos de cualquier banco (demo, archivos inventados): un formato desconocido abre el asistente de columnas con una
 propuesta, se puede corregir viendo cómo se leerá, se recuerda para la próxima vez; un archivo con Debe/Haber o con comas
-se lee solo; y desde la vista previa se pueden elegir las columnas a mano."""
+se lee solo; y desde la vista previa se pueden elegir las columnas a mano. Con sesión (Supabase simulado), el formato se
+guarda en la base de datos y vale en otro dispositivo; sin la tabla, se recuerda solo en el mismo dispositivo."""
 from playwright.sync_api import sync_playwright
-from comun import Resultado, lanzar, pagina, foto, TMP
+from comun import Resultado, Supabase, lanzar, pagina, con_sesion, foto, TMP
 import datetime, pathlib
 
 res = Resultado('Extractos de cualquier banco')
@@ -85,6 +86,36 @@ with sync_playwright() as p:
     pg2.goto('http://pulso.prueba/nueva/?demo#/anadir?pestana=extracto'); pg2.wait_for_selector('input[data-cambio="archivo"]', state='attached')
     pg2.set_input_files('input[data-cambio="archivo"]', str(DESCONOCIDO)); pg2.wait_for_selector('text=No conocemos este formato')
     foto(pg2, 'ob05_ordenador', False)
+    pg2.close(); pg.close()
+
+    # ── 5. Con sesión: el formato se guarda en la base de datos ──
+    def con_base(base):
+        pg = pagina(b, errores); con_sesion(pg, base)
+        pg.goto('http://pulso.prueba/nueva/'); pg.wait_for_selector('.saludo')
+        pg.goto('http://pulso.prueba/nueva/#/anadir?pestana=extracto'); pg.wait_for_selector('input[data-cambio="archivo"]', state='attached')
+        pg.set_input_files('input[data-cambio="archivo"]', str(DESCONOCIDO)); pg.wait_for_timeout(600)
+        return pg
+    tablas = lambda: {'pj_transacciones': [], 'pj_cuentas': [], 'pj_presupuestos': [], 'pj_metas': [], 'pj_reglas_categoria': [], 'pj_fijos': []}
+    t = tablas(); t['pj_formatos_extracto'] = []
+    base = Supabase(t, por_defecto={'pj_formatos_extracto': {'user_id': 'u1'}})
+    pg = con_base(base)
+    pg.click('[data-accion="usar-formato"]'); pg.wait_for_selector('[data-accion="confirmar-importacion"]')
+    guardados = base.tablas['pj_formatos_extracto']
+    res.comprobar(len(guardados) == 1 and guardados[0]['firma'] == 'f. op.|operacion|euros|tras op.' and guardados[0]['formato']['importe'] == 2, 'con sesión, las columnas elegidas se guardan en la base de datos (solo los títulos, sin movimientos)')
+    pg.close()
+    pg = con_base(base)  # otro dispositivo: sin nada guardado en el navegador
+    res.comprobar(not pg.is_visible('text=No conocemos este formato') and pg.is_visible('[data-accion="confirmar-importacion"]'), 'en otro dispositivo ya no pregunta')
+    res.comprobar(not pg.is_visible('#aviso-error'), 'sin avisos de error')
+    pg.close()
+
+    # ── 6. Sin la tabla: se recuerda en el mismo dispositivo ──
+    pg = con_base(Supabase(tablas()))
+    res.comprobar(pg.is_visible('text=No conocemos este formato'), 'sin la tabla de formatos, la primera vez pregunta')
+    pg.click('[data-accion="usar-formato"]'); pg.wait_for_selector('[data-accion="confirmar-importacion"]')
+    pg.click('[data-accion="cancelar-importacion"]')
+    pg.set_input_files('input[data-cambio="archivo"]', str(DESCONOCIDO)); pg.wait_for_timeout(600)
+    res.comprobar(not pg.is_visible('text=No conocemos este formato'), 'y la siguiente vez, en el mismo dispositivo, ya no')
+    res.comprobar(not pg.is_visible('#aviso-error'), 'sin avisos de error (sin la tabla)')
     b.close()
 
 res.terminar(errores)

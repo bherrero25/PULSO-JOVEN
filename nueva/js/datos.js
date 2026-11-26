@@ -84,8 +84,10 @@ export async function cargarTodo(usuario) {
     filasReglas.forEach(r => { reglas[claveConcepto(r.concepto)] = r.categoria; });
     // Los retenidos necesitan la columna «pendiente» (sql/2026-11-retenidos.sql)
     const conRetenidos = txs.length ? 'pendiente' in txs[0] : !(await sb.from('pj_transacciones').select('pendiente').limit(1)).error;
+    // Para qué es cada dinero de paso necesita la columna «paso» (sql/2026-11-paso.sql)
+    const conPaso = txs.length ? 'paso' in txs[0] : !(await sb.from('pj_transacciones').select('paso').limit(1)).error;
     const [cuentas, fijos, formatos] = await Promise.all([cargarCuentas(), cargarFijos(), cargarFormatos()]);
-    return { txs, presupuestos, metas, reglas, cuentas, fijos, formatos, conRetenidos };
+    return { txs, presupuestos, metas, reglas, cuentas, fijos, formatos, conRetenidos, conPaso };
   } catch (error) {
     avisarError(error, 'cargar tus datos');
     return null;

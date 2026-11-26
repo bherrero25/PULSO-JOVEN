@@ -139,30 +139,47 @@ export function mesEfectivo(t) {
 export const CUENTA_LIBERADO = 'liberado';
 export const esLiberado = t => t.cuenta === CUENTA_LIBERADO;
 
-// Saldo del dinero de paso hasta un mes (incluido): lo que ha llegado − lo que ha salido − lo que te has quedado.
-// Positivo: dinero en espera (ni es tuyo ni se ha ido todavía). Negativo: ha salido más de lo que llegó, con tu dinero.
-function saldoPasoHasta(txs, ym) {
-  let s = 0;
+// Para qué es cada dinero de paso (pj_transacciones.paso: «Ordenador», «Dentista y luz»…). Cada propósito es una «bolsa»:
+// lo que llega y lo que sale para lo mismo se compensan, y lo que llega y aún no ha salido queda en espera.
+// Lo que sale sin decir para qué es de tu dinero (como la parte del alquiler que va dentro de la mensualidad): resta.
+// Lo que llega sin decir para qué queda en espera hasta que se diga (o «Me lo quedo»).
+export const propositoPaso = t => String(t.paso || '').trim() || null;
+const r2 = n => Math.round(n * 100) / 100;
+
+// Bolsas de dinero de paso hasta un mes (incluido), llevando la cuenta de un mes a otro: en cada una, `saldo` = llegado −
+// salido − lo que te has quedado. Si es positivo, está en espera; si es negativo, pusiste tu dinero (resta ese mes, y si
+// luego llega lo que faltaba, suma ese otro mes). `efecto` es lo que se resta de lo ingresado en ese mes por la bolsa.
+export function bolsasPaso(txs, ym) {
+  const anterior = sumarMeses(ym, -1), mapa = new Map(), deTuDinero = [];
   for (const t of txs) {
-    const signo = esPaso(t) ? (t.tipo === 'ingreso' ? 1 : -1) : esLiberado(t) ? -1 : 0;
-    if (signo && mesEfectivo(t) <= ym) s += signo * parseFloat(t.importe);
+    const liberado = esLiberado(t), paso = esPaso(t);
+    if (!liberado && !paso) continue;
+    const mes = mesEfectivo(t);
+    if (mes > ym) continue;
+    const nombre = propositoPaso(t), importe = parseFloat(t.importe);
+    if (paso && t.tipo === 'gasto' && !nombre) { if (mes === ym) deTuDinero.push(t); continue; }
+    const b = mapa.get(nombre || '') || { nombre, saldo: 0, saldoAntes: 0, llega: 0, sale: 0, liberado: 0, movs: [] };
+    const signo = paso && t.tipo === 'ingreso' ? 1 : -1;
+    b.saldo += signo * importe;
+    if (mes <= anterior) b.saldoAntes += signo * importe;
+    else { b.movs.push(t); b[liberado ? 'liberado' : t.tipo === 'ingreso' ? 'llega' : 'sale'] += importe; }
+    mapa.set(nombre || '', b);
   }
-  return Math.round(s * 100) / 100;
+  const bolsas = [...mapa.values()].map(b => {
+    const saldo = r2(b.saldo), tuDinero = r2(Math.max(0, -saldo));
+    return { ...b, saldo, enEspera: r2(Math.max(0, saldo)), tuDinero, efecto: r2(tuDinero - Math.max(0, -r2(b.saldoAntes))), llega: r2(b.llega), sale: r2(b.sale), liberado: r2(b.liberado) };
+  });
+  const salidoTuyo = r2(sumar(deTuDinero));
+  return { bolsas, deTuDinero, salidoTuyo, totalPaso: r2(salidoTuyo + bolsas.reduce((s, b) => s + b.efecto, 0)), enEspera: r2(bolsas.reduce((s, b) => s + b.enEspera, 0)) };
 }
 
-// Dinero de paso: lo que llega queda en espera y no cuenta como ingreso; cuando sale, se descuenta de lo que hay en espera
-// y tampoco cuenta como gasto. Lo que sale sin que haya nada en espera (la parte del alquiler que va dentro de la
-// mensualidad, o algo que pagas tú antes de que te lo den) se resta de lo ingresado ese mes, y si más adelante llega su
-// dinero, se suma ese mes. Se lleva la cuenta de un mes a otro: puede llegar en noviembre y salir en diciembre.
+// Dinero de paso (ver bolsasPaso): no cuenta como ingreso ni como gasto; solo resta lo que sale de tu dinero.
 export function resumenMes(txs, ym) {
   const movs = txs.filter(t => mesEfectivo(t) === ym);
   const gastos = movs.filter(esGasto), ingresos = movs.filter(esIngreso), paso = movs.filter(esPaso);
   const pasoLlega = sumar(paso.filter(t => t.tipo === 'ingreso')), pasoSale = sumar(paso.filter(t => t.tipo === 'gasto'));
-  const antes = saldoPasoHasta(txs, sumarMeses(ym, -1)), despues = saldoPasoHasta(txs, ym);
-  const conTuDinero = n => Math.max(0, -n);
   // totalPaso > 0: este mes ha salido dinero de paso con tu dinero (se resta de lo ingresado); < 0: te han devuelto lo que pusiste
-  const totalPaso = Math.round((conTuDinero(despues) - conTuDinero(antes)) * 100) / 100;
-  const enEspera = Math.max(0, despues), liberado = sumar(movs.filter(esLiberado));
+  const { totalPaso, enEspera } = bolsasPaso(txs, ym), liberado = sumar(movs.filter(esLiberado));
   const totalGastos = sumar(gastos), ingresosBrutos = sumar(ingresos);
   const ingresado = ingresosBrutos - totalPaso;
   return { ym, movs, gastos, ingresos, paso, pasoLlega, pasoSale, totalGastos, ingresosBrutos, totalPaso, enEspera, liberado, ingresado, queda: ingresado - totalGastos };

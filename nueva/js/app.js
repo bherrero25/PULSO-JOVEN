@@ -18,7 +18,7 @@ import * as paso from './pantallas/paso.js';
 // Estado de la app: datos de la persona y lo que tiene elegido en pantalla
 const E = {
   usuario: null, nombre: '', cargado: false,
-  txs: [], presupuestos: [], metas: [], reglas: {}, cuentas: null, fijos: null, formatos: null, conRetenidos: false,
+  txs: [], presupuestos: [], metas: [], reglas: {}, cuentas: null, fijos: null, formatos: null, conRetenidos: false, conPaso: false,
   meses: [mesActual()], mes: mesActual(), pantalla: 'inicio',
   filtro: 'todos', q: '', filtroCuenta: '',
   tabAnadir: 'mano', nuevo: anadir.nuevoMovimiento(), importacion: null,

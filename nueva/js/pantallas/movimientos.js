@@ -1,8 +1,9 @@
 // Movimientos: lista del mes con buscador y filtros; al tocar uno se puede cambiar su categoría, fecha o forma de pago
 
 import { ic } from '../iconos.js';
-import { esc, fmt, resumenMes, porRevisar, etiquetaDia, infoCategoria, CATEGORIAS, claveConcepto, MEDIOS, BD, esGasto, esIngreso, esBizum, CUENTA_MANUAL, esManual, cuentasBanco, cuentaManual, cuentaPrincipal, gemeloEnBanco, medioDe } from '../logica.js';
+import { esc, fmt, resumenMes, porRevisar, etiquetaDia, infoCategoria, CATEGORIAS, claveConcepto, MEDIOS, BD, esGasto, esIngreso, esBizum, CUENTA_MANUAL, esManual, cuentasBanco, cuentaManual, cuentaPrincipal, gemeloEnBanco, medioDe, propositoPaso } from '../logica.js';
 import { preguntarTraspaso, ajustarEfectivo } from './dinero.js';
+import { preguntarPaso } from './paso.js';
 import { selectorMes, filaMovimiento, ficha, conceptoVisible, importeMovimiento } from '../componentes.js';
 import { abrirHoja, cerrarHoja, cabeceraHoja, toast, confirmar } from '../ui.js';
 import * as D from '../datos.js';
@@ -113,8 +114,19 @@ function abrirEdicion(ctx, t) {
         ${Object.entries(MEDIOS).map(([k, v]) => `<option value="${k}"${medioDe(t) === k ? ' selected' : ''}>${v}</option>`).join('')}
       </select></label>
     </div>
+    ${paraQue(E, t)}
     ${dondeEsta(E, t)}
     <button type="button" class="boton peligro peq" data-accion="borrar-mov" data-id="${esc(t.id)}">${ic('papelera')}Borrar movimiento</button>`, 'Editar movimiento');
+}
+
+// Dinero de paso: para qué es (o si sale de tu dinero), con un botón para cambiarlo
+function paraQue(E, t) {
+  if (!E.conPaso || t.categoria !== BD.REENVIO) return '';
+  const p = propositoPaso(t);
+  const texto = p ? `Para «${esc(p)}»` : t.tipo === 'gasto' ? 'De tu dinero (se resta de lo que te entra)' : 'Sin decir para qué (en espera)';
+  return `<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--fondo);border-radius:12px;padding:10px 12px;font-size:14px">
+    <span><span class="nota" style="display:block">Dinero de paso</span>${texto}</span>
+    <button type="button" class="enlace" data-accion="elegir-paso" data-id="${esc(t.id)}">Cambiar</button></div>`;
 }
 
 // Un ingreso en efectivo apuntado a mano: ¿se quedó en mano o se metió en el banco? Si está en el banco, cuenta en
@@ -160,6 +172,8 @@ export const acciones = {
     ctx.pintar();
     if (nueva === BD.TRASPASO && anterior !== BD.TRASPASO) preguntarTraspaso(ctx, t);
     else if (anterior === BD.TRASPASO && nueva !== BD.TRASPASO) preguntarTraspaso(ctx, t, true);
+    // Dinero de paso: para qué es (lo que llega y lo que sale para lo mismo se compensan)
+    else if (nueva === BD.REENVIO && anterior !== BD.REENVIO) preguntarPaso(ctx, t);
   },
 
   'borrar-mov': async (ctx, el) => {

@@ -8,39 +8,50 @@ let bien = 0; const fallos = [];
 const prueba = (que, f) => { try { f(); bien++; } catch (e) { fallos.push(`${que}: ${e.message.split('\n')[0]}`); } };
 const m = (fecha, importe, tipo, categoria, extra = {}) => ({ fecha, importe, tipo, categoria, descripcion: 'x', ...extra });
 
-// ── Dinero de paso: lo que llega espera a salir; solo cuenta lo que sale con tu dinero ──
+// ── Dinero de paso: lo que llega y sale para lo mismo se compensa; lo que sale sin decir para qué es de tu dinero ──
 const base = [m('2026-11-01', 470, 'ingreso', '💰 Mensualidad'), m('2026-11-05', 100, 'gasto', '🍔 Comida')];
-prueba('paso: solo sale (alquiler dentro de la mensualidad) se resta de lo ingresado', () => {
-  const r = L.resumenMes([...base, m('2026-11-02', 120, 'gasto', '↩️ Reenviado')], '2026-11');
+const P = (fecha, importe, tipo, paso = null, extra = {}) => m(fecha, importe, tipo, '↩️ Reenviado', { paso, ...extra });
+prueba('paso: lo que sale sin decir para qué (alquiler dentro de la mensualidad) se resta de lo ingresado', () => {
+  const r = L.resumenMes([...base, P('2026-11-02', 120, 'gasto')], '2026-11');
   assert.equal(r.ingresado, 350); assert.equal(r.totalGastos, 100);
 });
-prueba('paso: llega y sale lo mismo, no cambia nada', () => {
-  const r = L.resumenMes([...base, m('2026-11-10', 60, 'ingreso', '↩️ Reenviado'), m('2026-11-11', 60, 'gasto', '↩️ Reenviado')], '2026-11');
+prueba('paso: llega y sale lo mismo para lo mismo, no cambia nada', () => {
+  const r = L.resumenMes([...base, P('2026-11-10', 60, 'ingreso', 'Seguro'), P('2026-11-11', 60, 'gasto', 'Seguro')], '2026-11');
   assert.equal(r.ingresado, 470); assert.equal(r.queda, 370);
 });
-prueba('paso: lo que llega y aún no ha salido queda en espera y no suma', () => {
-  const r = L.resumenMes([...base, m('2026-11-25', 800, 'ingreso', '↩️ Reenviado')], '2026-11');
-  assert.equal(r.ingresado, 470); assert.equal(r.enEspera, 800); assert.equal(r.totalPaso, 0);
+prueba('paso: lo que llega y aún no ha salido queda en espera y no suma (diga o no para qué)', () => {
+  const r = L.resumenMes([...base, P('2026-11-25', 800, 'ingreso', 'Ordenador'), P('2026-11-25', 50, 'ingreso')], '2026-11');
+  assert.equal(r.ingresado, 470); assert.equal(r.enEspera, 850); assert.equal(r.totalPaso, 0);
 });
 prueba('paso: llega un mes y sale el siguiente, ningún mes cambia', () => {
-  const txs = [...base, m('2026-11-20', 800, 'ingreso', '↩️ Reenviado'), m('2026-12-02', 800, 'gasto', '↩️ Reenviado')];
+  const txs = [...base, P('2026-11-20', 800, 'ingreso', 'Ordenador'), P('2026-12-02', 800, 'gasto', 'Ordenador')];
   assert.equal(L.resumenMes(txs, '2026-11').ingresado, 470); assert.equal(L.resumenMes(txs, '2026-11').enEspera, 800);
   assert.equal(L.resumenMes(txs, '2026-12').totalPaso, 0); assert.equal(L.resumenMes(txs, '2026-12').enEspera, 0);
 });
 prueba('paso: lo pagas tú y te lo devuelven el mes siguiente: resta y luego suma', () => {
-  const txs = [...base, m('2026-11-10', 60, 'gasto', '↩️ Reenviado'), m('2026-12-03', 60, 'ingreso', '↩️ Reenviado')];
+  const txs = [...base, P('2026-11-10', 60, 'gasto', 'Cena'), P('2026-12-03', 60, 'ingreso', 'Cena')];
   assert.equal(L.resumenMes(txs, '2026-11').totalPaso, 60); assert.equal(L.resumenMes(txs, '2026-12').totalPaso, -60);
 });
-prueba('paso: «Me lo quedo» pasa a ingreso lo que sobró y lo quita de la espera', () => {
-  const txs = [...base, m('2026-11-20', 800, 'ingreso', '↩️ Reenviado'), m('2026-11-22', 700, 'gasto', '↩️ Reenviado'),
-    m('2026-11-26', 100, 'ingreso', '🎁 Regalo recibido', { cuenta: 'liberado' })];
+prueba('paso: propósitos distintos no se mezclan (el alquiler sigue restando aunque haya dinero del ordenador en espera)', () => {
+  const txs = [m('2026-09-28', 470, 'ingreso', '💰 Mensualidad'), P('2026-10-02', 400, 'gasto'), m('2026-10-29', 470, 'ingreso', '💰 Mensualidad'), P('2026-11-02', 400, 'gasto'),
+    P('2026-11-10', 300, 'ingreso', 'Dentista y luz'), P('2026-11-12', 60, 'gasto', 'Dentista y luz'), P('2026-11-15', 290, 'gasto', 'Dentista y luz'),
+    P('2026-11-20', 1000, 'ingreso', 'Ordenador'), P('2026-11-24', 345, 'ingreso', 'Ordenador')];
+  const r = L.resumenMes(txs, '2026-11'), b = L.bolsasPaso(txs, '2026-11');
+  // resta el alquiler (400) y los 50 € del dentista que puso de su dinero; los 1.345 € del ordenador, en espera
+  assert.equal(r.totalPaso, 450); assert.equal(r.ingresado, 20); assert.equal(r.enEspera, 1345);
+  assert.equal(b.bolsas.find(x => x.nombre === 'Dentista y luz').tuDinero, 50);
+});
+prueba('paso: «Me lo quedo» pasa a ingreso lo que sobró de su propósito y lo quita de la espera', () => {
+  const txs = [...base, P('2026-11-20', 800, 'ingreso', 'Ordenador'), P('2026-11-22', 700, 'gasto', 'Ordenador'),
+    m('2026-11-26', 100, 'ingreso', '🎁 Regalo recibido', { cuenta: 'liberado', paso: 'Ordenador' })];
   const r = L.resumenMes(txs, '2026-11');
   assert.equal(r.ingresado, 570); assert.equal(r.enEspera, 0); assert.equal(r.totalGastos, 100);
   assert.ok(!L.esClaveBanco('liberado'));
 });
 prueba('paso: llega el 29 y sale el 2, los dos cuentan para el mes siguiente', () => {
-  const txs = [...base, m('2026-11-29', 80, 'ingreso', '↩️ Reenviado'), m('2026-12-02', 80, 'gasto', '↩️ Reenviado')];
-  assert.equal(L.resumenMes(txs, '2026-11').totalPaso, 0); assert.equal(L.resumenMes(txs, '2026-12').totalPaso, 0);
+  const txs = [...base, P('2026-11-29', 80, 'ingreso', 'Regalo'), P('2026-12-02', 80, 'gasto', 'Regalo')];
+  assert.equal(L.resumenMes(txs, '2026-11').totalPaso, 0); assert.equal(L.resumenMes(txs, '2026-11').enEspera, 0);
+  assert.equal(L.resumenMes(txs, '2026-12').totalPaso, 0);
 });
 prueba('traspaso: no cuenta como ingreso ni gasto', () => {
   const r = L.resumenMes([...base, m('2026-11-03', 200, 'ingreso', '🔄 Traspaso'), m('2026-11-04', 50, 'gasto', '🔄 Traspaso')], '2026-11');

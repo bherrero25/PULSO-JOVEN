@@ -27,8 +27,8 @@ Si sale **✗**, algo se ha roto: no se publica hasta arreglarlo. Las capturas d
 | `prueba_registro.py` | «Crear cuenta» en la app nueva y en la antigua con las tres respuestas de Supabase |
 | `prueba_tu_dinero.py` | Cuentas, lo apuntado después del extracto, el desglose, el saldo al importar y sin la tabla de cuentas |
 | `prueba_categorias.py` | Bizum en categorías reales, coche compartido descontado de la gasolina y la casilla «recordar» |
-| `prueba_paso_espera.py` | Dinero de paso en espera (no suma ni a lo ingresado ni a la previsión), al salir no resta, «Me lo quedo» y deshacerlo |
-| `prueba_paso_traspaso.py` | Dinero de paso en los dos sentidos y traspasos (con deshacer) |
+| `prueba_paso_espera.py` | Dinero de paso con propósito (un mes real: alquiler, dentista y luz, ordenador): en espera, asignar para qué es, comprar con él, «Me lo quedo» y sin la columna |
+| `prueba_paso_traspaso.py` | Dinero de paso en los dos sentidos (preguntando para qué es) y traspasos (con deshacer) |
 | `prueba_importar.py` | Retenidos (con y sin la columna), juntar lo apuntado a mano y lo de Apple Pay, volver a subir sin duplicar |
 | `prueba_atajo.py` | Atajo de Apple Pay: clasificación al abrir, hoja con el código y sin la tabla |
 | `prueba_apuntar.py` | Botones de apuntar rápido y textos que se adaptan a Bizum y transferencia |

@@ -1,5 +1,6 @@
 """Dinero de paso y traspasos (modo demo): ni el dinero de paso ni los traspasos cuentan como ingreso o gasto; lo que llega
-de paso y lo que sale se compensan; un traspaso resta o suma en la cuenta elegida de «Tu dinero» y se puede deshacer."""
+de paso y lo que sale para lo mismo se compensan (la app pregunta para qué es); un traspaso resta o suma en la cuenta
+elegida de «Tu dinero» y se puede deshacer."""
 from playwright.sync_api import sync_playwright
 from comun import Resultado, lanzar, pagina, apuntar, euros, iso
 
@@ -28,15 +29,20 @@ with sync_playwright() as p:
     pg.locator('#lista-movs .fila:has-text("60,00")').first.click(); pg.wait_for_selector('.rejilla-cats')
     res.comprobar('Dinero de paso' in pg.locator('.rejilla-cats button').all_inner_texts(), 'un ingreso se puede marcar como dinero de paso')
     res.comprobar(not pg.is_checked('#recordar'), 'cambiar una transferencia de casa no cambia la regla por defecto')
-    pg.click('.rejilla-cats button:has-text("Dinero de paso")'); pg.wait_for_timeout(300)
+    pg.click('.rejilla-cats button:has-text("Dinero de paso")'); pg.wait_for_selector('#paso-nuevo')
+    res.comprobar('¿Para qué es este dinero?' in pg.inner_text('.hoja-cab'), 'al marcar algo como dinero de paso pregunta para qué es')
+    pg.fill('#paso-nuevo', 'Seguro del coche'); pg.click('[data-accion="poner-paso-nuevo"]'); pg.wait_for_timeout(300)
     pg.fill('input[data-entrada="buscar"]', 'transferencia de casa'); pg.wait_for_timeout(150)
     res.comprobar(pg.locator('#lista-movs .fila:has-text("Mensualidad")').count() == mensualidades - 1, 'solo esa transferencia deja de ser mensualidad')
     apuntar(pg, 'gasto', '60', 'reenviado', iso(0), 'tarjeta', 'Seguro del coche de papá')
+    pg.wait_for_selector('[data-accion="poner-paso"][data-paso="Seguro del coche"]')
+    res.comprobar('¿Con qué dinero lo pagas?' in pg.inner_text('.hoja-cab'), 'al apuntar un gasto de paso pregunta con qué dinero se paga, y ofrece el que hay en espera')
+    pg.click('[data-accion="poner-paso"][data-paso="Seguro del coche"]'); pg.wait_for_timeout(300)
     c1 = cifras(pg)
     res.comprobar(c1 == c0, 'llega y sale el mismo dinero de paso: balance, ingresado y gastado como al principio')
-    pg.click('.barra a[href="#/resumen"]'); pg.wait_for_selector('section[aria-label="De dónde viene"]')
-    texto = pg.inner_text('section[aria-label="De dónde viene"]')
-    res.comprobar('Llegaron 60,00 €' in texto, 'el Resumen explica lo que llegó y salió de paso')
+    pg.click('.barra a[href="#/resumen"]'); pg.wait_for_selector('section[aria-label="Dinero de paso"]')
+    texto = pg.inner_text('section[aria-label="Dinero de paso"]')
+    res.comprobar('Seguro del coche' in texto and 'Llegaron 60,00 €' in texto and 'se compensan' in texto, 'el Resumen explica lo que llegó y salió para cada cosa')
 
     # ── Traspaso: meter en el banco 200 € del efectivo ahorrado ──
     apuntar(pg, 'ingreso', '200', 'traspaso', iso(0), 'efectivo', 'Ahorros al banco')

@@ -77,13 +77,10 @@ export function render(E) {
     ${fuentes.length ? fuentes.map(g => `<details class="cat-fila"><summary><div class="fila" style="border:none">${ficha(g.cat)}<span class="cuerpo"><span class="concepto" style="font-size:14px">${esc(g.cat.nombre)}</span></span><span class="importe num" style="font-size:14px">${fmt(g.total)}</span></div></summary>
       <div class="detalle">${g.txs.map(t => `<div><span>${fechaCorta(t.fecha)} · ${esc(conceptoVisible(t))}</span><span class="num">${fmt(t.importe)}</span></div>`).join('')}</div></details>`).join('')
       : `<p class="vacio">Aún no ha entrado dinero en ${mes}</p>`}
-    ${R.paso.length || (ritmo.abierto && R.enEspera > 0) ? `<details class="cat-fila" style="border-top:1px solid var(--linea-suave);margin-top:4px;padding-top:4px"${ritmo.abierto && R.enEspera > 0 ? ' open' : ''}><summary><div class="fila" style="border:none">
-      <span class="ficha">${ic('paso')}</span>
-      <span class="cuerpo"><span class="concepto" style="font-size:14px">Dinero de paso</span><span class="detalle">${textoPaso(R)}</span></span>
-      <span class="importe num texto-2" style="font-size:14px">${R.totalPaso ? fmt(-R.totalPaso, true) : fmt(0)}</span></div></summary>
-      <div class="detalle">${[...R.paso].sort((a, b) => b.fecha.localeCompare(a.fecha)).map(t => `<div><span>${fechaCorta(t.fecha)} · ${esc(conceptoVisible(t))}</span><span class="num${t.tipo === 'ingreso' ? ' positivo' : ''}">${fmt(t.tipo === 'ingreso' ? +t.importe : -t.importe, true)}</span></div>`).join('')}
-      </div>${ritmo.abierto ? `<div style="padding:4px 0 8px">${paso.aviso(E, { conBoton: pv?.final == null })}</div>` : ''}</details>` : ''}
+    ${R.totalPaso ? `<p class="nota" style="padding-top:6px">Ya está descontado el dinero de paso que salió de tu dinero (${fmt(-R.totalPaso, true)}): lo tienes en «Dinero de paso».</p>` : ''}
   </section>
+
+  ${paso.seccion(E, E.mes, ritmo.abierto)}
 
   ${comparacion ? `<section class="tarjeta-tinta" aria-label="Comparación" style="flex-direction:row;align-items:flex-start;gap:12px;padding:16px">
     <span class="ficha" style="background:var(--tinta-2);color:var(--lima)">${ic('tendencia')}</span>

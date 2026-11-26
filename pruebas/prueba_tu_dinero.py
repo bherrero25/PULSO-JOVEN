@@ -22,6 +22,7 @@ with sync_playwright() as p:
     pg.click('.rapidos a:has-text("Transferencia")'); pg.wait_for_selector('.teclado'); pg.click('.tipo button:has-text("Recibida")')
     for k in '200': pg.click(f'.teclado [data-valor="{k}"]')
     pg.click('[data-accion="cat-nuevo"][data-valor="reenviado"]'); pg.click('[data-accion="guardar-nuevo"]'); pg.wait_for_selector('.saludo')
+    pg.wait_for_selector('[data-accion="poner-paso"][data-paso=""]'); pg.click('[data-accion="poner-paso"][data-paso=""]'); pg.wait_for_timeout(300)  # «Todavía no lo sé»
     res.comprobar(abs(banco(pg) - (b0 + 200)) < 0.005, 'lo apuntado a mano después del extracto se suma al banco')
     res.comprobar('apuntado después' in pg.inner_text('section[aria-label="Tu dinero"]'), 'y la fila del banco lo dice')
     pg.click('.rapidos a:has-text("Gasto")'); pg.wait_for_selector('.teclado'); pg.click('.formas button:has-text("Efectivo")')

@@ -53,6 +53,15 @@ prueba('paso: llega el 29 y sale el 2, los dos cuentan para el mes siguiente', (
   assert.equal(L.resumenMes(txs, '2026-11').totalPaso, 0); assert.equal(L.resumenMes(txs, '2026-11').enEspera, 0);
   assert.equal(L.resumenMes(txs, '2026-12').totalPaso, 0);
 });
+prueba('dividir: la mensualidad con el alquiler dentro cuenta por partes, en el mes de la mensualidad', () => {
+  const txs = [m('2026-10-30', 686, 'ingreso', '💰 Mensualidad', { id: 1, partes: [{ importe: 300, categoria: '↩️ Reenviado', paso: 'Alquiler' }] }),
+    P('2026-11-02', 300, 'gasto', 'Alquiler'), m('2026-11-05', 50, 'gasto', '🍔 Comida')];
+  const r = L.resumenMes(txs, '2026-11');
+  assert.equal(r.ingresado, 386); assert.equal(r.totalPaso, 0); assert.equal(r.enEspera, 0);
+  assert.equal(r.movs.length, 3, 'las listas siguen viendo el movimiento entero');
+  assert.deepEqual(L.desglosar(txs).filter(t => t.parteDe === 1).map(t => [t.categoria, t.importe]), [['💰 Mensualidad', 386], ['↩️ Reenviado', 300]]);
+  assert.equal(L.resumenMes(txs, '2026-10').ingresado, 0, 'la parte no se va al mes de la fecha (octubre)');
+});
 prueba('traspaso: no cuenta como ingreso ni gasto', () => {
   const r = L.resumenMes([...base, m('2026-11-03', 200, 'ingreso', '🔄 Traspaso'), m('2026-11-04', 50, 'gasto', '🔄 Traspaso')], '2026-11');
   assert.equal(r.ingresado, 470); assert.equal(r.totalGastos, 100);

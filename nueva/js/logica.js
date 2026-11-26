@@ -128,10 +128,31 @@ const esMensualidad = t => t.tipo === 'ingreso' && t.categoria === BD.MENSUALIDA
 // La mensualidad y el dinero de paso de los 3 últimos días del mes cuentan para el mes siguiente
 // (la transferencia del 30 de octubre es la de noviembre)
 export function mesEfectivo(t) {
+  if (t._mes) return t._mes; // parte de un movimiento dividido: cuenta en el mes del movimiento
   const mes = t.fecha.slice(0, 7);
   if (!esMensualidad(t) && !esPaso(t)) return mes;
   const dia = Number(t.fecha.slice(8));
   return dia <= diasDelMes(mes) - 3 ? mes : sumarMeses(mes, 1);
+}
+
+// ─── DIVIDIR UN MOVIMIENTO ───
+// Un movimiento puede repartirse en partes con otra categoría (pj_transacciones.partes: [{ importe, categoria, paso }]),
+// como los 300 € del alquiler que vienen dentro de la mensualidad (dinero de paso «Alquiler»). En la base de datos sigue
+// siendo uno, como en el banco (así el extracto no lo duplica); para las cuentas se usan sus partes: cada una con su
+// categoría y lo que queda con la del movimiento, todas en el mes del movimiento. Las listas enseñan el movimiento entero.
+export const partesDe = t => Array.isArray(t.partes) ? t.partes.filter(p => parseFloat(p.importe) > 0) : [];
+export function desglosar(lista) {
+  if (!lista.some(t => partesDe(t).length)) return lista;
+  const out = [];
+  for (const t of lista) {
+    const partes = partesDe(t);
+    if (!partes.length) { out.push(t); continue; }
+    const _mes = mesEfectivo(t);
+    const resto = Math.round((parseFloat(t.importe) - sumar(partes)) * 100) / 100;
+    if (resto > 0.005) out.push({ ...t, importe: resto, partes: null, parteDe: t.id, _mes });
+    partes.forEach((p, i) => out.push({ ...t, id: `${t.id}·${i + 1}`, importe: Math.round(parseFloat(p.importe) * 100) / 100, categoria: p.categoria, paso: p.paso || null, partes: null, parteDe: t.id, _mes }));
+  }
+  return out;
 }
 
 // «Me lo quedo»: la parte del dinero de paso en espera que al final es tuya. Es un ingreso normal (con su categoría) que
@@ -151,7 +172,7 @@ const r2 = n => Math.round(n * 100) / 100;
 // luego llega lo que faltaba, suma ese otro mes). `efecto` es lo que se resta de lo ingresado en ese mes por la bolsa.
 export function bolsasPaso(txs, ym) {
   const anterior = sumarMeses(ym, -1), mapa = new Map(), deTuDinero = [];
-  for (const t of txs) {
+  for (const t of desglosar(txs)) {
     const liberado = esLiberado(t), paso = esPaso(t);
     if (!liberado && !paso) continue;
     const mes = mesEfectivo(t);
@@ -175,11 +196,12 @@ export function bolsasPaso(txs, ym) {
 
 // Dinero de paso (ver bolsasPaso): no cuenta como ingreso ni como gasto; solo resta lo que sale de tu dinero.
 export function resumenMes(txs, ym) {
-  const movs = txs.filter(t => mesEfectivo(t) === ym);
-  const gastos = movs.filter(esGasto), ingresos = movs.filter(esIngreso), paso = movs.filter(esPaso);
+  const movs = txs.filter(t => mesEfectivo(t) === ym); // tal cual, para las listas
+  const partes = desglosar(movs);                       // para las cuentas: los movimientos divididos, en sus partes
+  const gastos = partes.filter(esGasto), ingresos = partes.filter(esIngreso), paso = partes.filter(esPaso);
   const pasoLlega = sumar(paso.filter(t => t.tipo === 'ingreso')), pasoSale = sumar(paso.filter(t => t.tipo === 'gasto'));
   // totalPaso > 0: este mes ha salido dinero de paso con tu dinero (se resta de lo ingresado); < 0: te han devuelto lo que pusiste
-  const { totalPaso, enEspera } = bolsasPaso(txs, ym), liberado = sumar(movs.filter(esLiberado));
+  const { totalPaso, enEspera } = bolsasPaso(txs, ym), liberado = sumar(partes.filter(esLiberado));
   const totalGastos = sumar(gastos), ingresosBrutos = sumar(ingresos);
   const ingresado = ingresosBrutos - totalPaso;
   return { ym, movs, gastos, ingresos, paso, pasoLlega, pasoSale, totalGastos, ingresosBrutos, totalPaso, enEspera, liberado, ingresado, queda: ingresado - totalGastos };
@@ -198,7 +220,7 @@ export function porCategoria(lista) {
 }
 
 export function gastoHastaDia(txs, ym, dia) {
-  return sumar(txs.filter(t => esGasto(t) && t.fecha.slice(0, 7) === ym && Number(t.fecha.slice(8)) <= dia));
+  return sumar(desglosar(txs).filter(t => esGasto(t) && t.fecha.slice(0, 7) === ym && Number(t.fecha.slice(8)) <= dia));
 }
 
 // Meses que se pueden consultar: desde el primero con datos hasta el actual
@@ -616,7 +638,7 @@ export function gastoDiarioHabitual(txs, fijos, hoy = hoyISO()) {
   const semanas = Math.min(12, Math.floor((diasEntre(primero, ayer) + 1) / 7));
   if (semanas < 1) return null;
   const fijas = categoriasFijas(fijos);
-  const delDia = txs.filter(t => esDelDiaADia(t, fijas));
+  const delDia = desglosar(txs).filter(t => esDelDiaADia(t, fijas));
   const sumas = Array.from({ length: semanas }, (_, k) => {
     const hasta = sumarDias(ayer, -7 * k), desde = sumarDias(hasta, -6);
     return sumar(delDia.filter(t => t.fecha >= desde && t.fecha <= hasta));
@@ -651,7 +673,7 @@ export function prevision(txs, fijos, hoy = hoyISO()) {
     maxDiario: base > 0 ? redondear(base / (restantes + 1)) : 0, habitual, final: null, estado: null };
   if (!habitual) return out;
   const fijas = categoriasFijas(fijos);
-  const gastoHoy = sumar(txs.filter(t => t.fecha === hoy && esDelDiaADia(t, fijas)));
+  const gastoHoy = sumar(desglosar(txs).filter(t => t.fecha === hoy && esDelDiaADia(t, fijas)));
   out.restoDeHoy = redondear(Math.max(0, habitual.diario - gastoHoy));
   out.diaADia = redondear(habitual.diario * restantes + out.restoDeHoy);
   out.final = redondear(base - out.diaADia);

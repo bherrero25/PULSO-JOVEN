@@ -86,8 +86,10 @@ export async function cargarTodo(usuario) {
     const conRetenidos = txs.length ? 'pendiente' in txs[0] : !(await sb.from('pj_transacciones').select('pendiente').limit(1)).error;
     // Para qué es cada dinero de paso necesita la columna «paso» (sql/2026-11-paso.sql)
     const conPaso = txs.length ? 'paso' in txs[0] : !(await sb.from('pj_transacciones').select('paso').limit(1)).error;
+    // Dividir un movimiento necesita la columna «partes» (sql/2026-11-partes.sql)
+    const conPartes = txs.length ? 'partes' in txs[0] : !(await sb.from('pj_transacciones').select('partes').limit(1)).error;
     const [cuentas, fijos, formatos] = await Promise.all([cargarCuentas(), cargarFijos(), cargarFormatos()]);
-    return { txs, presupuestos, metas, reglas, cuentas, fijos, formatos, conRetenidos, conPaso };
+    return { txs, presupuestos, metas, reglas, cuentas, fijos, formatos, conRetenidos, conPaso, conPartes };
   } catch (error) {
     avisarError(error, 'cargar tus datos');
     return null;

@@ -11,7 +11,8 @@ txs = [fila(id=1, fecha=iso(1), descripcion=f'BIZUM DE ALGUIEN {ATAQUE}', import
        fila(id=3, fecha=iso(3), descripcion='MERCADONA', importe=20, categoria='🍔 Comida'),
        fila(id=4, fecha=iso(0), descripcion=f'Apuntado {ATAQUE}', importe=3, categoria='🍔 Comida', cuenta='manual'),
        fila(id=5, fecha=iso(2), descripcion='TRANSFERENCIA DE PAPA', importe=50, tipo='ingreso', categoria='↩️ Reenviado', paso=f'Para {ATAQUE}')]
-for t in txs: t.setdefault('paso', None)  # con la columna «paso» (para qué es el dinero de paso)
+txs.append(fila(id=6, fecha=iso(3), descripcion='TRANSFERENCIA DE CASA', importe=500, tipo='ingreso', categoria='💰 Mensualidad', partes=[{'importe': 100, 'categoria': '↩️ Reenviado', 'paso': f'Parte {ATAQUE}'}]))
+for t in txs: t.setdefault('paso', None); t.setdefault('partes', None)  # con las columnas «paso» y «partes»
 tablas = lambda: {'pj_transacciones': [dict(t) for t in txs], 'pj_reglas_categoria': [],
                   'pj_cuentas': [{'id': 'k1', 'user_id': 'u1', 'nombre': f'Cuenta {ATAQUE}', 'tipo': 'ahorro', 'clave': None, 'saldo': 100, 'fecha_saldo': iso(5)}],
                   'pj_presupuestos': [{'id': 1, 'user_id': 'u1', 'categoria': f'💥 {ATAQUE}', 'limite': 50, 'mes': '2026-01'}],
@@ -38,8 +39,14 @@ with sync_playwright() as p:
     # Dinero de paso: el nombre de para qué es lo escribe la persona (sección de Resumen y hoja para elegirlo)
     pg.goto('http://pulso.prueba/nueva/#/resumen'); pg.wait_for_selector('section[aria-label="Dinero de paso"]')
     res.comprobar('<img' in pg.inner_text('section[aria-label="Dinero de paso"]'), 'app nueva: el nombre de para qué es el dinero de paso se enseña como texto')
-    pg.click('section[aria-label="Dinero de paso"] summary >> nth=0'); pg.click('section[aria-label="Dinero de paso"] [data-accion="elegir-paso"] >> nth=0'); pg.wait_for_timeout(300)
+    for resumen in pg.locator('section[aria-label="Dinero de paso"] summary').all(): resumen.click()
+    pg.click('section[aria-label="Dinero de paso"] [data-accion="elegir-paso"] >> nth=0'); pg.wait_for_timeout(300)
     pg.keyboard.press('Escape')
+    # Un movimiento dividido con una parte cuyo «para qué» lleva código: hoja del movimiento y de dividir
+    pg.goto('http://pulso.prueba/nueva/#/movimientos'); pg.wait_for_selector('#lista-movs')
+    pg.click('#lista-movs .fila:has-text("500,00")'); pg.wait_for_selector('.hoja-panel')
+    res.comprobar('<img' in pg.inner_text('.hoja-panel'), 'app nueva: las partes de un movimiento dividido se enseñan como texto')
+    pg.click('[data-accion="dividir-mov"]'); pg.wait_for_timeout(300); pg.keyboard.press('Escape')
     pg.goto('http://pulso.prueba/nueva/#/anadir'); pg.click('[data-accion="tab-anadir"][data-valor="auto"]'); pg.click('[data-accion="gestionar-fijos"]'); pg.wait_for_timeout(300)
     pg.keyboard.press('Escape')
     importar(pg, extracto('ataque', [(dmy(0), f'BIZUM DE OTRA {ATAQUE}', 2, 100.0)]))

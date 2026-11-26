@@ -25,7 +25,7 @@ export function datosDemo() {
   const txs = [];
   let id = 1;
   const mov = (fecha, descripcion, importe, tipo, categoria, medio = 'tarjeta') => {
-    if (fecha <= hoy) txs.push({ id: 'demo' + id++, fecha, descripcion, importe: Math.round(importe * 100) / 100, tipo, categoria, medio, cuenta: 'bankinter', paso: null });
+    if (fecha <= hoy) txs.push({ id: 'demo' + id++, fecha, descripcion, importe: Math.round(importe * 100) / 100, tipo, categoria, medio, cuenta: 'bankinter', paso: null, partes: null });
   };
   for (let i = 5; i >= 0; i--) {
     const ym = sumarMeses(actual, -i);
@@ -76,5 +76,5 @@ export function datosDemo() {
     { id: 'f1', nombre: 'Transferencia de casa', tipo: 'ingreso', categoria: '💰 Mensualidad', importe: 470, dia: 29, medio: 'transferencia', activo: true },
     { id: 'f2', nombre: 'Nómina Bar La Esquina', tipo: 'ingreso', categoria: '💰 Nómina', importe: 320, dia: 20, medio: 'transferencia', activo: true }
   ].map(f => ({ ...f, ultimo: ultimaFechaFijo(f) }));
-  return { txs, presupuestos, metas, reglas: {}, cuentas, fijos, conRetenidos: true, conPaso: true };
+  return { txs, presupuestos, metas, reglas: {}, cuentas, fijos, conRetenidos: true, conPaso: true, conPartes: true };
 }

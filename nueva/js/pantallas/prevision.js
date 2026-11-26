@@ -38,7 +38,7 @@ export function apartado(E, pv) {
       ${linea('Lo que llevas este mes (entrado − gastado)', pv.llevas)}
       ${fijos ? `<span class="nota" style="margin-bottom:-4px">Falta por llegar o pagar (tus movimientos fijos):</span>${fijos}` : ''}
       ${pv.restoDeHoy ? linea('Lo que sueles gastar y aún no has gastado hoy', -pv.restoDeHoy) : ''}
-      ${pv.restantes ? linea(`Día a día hasta fin de mes: unos ${fmt(pv.habitual.diario)} × ${pv.restantes} ${pv.restantes === 1 ? 'día' : 'días'}`, -(pv.diaADia - pv.restoDeHoy)) : ''}
+      ${pv.restantes && pv.diaADia - pv.restoDeHoy > 0 ? linea(`Día a día hasta fin de mes: unos ${fmt(pv.habitual.diario)} × ${pv.restantes} ${pv.restantes === 1 ? 'día' : 'días'}`, -(pv.diaADia - pv.restoDeHoy)) : ''}
       ${linea(`Al acabar ${mes}, más o menos`, pv.final, true)}
     </div>
     ${paso.aviso(E)}

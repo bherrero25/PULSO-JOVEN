@@ -1,9 +1,10 @@
 // Movimientos: lista del mes con buscador y filtros; al tocar uno se puede cambiar su categoría, fecha o forma de pago
 
 import { ic } from '../iconos.js';
-import { esc, fmt, resumenMes, porRevisar, etiquetaDia, infoCategoria, CATEGORIAS, claveConcepto, MEDIOS, BD, esGasto, esIngreso, esBizum, CUENTA_MANUAL, esManual, cuentasBanco, cuentaManual, cuentaPrincipal, gemeloEnBanco, medioDe, propositoPaso } from '../logica.js';
+import { esc, fmt, resumenMes, porRevisar, etiquetaDia, infoCategoria, CATEGORIAS, claveConcepto, MEDIOS, BD, esGasto, esIngreso, esBizum, CUENTA_MANUAL, esManual, cuentasBanco, cuentaManual, cuentaPrincipal, gemeloEnBanco, medioDe, propositoPaso, desglosar, partesDe } from '../logica.js';
 import { preguntarTraspaso, ajustarEfectivo } from './dinero.js';
 import { preguntarPaso } from './paso.js';
+import { sePuedeDividir, resumenPartes } from './dividir.js';
 import { selectorMes, filaMovimiento, ficha, conceptoVisible, importeMovimiento } from '../componentes.js';
 import { abrirHoja, cerrarHoja, cabeceraHoja, toast, confirmar } from '../ui.js';
 import * as D from '../datos.js';
@@ -59,8 +60,9 @@ function filtroCuentas(E) {
 
 export function renderLista(E) {
   const lista = visibles(E);
-  const gastos = lista.filter(esGasto).reduce((s, t) => s + +t.importe, 0);
-  const ingresos = lista.filter(esIngreso).reduce((s, t) => s + +t.importe, 0);
+  const partes = desglosar(lista); // los divididos cuentan por partes
+  const gastos = partes.filter(esGasto).reduce((s, t) => s + +t.importe, 0);
+  const ingresos = partes.filter(esIngreso).reduce((s, t) => s + +t.importe, 0);
   const cab = `<div style="display:flex;flex-wrap:wrap;gap:4px 14px;font-size:13px;color:var(--texto-2)">
     <span>${lista.length} ${lista.length === 1 ? 'movimiento' : 'movimientos'}</span>
     <span class="num" style="color:var(--texto)">${fmt(-gastos, true)}</span>
@@ -116,6 +118,11 @@ function abrirEdicion(ctx, t) {
     </div>
     ${paraQue(E, t)}
     ${dondeEsta(E, t)}
+    ${sePuedeDividir(E, t) ? (partesDe(t).length
+      ? `<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--fondo);border-radius:12px;padding:10px 12px;font-size:14px">
+          <span><span class="nota" style="display:block">Dividido</span>${esc(resumenPartes(t))} · el resto, ${esc(infoCategoria(t.categoria).nombre)}</span>
+          <button type="button" class="enlace" data-accion="dividir-mov" data-id="${esc(t.id)}">Cambiar</button></div>`
+      : `<button type="button" class="boton suave peq" data-accion="dividir-mov" data-id="${esc(t.id)}">${ic('lista')}Dividir en partes</button>`) : ''}
     <button type="button" class="boton peligro peq" data-accion="borrar-mov" data-id="${esc(t.id)}">${ic('papelera')}Borrar movimiento</button>`, 'Editar movimiento');
 }
 

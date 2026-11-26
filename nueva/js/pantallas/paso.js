@@ -63,6 +63,8 @@ export function seccion(E, ym, abierto) {
   if (!bolsas.length && !B.deTuDinero.length) return '';
   const filaMov = t => {
     const texto = `<span>${fechaCorta(t.fecha)} · ${esc(conceptoVisible(t))}</span><span class="num${t.tipo === 'ingreso' && t.cuenta !== CUENTA_LIBERADO ? ' positivo' : ''}">${t.cuenta === CUENTA_LIBERADO ? `Te lo quedaste · ${fmt(t.importe)}` : fmt(t.tipo === 'ingreso' ? +t.importe : -t.importe, true)}</span>`;
+    // Una parte de un movimiento dividido se cambia desde «Dividir»; lo demás, eligiendo para qué es
+    if (t.parteDe != null && String(t.id) !== String(t.parteDe)) return `<button type="button" data-accion="dividir-mov" data-id="${esc(t.parteDe)}">${texto}</button>`;
     return E.conPaso && t.cuenta !== CUENTA_LIBERADO ? `<button type="button" data-accion="elegir-paso" data-id="${esc(t.id)}">${texto}</button>` : `<div>${texto}</div>`;
   };
   const efecto = n => n ? fmt(-n, true) : fmt(0);

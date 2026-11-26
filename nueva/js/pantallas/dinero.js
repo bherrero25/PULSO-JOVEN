@@ -18,6 +18,7 @@ function hojaCuentas(E) {
 
 const NOTA_BANCO_NUEVA = 'Cuando subas su extracto, la app la reconocerá por estas cifras y pondrá el saldo al día. Las ves en la app de tu banco, al final del número de cuenta (IBAN). Si no las tienes a mano, sube directamente el extracto: la cuenta se crea sola.';
 const NOTA_MANO = 'Es lo que tienes ahora: no cuenta como ingreso de ningún mes. Cámbialo cuando quieras.';
+const NOTA_EFECTIVO = 'Es lo que tienes ahora. Lo que apuntes como gastado o recibido en efectivo (en mano) se resta o se suma solo; si cuentas tu dinero y no coincide, cámbialo aquí.';
 
 // Con varias cuentas de banco, cada una puede ser la principal: viene elegida al apuntar a mano y recibe lo de Apple Pay
 function bloquePrincipal(E, c) {
@@ -45,7 +46,7 @@ function hojaCuenta(E, id) {
       <label class="campo">Banco<select id="cuenta-entidad">${BANCOS.map(([k, n]) => `<option value="${k}">${n}</option>`).join('')}</select></label>
       <label class="campo">4 últimas cifras<input type="text" id="cuenta-numero" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="1234"></label>
     </div>`}
-    <p class="nota" id="cuenta-nota">${banco ? (sinExtracto ? `Cuenta ···${esc(numeroDeClave(banco) || '')}: cuando subas su extracto, la app la reconocerá por su número y pondrá el saldo al día.` : `Es el saldo contable del extracto de ${esc(nombreCuenta(banco))}; en «Tu dinero» se le resta lo retenido y se tiene en cuenta lo que apuntes después. Se actualiza solo cada vez que importas el extracto; si lo cambias aquí, valdrá hasta la próxima importación.`) : NOTA_MANO}</p>
+    <p class="nota" id="cuenta-nota">${!banco && (c?.tipo || 'efectivo') === 'efectivo' ? NOTA_EFECTIVO : banco ? (sinExtracto ? `Cuenta ···${esc(numeroDeClave(banco) || '')}: cuando subas su extracto, la app la reconocerá por su número y pondrá el saldo al día.` : `Es el saldo contable del extracto de ${esc(nombreCuenta(banco))}; en «Tu dinero» se le resta lo retenido y se tiene en cuenta lo que apuntes después. Se actualiza solo cada vez que importas el extracto; si lo cambias aquí, valdrá hasta la próxima importación.`) : NOTA_MANO}</p>
     <button type="button" class="boton" data-accion="guardar-cuenta" data-id="${esc(c?.id || '')}">Guardar</button>
     ${banco ? bloquePrincipal(E, c) : ''}
     ${banco && cuentasBanco(E.cuentas).length > 1 ? `<button type="button" class="boton suave peq" data-accion="ver-movimientos-cuenta" data-clave="${esc(c.clave)}">${ic('lista')}Ver sus movimientos</button>` : ''}
@@ -90,15 +91,7 @@ export function preguntarTraspaso(ctx, t, deshacer = false) {
   const signo = (t.tipo === 'ingreso' ? -1 : 1) * (deshacer ? -1 : 1);
   const titulo = deshacer ? (signo > 0 ? '¿Devolvemos este dinero a alguna cuenta?' : '¿Lo quitamos de alguna cuenta?')
     : t.tipo === 'ingreso' ? '¿De dónde salía este dinero?' : '¿A dónde ha ido este dinero?';
-  const opciones = cuentas.map(c => {
-    const antes = parseFloat(c.saldo), despues = antes + signo * parseFloat(t.importe);
-    const tarde = c.fecha_saldo > t.fecha;
-    return `<button type="button" class="fila" data-accion="aplicar-traspaso" data-cuenta="${esc(c.id)}" data-delta="${signo * parseFloat(t.importe)}">
-      <span class="ficha">${ic((TIPOS_CUENTA[c.tipo] || TIPOS_CUENTA.efectivo)[1])}</span>
-      <span class="cuerpo"><span class="concepto">${esc(c.nombre)}</span>
-        <span class="detalle">${saldoTexto(antes)} → <b>${saldoTexto(despues)}</b>${tarde ? ` · saldo apuntado el ${fechaCorta(c.fecha_saldo)}, después de este movimiento` : ''}</span></span>
-      ${ic('derecha', 'ic-s')}</button>`;
-  }).join('');
+  const opciones = opcionesAjuste(cuentas, signo * parseFloat(t.importe), t.fecha);
   abrirHoja(`${cabeceraHoja(titulo, 'Traspaso entre tus cuentas')}
     <p class="texto-2" style="font-size:14px;line-height:1.45;margin-top:-6px">Elige la cuenta: ${signo < 0 ? 'se le restarán' : 'se le sumarán'} <b>${fmt(t.importe)}</b> en «Tu dinero». No cuenta como ${t.tipo === 'ingreso' ? 'ingreso' : 'gasto'} del mes.</p>
     <div>${opciones}</div>
@@ -106,12 +99,58 @@ export function preguntarTraspaso(ctx, t, deshacer = false) {
     <p class="nota">Elige «No cambiar» si el saldo de esa cuenta ya lo apuntaste contando con este movimiento.</p>`, 'Traspaso entre tus cuentas');
 }
 
+// Cuentas entre las que elegir al ajustar un saldo, con cómo quedaría cada una. `mantener`: el ajuste no cambia la fecha
+// del saldo (la del último recuento), como en lo que entra o sale en efectivo.
+function opcionesAjuste(cuentas, delta, fecha, mantener = false) {
+  return cuentas.map(c => {
+    const antes = parseFloat(c.saldo), despues = antes + delta;
+    const tarde = c.fecha_saldo > fecha;
+    return `<button type="button" class="fila" data-accion="aplicar-traspaso" data-cuenta="${esc(c.id)}" data-delta="${delta}"${mantener ? ' data-mantener="1"' : ''}>
+      <span class="ficha">${ic((TIPOS_CUENTA[c.tipo] || TIPOS_CUENTA.efectivo)[1])}</span>
+      <span class="cuerpo"><span class="concepto">${esc(c.nombre)}</span>
+        <span class="detalle">${saldoTexto(antes)} → <b>${saldoTexto(despues)}</b>${tarde ? ` · saldo apuntado el ${fechaCorta(c.fecha_saldo)}, después de este movimiento` : ''}</span></span>
+      ${ic('derecha', 'ic-s')}</button>`;
+  }).join('');
+}
+
+// Lo que entra o sale en efectivo (en mano) cambia tu efectivo en «Tu dinero» (las cuentas de tipo Efectivo).
+// Con una sola cuenta de efectivo se ajusta sola; con varias, o si el movimiento es de antes del último saldo que apuntaste
+// (quizá ya contaba con él), se pregunta. `deshacer`: al borrarlo o pasarlo al banco. `aviso`: lo que se iba a decir.
+export async function ajustarEfectivo(ctx, t, deshacer = false, aviso = '') {
+  const { E } = ctx;
+  const unir = (...x) => x.filter(Boolean).join(' · ');
+  const cuentas = (E.cuentas || []).filter(c => !c.clave && c.tipo === 'efectivo');
+  if (!cuentas.length || (t.tipo !== 'ingreso' && t.tipo !== 'gasto')) {
+    const pista = E.cuentas && !deshacer && t.tipo === 'ingreso' ? 'Para que cuente en «Tu dinero», añade allí tu efectivo' : '';
+    if (aviso || pista) toast(unir(aviso, pista));
+    return;
+  }
+  const delta = Math.round((t.tipo === 'ingreso' ? 1 : -1) * (deshacer ? -1 : 1) * parseFloat(t.importe) * 100) / 100;
+  if (cuentas.length === 1 && t.fecha >= cuentas[0].fecha_saldo) {
+    const c = cuentas[0], saldo = Math.round((parseFloat(c.saldo) + delta) * 100) / 100;
+    const fila = await D.guardarCuenta({ id: c.id, nombre: c.nombre, tipo: c.tipo, saldo, fecha_saldo: c.fecha_saldo });
+    if (!fila) return;
+    Object.assign(c, fila);
+    toast(unir(aviso, `${c.nombre}: ${saldoTexto(saldo)}`));
+    ctx.pintar();
+    return;
+  }
+  if (aviso) toast(aviso);
+  const titulo = deshacer ? (delta > 0 ? '¿Lo devolvemos a tu efectivo?' : '¿Lo quitamos de tu efectivo?')
+    : t.tipo === 'ingreso' ? '¿Dónde has guardado este dinero?' : '¿De dónde has sacado este dinero?';
+  abrirHoja(`${cabeceraHoja(titulo, 'Tu efectivo')}
+    <p class="texto-2" style="font-size:14px;line-height:1.45;margin-top:-6px">Elige la cuenta: ${delta < 0 ? 'se le restarán' : 'se le sumarán'} <b>${fmt(t.importe)}</b> en «Tu dinero».</p>
+    <div>${opcionesAjuste(cuentas, delta, t.fecha, true)}</div>
+    <button type="button" class="boton suave peq" data-accion="cerrar-hoja">No cambiar «Tu dinero»</button>
+    <p class="nota">Elige «No cambiar» si el saldo de esa cuenta ya lo apuntaste contando con este movimiento.</p>`, 'Tu efectivo');
+}
+
 export const acciones = {
   'aplicar-traspaso': async (ctx, el) => {
     const { E } = ctx;
     const c = E.cuentas.find(x => String(x.id) === el.dataset.cuenta);
     const saldo = Math.round((parseFloat(c.saldo) + parseFloat(el.dataset.delta)) * 100) / 100;
-    const fila = await D.guardarCuenta({ id: c.id, nombre: c.nombre, tipo: c.tipo, saldo, fecha_saldo: hoyISO() });
+    const fila = await D.guardarCuenta({ id: c.id, nombre: c.nombre, tipo: c.tipo, saldo, fecha_saldo: el.dataset.mantener ? c.fecha_saldo : hoyISO() });
     if (!fila) return;
     Object.assign(c, fila);
     cerrarHoja();
@@ -189,7 +228,7 @@ export const cambios = {
     const banco = el.value === 'banco', caja = document.getElementById('cuenta-banco');
     if (!caja) return;
     caja.hidden = !banco;
-    document.getElementById('cuenta-nota').textContent = banco ? NOTA_BANCO_NUEVA : NOTA_MANO;
+    document.getElementById('cuenta-nota').textContent = banco ? NOTA_BANCO_NUEVA : el.value === 'efectivo' ? NOTA_EFECTIVO : NOTA_MANO;
     document.getElementById('cuenta-nombre').placeholder = banco ? 'Cuenta nómina, cuenta joven…' : 'Efectivo ahorrado, hucha, cuenta de ahorro…';
   }
 };

@@ -2,7 +2,7 @@
 
 import { ic } from '../iconos.js';
 import { esc, fmt, resumenMes, porRevisar, etiquetaDia, infoCategoria, CATEGORIAS, claveConcepto, MEDIOS, BD, esGasto, esIngreso, esBizum, CUENTA_MANUAL, esManual, cuentasBanco, cuentaManual, cuentaPrincipal, gemeloEnBanco, medioDe } from '../logica.js';
-import { preguntarTraspaso } from './dinero.js';
+import { preguntarTraspaso, ajustarEfectivo } from './dinero.js';
 import { selectorMes, filaMovimiento, ficha, conceptoVisible, importeMovimiento } from '../componentes.js';
 import { abrirHoja, cerrarHoja, cabeceraHoja, toast, confirmar } from '../ui.js';
 import * as D from '../datos.js';
@@ -168,8 +168,9 @@ export const acciones = {
     if (!await confirmar('¿Borrar este movimiento?', `«${esc(conceptoVisible(t))}», ${fmt(t.importe)}. No se puede deshacer.`)) return;
     if (!await D.borrarMovimiento(t.id)) return;
     E.txs.splice(E.txs.indexOf(t), 1);
-    toast('Movimiento borrado');
     ctx.pintar();
+    if (t.cuenta === 'efectivo') ajustarEfectivo(ctx, t, true, 'Movimiento borrado'); // deja tu efectivo como estaba
+    else toast('Movimiento borrado');
   }
 };
 
@@ -190,17 +191,24 @@ export const cambios = {
     if (esManual(t) && el.value === 'efectivo' && t.categoria !== BD.TRASPASO) cambios.cuenta = 'efectivo';
     else if (t.cuenta === 'efectivo' && el.value !== 'efectivo') cambios.cuenta = CUENTA_MANUAL;
     if (!await D.actualizarMovimientos([t.id], cambios, 'cambiar la forma de pago')) { el.value = t.medio || 'transferencia'; return; }
+    const antes = t.cuenta;
     Object.assign(t, cambios);
-    toast('Forma de pago cambiada');
     ctx.pintar();
     if (t.tipo === 'ingreso' && 'cuenta' in cambios) abrirEdicion(ctx, t); // para que aparezca (o no) «¿Dónde está este dinero?»
+    // Pasar a efectivo o dejar de serlo cambia tu efectivo en «Tu dinero»
+    if (antes !== t.cuenta && (antes === 'efectivo' || t.cuenta === 'efectivo')) ajustarEfectivo(ctx, t, antes === 'efectivo', 'Forma de pago cambiada');
+    else toast('Forma de pago cambiada');
   },
   'donde-mov': async (ctx, el) => {
     const t = buscarTx(ctx.E, el.dataset.id);
     if (!await D.actualizarMovimientos([t.id], { cuenta: el.value }, 'cambiar dónde está el dinero')) { el.value = t.cuenta; return; }
+    const antes = t.cuenta;
     t.cuenta = el.value;
-    toast(el.value === 'efectivo' ? 'Cuenta como efectivo en mano' : 'Cuenta en el banco: se juntará con el extracto');
     ctx.pintar();
+    const aviso = el.value === 'efectivo' ? 'Cuenta como efectivo en mano' : 'Cuenta en el banco: se juntará con el extracto';
+    // Del banco a la mano se suma a tu efectivo; de la mano al banco, se quita
+    if (antes === 'efectivo' || el.value === 'efectivo') ajustarEfectivo(ctx, t, antes === 'efectivo', aviso);
+    else toast(aviso);
   }
 };
 

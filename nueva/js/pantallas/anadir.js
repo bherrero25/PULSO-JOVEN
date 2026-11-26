@@ -6,7 +6,7 @@ import { ficha, conceptoVisible } from '../componentes.js';
 import { toast, abrirHoja, cabeceraHoja, confirmar } from '../ui.js';
 import * as D from '../datos.js';
 import { leerFilas, analizarExtracto } from '../importar.js';
-import { preguntarTraspaso } from './dinero.js';
+import { preguntarTraspaso, ajustarEfectivo } from './dinero.js';
 
 // ─── A MANO ───
 // La forma de pago se elige con botones; con Bizum o transferencia los textos hablan de enviar y recibir, y la categoría
@@ -261,9 +261,12 @@ export const acciones = {
     E.txs.push(fila);
     E.txs.sort((a, b) => b.fecha.localeCompare(a.fecha));
     E.nuevo = { ...nuevoMovimiento(), cuentaBanco: n.cuentaBanco }; // la próxima vez, la misma cuenta
-    // Un traspaso pregunta de qué cuenta sale el dinero, ya en Inicio (al cambiar de pantalla se cierran las hojas)
+    // Un traspaso pregunta de qué cuenta sale el dinero, y lo que entra o sale en mano cambia tu efectivo: ya en Inicio
+    // (al cambiar de pantalla se cierran las hojas)
+    const aviso = `${textos.nombre} de ${fmt(importe)} ${n.medio === 'transferencia' ? 'guardada' : 'guardado'}${luego ? '. Ponle categoría cuando quieras en «Por revisar».' : ''}`;
     if (n.cat === 'traspaso') window.addEventListener('hashchange', () => preguntarTraspaso(ctx, fila), { once: true });
-    else toast(`${textos.nombre} de ${fmt(importe)} ${n.medio === 'transferencia' ? 'guardada' : 'guardado'}${luego ? '. Ponle categoría cuando quieras en «Por revisar».' : ''}`);
+    else if (fila.cuenta === 'efectivo') window.addEventListener('hashchange', () => ajustarEfectivo(ctx, fila, false, aviso), { once: true });
+    else toast(aviso);
     location.hash = '#/inicio';
   },
   'cancelar-importacion': (ctx) => { ctx.E.importacion = null; ctx.pintar(); },

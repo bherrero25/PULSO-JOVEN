@@ -70,7 +70,7 @@ export function render(E) {
     <section class="tarjeta solo-ordenador" aria-label="Ingresado">
       <span class="sub">Ingresado</span>
       <span class="cifra-m num positivo">${fmt(R.ingresado, true)}</span>
-      <span class="nota">${fuentes || 'Nada todavía'}${R.totalPaso ? ` · dinero de paso ${R.totalPaso > 0 ? '−' : '+'}${fmt0(Math.abs(R.totalPaso))}` : ''}</span>
+      <span class="nota">${fuentes || 'Nada todavía'}${R.totalPaso ? ` · dinero de paso ${R.totalPaso > 0 ? '−' : '+'}${fmt0(Math.abs(R.totalPaso))}` : ''}${ritmo.abierto && R.enEspera > 0 ? ` · ${fmt0(R.enEspera)} de paso en espera` : ''}</span>
     </section>
     <section class="tarjeta solo-ordenador" aria-label="Gastado">
       <span class="sub">Gastado</span>

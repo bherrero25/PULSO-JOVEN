@@ -3,6 +3,7 @@
 import { ic } from '../iconos.js';
 import { esc, fmt, fmt0, nombreMes, resumenMes, ritmoDelMes, porCategoria, gastoHastaDia, sumarMeses, mesActual, colorCategoria, fechaCorta, infoCategoria, sumar, prevision } from '../logica.js';
 import * as finDeMes from './prevision.js';
+import * as paso from './paso.js';
 import { ficha, conceptoVisible } from '../componentes.js';
 import { datosBarras, graficoBarras } from '../graficos.js';
 
@@ -76,11 +77,12 @@ export function render(E) {
     ${fuentes.length ? fuentes.map(g => `<details class="cat-fila"><summary><div class="fila" style="border:none">${ficha(g.cat)}<span class="cuerpo"><span class="concepto" style="font-size:14px">${esc(g.cat.nombre)}</span></span><span class="importe num" style="font-size:14px">${fmt(g.total)}</span></div></summary>
       <div class="detalle">${g.txs.map(t => `<div><span>${fechaCorta(t.fecha)} · ${esc(conceptoVisible(t))}</span><span class="num">${fmt(t.importe)}</span></div>`).join('')}</div></details>`).join('')
       : `<p class="vacio">Aún no ha entrado dinero en ${mes}</p>`}
-    ${R.paso.length ? `<details class="cat-fila" style="border-top:1px solid var(--linea-suave);margin-top:4px;padding-top:4px"><summary><div class="fila" style="border:none">
+    ${R.paso.length || (ritmo.abierto && R.enEspera > 0) ? `<details class="cat-fila" style="border-top:1px solid var(--linea-suave);margin-top:4px;padding-top:4px"${ritmo.abierto && R.enEspera > 0 ? ' open' : ''}><summary><div class="fila" style="border:none">
       <span class="ficha">${ic('paso')}</span>
       <span class="cuerpo"><span class="concepto" style="font-size:14px">Dinero de paso</span><span class="detalle">${textoPaso(R)}</span></span>
       <span class="importe num texto-2" style="font-size:14px">${R.totalPaso ? fmt(-R.totalPaso, true) : fmt(0)}</span></div></summary>
-      <div class="detalle">${[...R.paso].sort((a, b) => b.fecha.localeCompare(a.fecha)).map(t => `<div><span>${fechaCorta(t.fecha)} · ${esc(conceptoVisible(t))}</span><span class="num${t.tipo === 'ingreso' ? ' positivo' : ''}">${fmt(t.tipo === 'ingreso' ? +t.importe : -t.importe, true)}</span></div>`).join('')}</div></details>` : ''}
+      <div class="detalle">${[...R.paso].sort((a, b) => b.fecha.localeCompare(a.fecha)).map(t => `<div><span>${fechaCorta(t.fecha)} · ${esc(conceptoVisible(t))}</span><span class="num${t.tipo === 'ingreso' ? ' positivo' : ''}">${fmt(t.tipo === 'ingreso' ? +t.importe : -t.importe, true)}</span></div>`).join('')}
+      </div>${ritmo.abierto ? `<div style="padding:4px 0 8px">${paso.aviso(E, { conBoton: pv?.final == null })}</div>` : ''}</details>` : ''}
   </section>
 
   ${comparacion ? `<section class="tarjeta-tinta" aria-label="Comparación" style="flex-direction:row;align-items:flex-start;gap:12px;padding:16px">
@@ -90,11 +92,18 @@ export function render(E) {
   </div>`;
 }
 
-// Qué ha pasado con el dinero de paso del mes: lo que llegó y lo que salió marcado se compensan
+// Qué ha pasado con el dinero de paso del mes: lo que llega espera a salir; solo cuenta lo que sale con tu dinero
+// (se resta) o lo que te devuelven de eso (se suma)
 function textoPaso(R) {
-  if (R.pasoLlega && R.pasoSale) return `Llegaron ${fmt(R.pasoLlega)} y salieron ${fmt(R.pasoSale)}${!R.totalPaso ? ': se compensan' : R.totalPaso > 0 ? ': la diferencia se resta' : ': falta por salir la diferencia'}`;
-  if (R.pasoSale) return 'Llegó con otro ingreso y salió: se resta de lo ingresado';
-  return 'Ha llegado y aún no ha salido nada marcado como de paso';
+  const partes = [];
+  if (R.pasoLlega) partes.push(`llegaron ${fmt(R.pasoLlega)}`);
+  if (R.pasoSale) partes.push(`salieron ${fmt(R.pasoSale)}`);
+  if (R.totalPaso > 0) partes.push(`${fmt(R.totalPaso)} con tu dinero: se restan`);
+  else if (R.totalPaso < 0) partes.push(`te devolvieron ${fmt(-R.totalPaso)} que pusiste: se suman`);
+  if (R.enEspera > 0) partes.push(`${fmt(R.enEspera)} en espera`);
+  else if (!R.totalPaso && R.pasoLlega + R.pasoSale > 0) partes.push('se compensan');
+  const t = partes.join(' · ');
+  return t.charAt(0).toUpperCase() + t.slice(1);
 }
 
 export const acciones = {

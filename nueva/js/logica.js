@@ -134,14 +134,38 @@ export function mesEfectivo(t) {
   return dia <= diasDelMes(mes) - 3 ? mes : sumarMeses(mes, 1);
 }
 
+// «Me lo quedo»: la parte del dinero de paso en espera que al final es tuya. Es un ingreso normal (con su categoría) que
+// sale de lo que estaba en espera; no es de ninguna cuenta, porque ese dinero ya estaba en tu banco.
+export const CUENTA_LIBERADO = 'liberado';
+export const esLiberado = t => t.cuenta === CUENTA_LIBERADO;
+
+// Saldo del dinero de paso hasta un mes (incluido): lo que ha llegado − lo que ha salido − lo que te has quedado.
+// Positivo: dinero en espera (ni es tuyo ni se ha ido todavía). Negativo: ha salido más de lo que llegó, con tu dinero.
+function saldoPasoHasta(txs, ym) {
+  let s = 0;
+  for (const t of txs) {
+    const signo = esPaso(t) ? (t.tipo === 'ingreso' ? 1 : -1) : esLiberado(t) ? -1 : 0;
+    if (signo && mesEfectivo(t) <= ym) s += signo * parseFloat(t.importe);
+  }
+  return Math.round(s * 100) / 100;
+}
+
+// Dinero de paso: lo que llega queda en espera y no cuenta como ingreso; cuando sale, se descuenta de lo que hay en espera
+// y tampoco cuenta como gasto. Lo que sale sin que haya nada en espera (la parte del alquiler que va dentro de la
+// mensualidad, o algo que pagas tú antes de que te lo den) se resta de lo ingresado ese mes, y si más adelante llega su
+// dinero, se suma ese mes. Se lleva la cuenta de un mes a otro: puede llegar en noviembre y salir en diciembre.
 export function resumenMes(txs, ym) {
   const movs = txs.filter(t => mesEfectivo(t) === ym);
   const gastos = movs.filter(esGasto), ingresos = movs.filter(esIngreso), paso = movs.filter(esPaso);
   const pasoLlega = sumar(paso.filter(t => t.tipo === 'ingreso')), pasoSale = sumar(paso.filter(t => t.tipo === 'gasto'));
-  // totalPaso > 0: salió más de lo que llegó marcado (se resta de lo ingresado); < 0: llegó y aún no ha salido
-  const totalGastos = sumar(gastos), ingresosBrutos = sumar(ingresos), totalPaso = Math.round((pasoSale - pasoLlega) * 100) / 100;
+  const antes = saldoPasoHasta(txs, sumarMeses(ym, -1)), despues = saldoPasoHasta(txs, ym);
+  const conTuDinero = n => Math.max(0, -n);
+  // totalPaso > 0: este mes ha salido dinero de paso con tu dinero (se resta de lo ingresado); < 0: te han devuelto lo que pusiste
+  const totalPaso = Math.round((conTuDinero(despues) - conTuDinero(antes)) * 100) / 100;
+  const enEspera = Math.max(0, despues), liberado = sumar(movs.filter(esLiberado));
+  const totalGastos = sumar(gastos), ingresosBrutos = sumar(ingresos);
   const ingresado = ingresosBrutos - totalPaso;
-  return { ym, movs, gastos, ingresos, paso, pasoLlega, pasoSale, totalGastos, ingresosBrutos, totalPaso, ingresado, queda: ingresado - totalGastos };
+  return { ym, movs, gastos, ingresos, paso, pasoLlega, pasoSale, totalGastos, ingresosBrutos, totalPaso, enEspera, liberado, ingresado, queda: ingresado - totalGastos };
 }
 
 // Agrupa movimientos por categoría, de mayor a menor importe
@@ -289,7 +313,7 @@ const titulo = s => s.toLowerCase().split(/\s+/).filter(Boolean).map((w, i) => {
 
 export function nombreLimpio(t) {
   const original = String(t.descripcion || '').replace(/^\[Efectivo\]\s*/, '').trim();
-  if (!original || esManual(t) || t.cuenta === CUENTA_PREVISTO || t.cuenta === 'efectivo') return original;
+  if (!original || esManual(t) || t.cuenta === CUENTA_PREVISTO || t.cuenta === 'efectivo' || t.cuenta === CUENTA_LIBERADO) return original;
   let s = ' ' + original + ' ';
   s = s.replace(/\b\d{4,6}[X*·]{4,}\d{0,4}\b|\b[X*]{4,}\d{2,4}\b/gi, ' ')         // número de tarjeta tapado
     .replace(/\b\d{1,2}[\/.-]\d{1,2}(?:[\/.-]\d{2,4})?\b|\b\d{1,2}:\d{2}(?::\d{2})?\b/g, ' ') // fechas y horas
@@ -338,7 +362,7 @@ export const medioDe = t => t.medio === 'transferencia' && t.tipo === 'gasto' &&
 export const TIPOS_CUENTA = { efectivo: ['Efectivo', 'cartera'], ahorro: ['Ahorro', 'escudo'], banco: ['Banco', 'banco'], inversion: ['Inversión', 'tendencia'] };
 export const totalCuentas = (cuentas, txs = []) => cuentas.reduce((s, c) => s + saldoDisponible(c, txs, cuentas).disponible, 0);
 const NOMBRES_CUENTA = { bankinter: 'Bankinter', bbva: 'BBVA', santander: 'Santander', caixabank: 'CaixaBank', ing: 'ING', revolut: 'Revolut', n26: 'N26', efectivo: 'Efectivo', generico: 'Otro banco', apple_pay: 'Apple Pay', manual: 'Apuntado a mano', previsto: 'Previsto' };
-export const formaDePago = t => t.cuenta === 'apple_pay' ? 'Apple Pay' : MEDIOS[medioDe(t)] || 'Transferencia';
+export const formaDePago = t => t.cuenta === 'apple_pay' ? 'Apple Pay' : t.cuenta === CUENTA_LIBERADO ? 'De tu dinero de paso' : MEDIOS[medioDe(t)] || 'Transferencia';
 
 // Pagos que llegan del atajo de Apple Pay sin clasificar: se les pone la categoría aprendida o la automática.
 // Devuelve { categoría: [ids] } con los que hay que cambiar.
@@ -433,7 +457,7 @@ export const claveCuentaBanco = (banco, fin) => fin ? `${banco}·${fin}` : banco
 export const bancoDeClave = clave => String(clave || '').split('·')[0];
 export const cuentasBanco = cuentas => (cuentas || []).filter(c => c.clave);
 // Si el valor de «cuenta» de un movimiento es una cuenta de banco (y no efectivo, a mano, Apple Pay, previsto o tarjeta de crédito)
-export const esClaveBanco = c => !!c && !['manual', 'efectivo', 'apple_pay', 'previsto', 'principal'].includes(c) && !String(c).startsWith('manual:') && !String(c).endsWith('_tarjeta');
+export const esClaveBanco = c => !!c && !['manual', 'efectivo', 'apple_pay', 'previsto', 'principal', 'liberado'].includes(c) && !String(c).startsWith('manual:') && !String(c).endsWith('_tarjeta');
 // La cuenta principal: la que elige cada persona (pj_cuentas.principal) o, si no ha elegido, la primera que tuvo (la más
 // antigua), que no cambia al subir el extracto de otra. Viene elegida al apuntar a mano, y a ella va lo que no dice a qué
 // cuenta pertenece (lo apuntado sin cuenta y los pagos de Apple Pay).
@@ -606,7 +630,7 @@ export function prevision(txs, fijos, hoy = hoyISO()) {
   const base = redondear(conFijos.queda); // lo que te quedaría sin gastar nada más
   const habitual = gastoDiarioHabitual(txs, fijos, hoy);
   const restantes = dias - dia; // días después de hoy
-  const out = { mes, llevas: redondear(ahora.queda), pendientes, base, restantes, ingresado: conFijos.ingresado,
+  const out = { mes, llevas: redondear(ahora.queda), pendientes, base, restantes, ingresado: conFijos.ingresado, enEspera: ahora.enEspera,
     maxDiario: base > 0 ? redondear(base / (restantes + 1)) : 0, habitual, final: null, estado: null };
   if (!habitual) return out;
   const fijas = categoriasFijas(fijos);

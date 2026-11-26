@@ -3,6 +3,7 @@
 
 import { ic } from '../iconos.js';
 import { esc, fmt, fmt0, nombreMes } from '../logica.js';
+import * as paso from './paso.js';
 
 const ESTADOS = { bien: ['bien', 'Sí, con margen'], justo: ['justo', 'Muy justo'], no: ['critica', 'A este ritmo, no'] };
 const conSigno = n => `${n < 0 ? '−' : ''}${fmt0(Math.abs(n))}`;
@@ -40,6 +41,7 @@ export function apartado(E, pv) {
       ${pv.restantes ? linea(`Día a día hasta fin de mes: unos ${fmt(pv.habitual.diario)} × ${pv.restantes} ${pv.restantes === 1 ? 'día' : 'días'}`, -(pv.diaADia - pv.restoDeHoy)) : ''}
       ${linea(`Al acabar ${mes}, más o menos`, pv.final, true)}
     </div>
+    ${paso.aviso(E)}
     <p class="nota">«Lo que sueles gastar» es tu semana típica de las últimas ${pv.habitual.semanas === 1 ? 'semana' : `${pv.habitual.semanas} semanas`} (la del medio, para que una compra grande o un pago de una vez al mes no la cambien), sin contar tus movimientos fijos, los traspasos ni el dinero de paso.</p>
     ${sinFijos ? `<div style="display:flex;flex-direction:column;gap:8px;background:var(--fondo);border-radius:12px;padding:10px 12px">
       <span class="nota">¿Te llega o pagas algo cada mes (mensualidad, nómina, alquiler…)? Apúntalo en tus movimientos fijos y la previsión contará con ello.</span>

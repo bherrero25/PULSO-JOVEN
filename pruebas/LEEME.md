@@ -32,7 +32,7 @@ Si sale **✗**, algo se ha roto: no se publica hasta arreglarlo. Las capturas d
 | `prueba_atajo.py` | Atajo de Apple Pay: clasificación al abrir, hoja con el código y sin la tabla |
 | `prueba_apuntar.py` | Botones de apuntar rápido y textos que se adaptan a Bizum y transferencia |
 | `prueba_cuenta_nueva.py` | Cuenta de banco añadida a mano (banco y 4 cifras, su extracto la reconoce), cuenta principal y sin la columna |
-| `prueba_efectivo.py` | Efectivo: ingreso en mano o metido en el banco (juntarlo con el extracto), y la cuenta de efectivo de «Tu dinero» que se ajusta sola, pregunta o se deshace |
+| `prueba_efectivo.py` | Efectivo: ingreso en mano o metido en el banco (juntarlo con el extracto), y la cuenta de efectivo de «Tu dinero» que se ajusta sola, pregunta o se deshace (preguntando) |
 | `prueba_fijos.py` | Movimientos fijos: configurarlos, crear el previsto sin repetir y juntarlo con el real |
 | `prueba_cuentas.py` | Varias cuentas: número del extracto, cuenta nueva, traspaso entre cuentas, cuenta al apuntar y filtro |
 | `prueba_nombres.py` | Nombres limpios en la lista, concepto original al abrir, buscador y forma de pago al importar |

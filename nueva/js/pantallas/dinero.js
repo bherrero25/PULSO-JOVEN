@@ -115,7 +115,8 @@ function opcionesAjuste(cuentas, delta, fecha, mantener = false) {
 
 // Lo que entra o sale en efectivo (en mano) cambia tu efectivo en «Tu dinero» (las cuentas de tipo Efectivo).
 // Con una sola cuenta de efectivo se ajusta sola; con varias, o si el movimiento es de antes del último saldo que apuntaste
-// (quizá ya contaba con él), se pregunta. `deshacer`: al borrarlo o pasarlo al banco. `aviso`: lo que se iba a decir.
+// (quizá ya contaba con él), se pregunta. `deshacer` (al borrarlo o pasarlo al banco) siempre pregunta: lo apuntado antes
+// de que existiera esto nunca se sumó ni se restó. `aviso`: lo que se iba a decir.
 export async function ajustarEfectivo(ctx, t, deshacer = false, aviso = '') {
   const { E } = ctx;
   const unir = (...x) => x.filter(Boolean).join(' · ');
@@ -126,7 +127,7 @@ export async function ajustarEfectivo(ctx, t, deshacer = false, aviso = '') {
     return;
   }
   const delta = Math.round((t.tipo === 'ingreso' ? 1 : -1) * (deshacer ? -1 : 1) * parseFloat(t.importe) * 100) / 100;
-  if (cuentas.length === 1 && t.fecha >= cuentas[0].fecha_saldo) {
+  if (!deshacer && cuentas.length === 1 && t.fecha >= cuentas[0].fecha_saldo) {
     const c = cuentas[0], saldo = Math.round((parseFloat(c.saldo) + delta) * 100) / 100;
     const fila = await D.guardarCuenta({ id: c.id, nombre: c.nombre, tipo: c.tipo, saldo, fecha_saldo: c.fecha_saldo });
     if (!fila) return;
@@ -142,7 +143,8 @@ export async function ajustarEfectivo(ctx, t, deshacer = false, aviso = '') {
     <p class="texto-2" style="font-size:14px;line-height:1.45;margin-top:-6px">Elige la cuenta: ${delta < 0 ? 'se le restarán' : 'se le sumarán'} <b>${fmt(t.importe)}</b> en «Tu dinero».</p>
     <div>${opcionesAjuste(cuentas, delta, t.fecha, true)}</div>
     <button type="button" class="boton suave peq" data-accion="cerrar-hoja">No cambiar «Tu dinero»</button>
-    <p class="nota">Elige «No cambiar» si el saldo de esa cuenta ya lo apuntaste contando con este movimiento.</p>`, 'Tu efectivo');
+    <p class="nota">${deshacer ? `Elige «No cambiar» si este movimiento no se llegó a ${t.tipo === 'ingreso' ? 'sumar a' : 'restar de'} tu efectivo (por ejemplo, si lo apuntaste antes de que la app lo hiciera sola).`
+      : 'Elige «No cambiar» si el saldo de esa cuenta ya lo apuntaste contando con este movimiento.'}</p>`, 'Tu efectivo');
 }
 
 export const acciones = {

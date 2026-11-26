@@ -21,7 +21,7 @@ Si sale **✗**, algo se ha roto: no se publica hasta arreglarlo. Las capturas d
 
 | Archivo | Qué comprueba |
 |---|---|
-| `prueba_logica.mjs` | Los cálculos sin navegador: lectura de CSV, importes, fechas y formatos de cualquier banco, dinero de paso, traspasos, juntar lo apuntado con el extracto, varias cuentas, número de cuenta del extracto, «Tu dinero», movimientos fijos, nombres limpios y forma de pago |
+| `prueba_logica.mjs` | Los cálculos sin navegador: previsión de fin de mes, lectura de CSV, importes, fechas y formatos de cualquier banco, dinero de paso, traspasos, juntar lo apuntado con el extracto, varias cuentas, número de cuenta del extracto, «Tu dinero», movimientos fijos, nombres limpios y forma de pago |
 | `prueba_recorrido.py` | Todas las pantallas en móvil y ordenador (demo): clasificar, buscar, apuntar, importar, resumen, presupuesto, metas, inversión |
 | `prueba_sesion.py` | Con sesión: más de 1.000 movimientos, reglas aprendidas, altas, presupuestos y aviso si falla al guardar |
 | `prueba_registro.py` | «Crear cuenta» en la app nueva y en la antigua con las tres respuestas de Supabase |
@@ -34,6 +34,7 @@ Si sale **✗**, algo se ha roto: no se publica hasta arreglarlo. Las capturas d
 | `prueba_cuenta_nueva.py` | Cuenta de banco añadida a mano (banco y 4 cifras, su extracto la reconoce), cuenta principal y sin la columna |
 | `prueba_efectivo.py` | Efectivo: ingreso en mano o metido en el banco (juntarlo con el extracto), y la cuenta de efectivo de «Tu dinero» que se ajusta sola, pregunta o se deshace (preguntando) |
 | `prueba_otros_bancos.py` | Cualquier banco: asistente de columnas con propuesta, recordar el formato (en la base de datos o, sin la tabla, en el dispositivo), Debe/Haber y CSV con comas leídos solos |
+| `prueba_fin_de_mes.py` | ¿Llego a fin de mes?: semáforo, cifra de la tarjeta igual a la del desglose, fijos pendientes, mes pasado y pocos datos |
 | `prueba_fijos.py` | Movimientos fijos: configurarlos, crear el previsto sin repetir y juntarlo con el real |
 | `prueba_cuentas.py` | Varias cuentas: número del extracto, cuenta nueva, traspaso entre cuentas, cuenta al apuntar y filtro |
 | `prueba_nombres.py` | Nombres limpios en la lista, concepto original al abrir, buscador y forma de pago al importar |

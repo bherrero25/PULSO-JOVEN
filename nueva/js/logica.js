@@ -557,6 +557,67 @@ export function previstosPendientes(fijos, hoy = hoyISO()) {
 }
 export const movimientoPrevisto = (f, fecha) => ({ fecha, descripcion: f.nombre, importe: +f.importe, tipo: f.tipo, categoria: f.categoria, medio: f.medio || 'transferencia', cuenta: CUENTA_PREVISTO });
 
+// ─── ¿LLEGO A FIN DE MES? ───
+const sumarDias = (fecha, n) => { const d = new Date(fecha + 'T12:00:00'); d.setDate(d.getDate() + n); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+const redondear = n => Math.round(n * 100) / 100;
+// Gasto del día a día: lo que no es un movimiento fijo (ni lo previsto, ni traspasos ni dinero de paso)
+const categoriasFijas = fijos => new Set((fijos || []).filter(f => f.activo !== false && f.tipo === 'gasto').map(f => f.categoria));
+const esDelDiaADia = (t, fijas) => esGasto(t) && t.cuenta !== CUENTA_PREVISTO && !fijas.has(t.categoria);
+
+// Lo que sueles gastar al día en el día a día: la semana típica (la mediana) de las últimas 12 semanas hasta ayer, para
+// que una compra grande puntual o un pago mensual (el alquiler cae en una sola semana) no lo cambien. Con menos de una
+// semana de datos, null.
+export function gastoDiarioHabitual(txs, fijos, hoy = hoyISO()) {
+  const reales = txs.filter(t => t.cuenta !== CUENTA_PREVISTO);
+  if (!reales.length) return null;
+  const primero = reales.reduce((m, t) => t.fecha < m ? t.fecha : m, hoy);
+  const ayer = sumarDias(hoy, -1);
+  const semanas = Math.min(12, Math.floor((diasEntre(primero, ayer) + 1) / 7));
+  if (semanas < 1) return null;
+  const fijas = categoriasFijas(fijos);
+  const delDia = txs.filter(t => esDelDiaADia(t, fijas));
+  const sumas = Array.from({ length: semanas }, (_, k) => {
+    const hasta = sumarDias(ayer, -7 * k), desde = sumarDias(hasta, -6);
+    return sumar(delDia.filter(t => t.fecha >= desde && t.fecha <= hasta));
+  }).sort((a, b) => a - b);
+  const mitad = Math.floor(semanas / 2);
+  const mediana = semanas % 2 ? sumas[mitad] : (sumas[mitad - 1] + sumas[mitad]) / 2;
+  return { diario: redondear(mediana / 7), semanas };
+}
+
+// Movimientos fijos que aún no han llegado este mes (su día es después de hoy y no ha llegado ya uno parecido, por
+// ejemplo la nómina que entró un par de días antes), como movimientos previstos
+export function fijosPendientes(txs, fijos, hoy = hoyISO()) {
+  const mes = hoy.slice(0, 7);
+  return (fijos || []).filter(f => f.activo !== false).map(f => ({ f, fecha: fechaFijo(f, mes) }))
+    .filter(({ f, fecha }) => fecha > hoy && !txs.some(t => t.tipo === f.tipo && t.categoria === f.categoria
+      && Math.abs(diasEntre(fecha, t.fecha)) <= 10 && Math.abs(+t.importe - +f.importe) <= +f.importe * 0.5))
+    .map(({ f, fecha }) => movimientoPrevisto(f, fecha));
+}
+
+// Previsión del mes en curso: el balance que llevas, más lo que falta por llegar o pagar de tus movimientos fijos (los que
+// cuentan para este mes: la mensualidad de los últimos días ya es del siguiente), menos lo que sueles gastar en el día a
+// día en los días que quedan (hoy, solo lo que te falte por gastar). `final` es null si no hay datos para saber lo habitual.
+export function prevision(txs, fijos, hoy = hoyISO()) {
+  const mes = hoy.slice(0, 7), dias = diasDelMes(mes), dia = Number(hoy.slice(8));
+  const ahora = resumenMes(txs, mes);
+  const pendientes = fijosPendientes(txs, fijos, hoy).filter(t => mesEfectivo(t) === mes);
+  const conFijos = resumenMes([...txs, ...pendientes], mes);
+  const base = redondear(conFijos.queda); // lo que te quedaría sin gastar nada más
+  const habitual = gastoDiarioHabitual(txs, fijos, hoy);
+  const restantes = dias - dia; // días después de hoy
+  const out = { mes, llevas: redondear(ahora.queda), pendientes, base, restantes, ingresado: conFijos.ingresado,
+    maxDiario: base > 0 ? redondear(base / (restantes + 1)) : 0, habitual, final: null, estado: null };
+  if (!habitual) return out;
+  const fijas = categoriasFijas(fijos);
+  const gastoHoy = sumar(txs.filter(t => t.fecha === hoy && esDelDiaADia(t, fijas)));
+  out.restoDeHoy = redondear(Math.max(0, habitual.diario - gastoHoy));
+  out.diaADia = redondear(habitual.diario * restantes + out.restoDeHoy);
+  out.final = redondear(base - out.diaADia);
+  out.estado = out.final < 0 ? 'no' : out.final < Math.max(20, conFijos.ingresado * 0.05) ? 'justo' : 'bien';
+  return out;
+}
+
 // Empareja movimientos nuevos del extracto con lo que ya estaba apuntado: mismo tipo e importe y fecha del banco
 // entre 3 días antes y 7 después. Si hay varios posibles, gana la fecha más cercana, la misma forma de pago y alguna palabra en común.
 // - seguro: era un apuntado a mano (cuenta 'manual') o un pago de Apple Pay;

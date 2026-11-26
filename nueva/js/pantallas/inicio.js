@@ -1,9 +1,10 @@
 // Inicio: de un vistazo, lo que te queda, lo que ha entrado y salido, cómo van los presupuestos y la meta más cercana
 
 import { ic } from '../iconos.js';
-import { esc, fmt, fmt0, nombreMes, resumenMes, ritmoDelMes, estadoPresupuestos, porRevisar, gastoHastaDia, sumarMeses, porCategoria, hoyISO, fechaCorta, TIPOS_CUENTA, totalCuentas, saldoDisponible, cuentasBanco, cuentaPrincipal } from '../logica.js';
+import { esc, fmt, fmt0, nombreMes, resumenMes, ritmoDelMes, estadoPresupuestos, porRevisar, gastoHastaDia, sumarMeses, porCategoria, hoyISO, fechaCorta, TIPOS_CUENTA, totalCuentas, saldoDisponible, cuentasBanco, cuentaPrincipal, prevision } from '../logica.js';
 import { selectorMes, filaMovimiento, ficha, barraPresupuesto, textoEstado, inicial, conceptoVisible } from '../componentes.js';
 import * as primeros from './primeros.js';
+import * as finDeMes from './prevision.js';
 import * as D from '../datos.js';
 
 // Botones para apuntar a mano en dos toques: abren el formulario ya preparado
@@ -15,10 +16,14 @@ export function render(E) {
   const mes = nombreMes(E.mes, { año: false }).toLowerCase();
   const pctGastado = R.ingresado > 0 ? Math.round(R.totalGastos / R.ingresado * 100) : 0;
   let etiqueta, sub;
+  // Previsión del mes en curso: cuenta con lo que falta por llegar o pagar de los movimientos fijos
+  const pv = ritmo.abierto ? prevision(E.txs, E.fijos) : null;
   // Balance del mes: lo que ha entrado menos lo que se ha gastado (no es el saldo de la cuenta: eso está en «Tu dinero»)
   if (ritmo.abierto) {
     etiqueta = 'Balance mensual';
-    sub = R.queda > 0 ? `Puedes gastar ${fmt(R.queda / ritmo.quedan)} al día · ${ritmo.quedan === 1 ? 'queda 1 día' : `quedan ${ritmo.quedan} días`}` : 'Has gastado más de lo que ha entrado';
+    const dias = ritmo.quedan === 1 ? 'queda 1 día' : `quedan ${ritmo.quedan} días`;
+    sub = pv.base > 0 ? `Puedes gastar ${fmt(pv.maxDiario)} al día · ${dias}`
+      : R.queda > 0 ? 'Con lo que falta por pagar, no te queda margen' : 'Has gastado más de lo que ha entrado';
   } else {
     etiqueta = `Balance de ${mes}`;
     sub = R.queda > 0 ? 'Mes cerrado · puedes pasarlo a una meta' : 'Mes cerrado · gastaste más de lo que entró';
@@ -79,6 +84,8 @@ export function render(E) {
       <span class="nota">de lo que entra se queda contigo · objetivo: 20 %</span>
     </section>
   </div>`}
+
+  ${nuevo ? '' : finDeMes.tarjeta(E, pv)}
 
   <nav class="rapidos" aria-label="Apuntar rápido">
     ${RAPIDOS.map(([tipo, medio, texto, icono]) => `<a href="#/anadir?tipo=${tipo}&medio=${medio}"><span class="ficha">${ic(icono)}</span>${texto}</a>`).join('')}

@@ -92,6 +92,11 @@ h1, h2, h3, p { margin: 0; }
 .enlace { font-size: 14px; font-weight: 600; padding: 8px 0 8px 8px; background: none; border: none; }
 .pastilla { font-size: 12px; font-weight: 600; border-radius: 999px; padding: 3px 8px; }
 .pastilla.critica { color: var(--critico-texto); background: var(--critico-fondo); }
+.pastilla.bien { color: var(--positivo); background: #E4F4E1; }
+.pastilla.justo { color: var(--aviso-texto); background: var(--aviso-fondo); }
+/* Tarjeta que se puede tocar entera */
+.tarjeta-boton { width: 100%; text-align: left; font: inherit; color: inherit; border: 0; cursor: pointer; }
+.cifra-m.negativo { color: var(--critico-texto); }
 .pastilla.pro { background: var(--lima); color: var(--tinta); font-weight: 700; }
 .pastilla.gris { background: var(--gris); color: #33393F; font-weight: 700; font-size: 11px; }
 .nota { font-size: 12px; color: var(--texto-3); line-height: 1.5; }

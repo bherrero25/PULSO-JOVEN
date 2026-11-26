@@ -13,6 +13,7 @@ import * as planes from './pantallas/planes.js';
 import * as dinero from './pantallas/dinero.js';
 import * as fijos from './pantallas/fijos.js';
 import * as primeros from './pantallas/primeros.js';
+import * as finDeMes from './pantallas/prevision.js';
 
 // Estado de la app: datos de la persona y lo que tiene elegido en pantalla
 const E = {
@@ -196,7 +197,7 @@ const generales = {
 };
 
 const ctx = { E, pintar };
-const ACCIONES = { ...generales, ...movimientos.acciones, ...anadir.acciones, ...resumen.acciones, ...planes.acciones, ...dinero.acciones, ...fijos.acciones, ...primeros.acciones };
+const ACCIONES = { ...generales, ...movimientos.acciones, ...anadir.acciones, ...resumen.acciones, ...planes.acciones, ...dinero.acciones, ...fijos.acciones, ...primeros.acciones, ...finDeMes.acciones };
 const ENTRADAS = { ...movimientos.entradas, ...anadir.entradas, ...planes.entradas };
 const CAMBIOS = { ...movimientos.cambios, ...anadir.cambios, ...dinero.cambios };
 

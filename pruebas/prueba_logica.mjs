@@ -172,6 +172,35 @@ prueba('formato: aunque pregunte, la propuesta acierta las columnas por lo que c
   assert.deepEqual([p.fecha, p.concepto, p.importe, p.saldo], [0, 1, 2, 3]);
 });
 
+// ── ¿Llego a fin de mes? ──
+const diario = (desde, hasta, importe, categoria = '🍔 Comida') => { const r = []; for (let d = new Date(desde + 'T12:00:00'); d <= new Date(hasta + 'T12:00:00'); d.setDate(d.getDate() + 1)) r.push(m(d.toISOString().slice(0, 10), importe, 'gasto', categoria, { cuenta: 'bankinter' })); return r; };
+const historia = [m('2026-11-01', 470, 'ingreso', '💰 Mensualidad'), m('2026-11-02', 350, 'gasto', '🏠 Alquiler'), m('2026-10-15', 600, 'gasto', '💻 Tecnología'),
+  ...diario('2026-09-01', '2026-11-25', 5)];
+prueba('fin de mes: lo que se suele gastar es la semana típica (ni el portátil ni el alquiler la cambian)', () => {
+  assert.equal(L.gastoDiarioHabitual(historia, [], '2026-11-26').diario, 5);
+});
+prueba('fin de mes: balance + fijos que faltan − día a día de los días que quedan', () => {
+  const fijos = [{ nombre: 'Beca', tipo: 'ingreso', categoria: '💰 Nómina', importe: 100, dia: 28 }];
+  const pv = L.prevision(historia, fijos, '2026-11-26');
+  // llevas 470 − 350 − 25×5 = −5; +100 de la beca; −5 de hoy y −5×4 de los días que quedan
+  assert.equal(pv.llevas, -5); assert.equal(pv.base, 95); assert.equal(pv.final, 70); assert.equal(pv.estado, 'bien');
+  assert.equal(pv.maxDiario, 19);
+});
+prueba('fin de mes: un fijo que ya llegó unos días antes no se cuenta dos veces', () => {
+  const fijos = [{ nombre: 'Beca', tipo: 'ingreso', categoria: '💰 Nómina', importe: 100, dia: 28 }];
+  const pv = L.prevision([...historia, m('2026-11-25', 100, 'ingreso', '💰 Nómina')], fijos, '2026-11-26');
+  assert.equal(pv.pendientes.length, 0);
+});
+prueba('fin de mes: la mensualidad de los últimos días ya es del mes siguiente', () => {
+  const fijos = [{ nombre: 'Mensualidad', tipo: 'ingreso', categoria: '💰 Mensualidad', importe: 470, dia: 29 }];
+  assert.equal(L.prevision(historia, fijos, '2026-11-26').pendientes.length, 0);
+});
+prueba('fin de mes: un gasto fijo pendiente puede hacer que no llegues; sin una semana de datos no hay previsión', () => {
+  const fijos = [{ nombre: 'Alquiler', tipo: 'gasto', categoria: '🏠 Alquiler', importe: 350, dia: 30 }];
+  assert.equal(L.prevision(historia, fijos, '2026-11-26').estado, 'no');
+  assert.equal(L.prevision([m('2026-11-24', 10, 'gasto', '🍔 Comida')], [], '2026-11-26').final, null);
+});
+
 // ── Nombres limpios y forma de pago ──
 const limpio = (descripcion, tipo = 'gasto', cuenta = 'bankinter') => L.nombreLimpio({ descripcion, tipo, cuenta });
 prueba('nombres: quita «COMPRA TARJ.», el número de tarjeta y la ciudad de una marca conocida', () => assert.equal(limpio('COMPRA TARJ. 5402XXXXXXXX1234 MERCADONA VALENCIA'), 'Mercadona'));

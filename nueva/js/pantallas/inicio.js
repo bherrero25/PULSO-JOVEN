@@ -57,7 +57,8 @@ export function render(E) {
     <section class="tarjeta-tinta ancha" aria-label="Balance del mes">
       <div class="etiqueta"><span class="punto"></span>${etiqueta}</div>
       <div class="cifra num">${R.queda < 0 ? '−' : ''}${fmt(R.queda)}</div>
-      <div class="lima" style="font-size:13px;font-weight:500">${sub}</div>
+      <div style="display:flex;flex-direction:column;gap:3px"><div class="lima" style="font-size:13px;font-weight:500">${sub}</div>
+        ${R.deAhorros > 0 ? `<span style="font-size:12px;color:var(--texto-claro-2)">${ritmo.abierto ? 'Este mes has usado' : 'Ese mes usaste'} <b style="color:#fff">${fmt(R.deAhorros)}</b> de tus ahorros (no cuenta como ingreso)</span>` : ''}</div>
       <div style="display:flex;flex-direction:column;gap:6px">
         <div class="progreso gruesa tinta"><i style="width:${Math.min(pctGastado, 100)}%"></i></div>
         ${finDeMes.lineaInicio(pv) || `<span style="font-size:12px;color:var(--texto-claro-2)">${R.ingresado > 0 ? `Has gastado el ${pctGastado} % de lo que ha entrado` : 'Aún no ha entrado dinero este mes'}</span>`}

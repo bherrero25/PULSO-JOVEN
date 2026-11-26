@@ -77,6 +77,7 @@ export function render(E) {
     ${fuentes.length ? fuentes.map(g => `<details class="cat-fila"><summary><div class="fila" style="border:none">${ficha(g.cat)}<span class="cuerpo"><span class="concepto" style="font-size:14px">${esc(g.cat.nombre)}</span></span><span class="importe num" style="font-size:14px">${fmt(g.total)}</span></div></summary>
       <div class="detalle">${g.txs.map(t => `<div><span>${fechaCorta(t.fecha)} · ${esc(conceptoVisible(t))}</span><span class="num">${fmt(t.importe)}</span></div>`).join('')}</div></details>`).join('')
       : `<p class="vacio">Aún no ha entrado dinero en ${mes}</p>`}
+    ${R.deAhorros > 0 ? `<p class="nota" style="padding-top:6px">Además, ${ritmo.abierto ? 'has usado' : 'usaste'} ${fmt(R.deAhorros)} de tus ahorros (traspasos a tu cuenta): no cuentan como ingreso porque ya eran tuyos.</p>` : ''}
     ${R.totalPaso ? `<p class="nota" style="padding-top:6px">Ya está descontado el dinero de paso que salió de tu dinero (${fmt(-R.totalPaso, true)}): lo tienes en «Dinero de paso».</p>` : ''}
   </section>
 

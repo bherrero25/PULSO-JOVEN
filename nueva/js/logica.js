@@ -204,7 +204,11 @@ export function resumenMes(txs, ym) {
   const { totalPaso, enEspera } = bolsasPaso(txs, ym), liberado = sumar(partes.filter(esLiberado));
   const totalGastos = sumar(gastos), ingresosBrutos = sumar(ingresos);
   const ingresado = ingresosBrutos - totalPaso;
-  return { ym, movs, gastos, ingresos, paso, pasoLlega, pasoSale, totalGastos, ingresosBrutos, totalPaso, enEspera, liberado, ingresado, queda: ingresado - totalGastos };
+  // Lo que has traído al banco de tus otras cuentas (efectivo ahorrado, hucha…) con traspasos, menos lo que has llevado:
+  // no es dinero nuevo (no cuenta como ingreso), pero explica un balance en negativo («has usado X € de tus ahorros»)
+  const traspasos = partes.filter(esTraspaso);
+  const deAhorros = Math.max(0, Math.round((sumar(traspasos.filter(t => t.tipo === 'ingreso')) - sumar(traspasos.filter(t => t.tipo === 'gasto'))) * 100) / 100);
+  return { ym, movs, gastos, ingresos, paso, pasoLlega, pasoSale, totalGastos, ingresosBrutos, totalPaso, enEspera, liberado, deAhorros, ingresado, queda: ingresado - totalGastos };
 }
 
 // Agrupa movimientos por categoría, de mayor a menor importe

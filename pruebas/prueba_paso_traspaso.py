@@ -2,7 +2,7 @@
 de paso y lo que sale para lo mismo se compensan (la app pregunta para qué es); un traspaso resta o suma en la cuenta
 elegida de «Tu dinero» y se puede deshacer."""
 from playwright.sync_api import sync_playwright
-from comun import Resultado, lanzar, pagina, apuntar, euros, iso
+from comun import Resultado, lanzar, pagina, apuntar, euros, iso, foto
 
 res = Resultado('Dinero de paso y traspasos')
 
@@ -51,6 +51,8 @@ with sync_playwright() as p:
     pg.click('[data-accion="aplicar-traspaso"]:has-text("Efectivo ahorrado")'); pg.wait_for_timeout(300)
     res.comprobar(abs(ahorrado(pg) - (a0 - 200)) < 0.005, 'se restan los 200 € del efectivo ahorrado')
     res.comprobar(cifras(pg) == c1, 'un traspaso no cambia ni el balance ni lo ingresado')
+    res.comprobar('has usado 200,00 € de tus ahorros' in pg.inner_text('.tarjeta-tinta'), 'pero el balance dice que este mes has usado 200 € de tus ahorros')
+    foto(pg, 'pt01_ahorros')
     pg.click('.barra a[href="#/movimientos"]'); pg.fill('input[data-entrada="buscar"]', 'ahorros al banco'); pg.wait_for_timeout(150)
     fila = pg.locator('#lista-movs .fila').first
     res.comprobar('⇄' in fila.inner_text(), 'en la lista se ve como traspaso (⇄)')
@@ -62,6 +64,7 @@ with sync_playwright() as p:
     c2 = cifras(pg)
     res.comprobar(abs(ahorrado(pg) - a0) < 0.005, 'el efectivo ahorrado vuelve a lo que tenía')
     res.comprobar(abs(c2['ingresado'] - (c1['ingresado'] + 200)) < 0.005, 'y ahora sí cuenta como ingreso')
+    res.comprobar('de tus ahorros' not in pg.inner_text('.tarjeta-tinta'), 'y la nota de los ahorros desaparece')
     b.close()
 
 res.terminar(errores)

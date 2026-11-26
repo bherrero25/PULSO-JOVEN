@@ -696,6 +696,83 @@ export function prevision(txs, fijos, hoy = hoyISO()) {
   return out;
 }
 
+// ─── SUSCRIPCIONES Y PAGOS DE CADA MES (detectados solos) ───
+// Lo que se cobra cada mes en el mismo sitio, más o menos el mismo día y por el mismo importe (Netflix, Spotify, la cuota
+// del gimnasio, el móvil…), sin que nadie lo configure. Reglas:
+// - gastos de verdad (no lo previsto, el efectivo, «Me lo quedo», los traspasos ni el dinero de paso), agrupados por el
+//   nombre limpio del comercio;
+// - una cadena de cobros, uno al mes (de 25 a 36 días entre uno y otro), con el mismo importe al céntimo; un recibo
+//   (luz, móvil…) puede variar hasta un 20 %; una subida de precio se acepta si la cadena es lo bastante larga;
+// - al menos 3 cobros seguidos, todos cerca del mismo día del mes (±4 días);
+// - activa si el último cobro fue hace 40 días o menos, contando desde el último movimiento apuntado (por si el extracto
+//   no está al día); si no, se da por terminada.
+const MIN_COBROS = 3;
+const mismoImporte = (a, b) => Math.abs(a - b) < 0.005;
+const distanciaDia = (a, b) => { const d = Math.abs(a - b); return Math.min(d, 30 - d); }; // el 30 y el 1 están cerca
+
+export function pagosDeCadaMes(txs, hoy = hoyISO()) {
+  const reales = txs.filter(t => t.fecha <= hoy && t.cuenta !== CUENTA_PREVISTO);
+  const referencia = reales.reduce((m, t) => t.fecha > m ? t.fecha : m, '');
+  const grupos = new Map();
+  reales.filter(t => esGasto(t) && !esLiberado(t) && t.cuenta !== 'efectivo' && medioDe(t) !== 'efectivo' && t.categoria !== '💳 Cargo tarjeta' && parseFloat(t.importe) > 0)
+    .forEach(t => {
+      const clave = claveConcepto(nombreLimpio(t));
+      if (clave) (grupos.get(clave) || grupos.set(clave, []).get(clave)).push(t);
+    });
+  const lista = [];
+  for (const [clave, cobros] of grupos) {
+    if (cobros.length < MIN_COBROS) continue;
+    cobros.sort((a, b) => a.fecha.localeCompare(b.fecha) || String(a.id).localeCompare(String(b.id)));
+    // Cadenas de cobros del mismo importe (o parecido, si es un recibo), uno al mes
+    const cadenas = [];
+    for (const t of cobros) {
+      const imp = parseFloat(t.importe), recibo = medioDe(t) === 'recibo';
+      const encaja = c => {
+        const u = c[c.length - 1], dias = diasEntre(u.fecha, t.fecha), antes = parseFloat(u.importe);
+        return dias >= 25 && dias <= 36 && (mismoImporte(imp, antes) || (recibo && Math.abs(imp - antes) <= antes * 0.2));
+      };
+      const c = cadenas.filter(encaja).sort((a, b) => Math.abs(parseFloat(a[a.length - 1].importe) - imp) - Math.abs(parseFloat(b[b.length - 1].importe) - imp))[0];
+      if (c) c.push(t); else cadenas.push([t]);
+    }
+    // Una subida (o bajada) de precio: la cadena nueva empieza un mes después de la anterior, con un importe parecido
+    cadenas.sort((a, b) => a[0].fecha.localeCompare(b[0].fecha));
+    for (let i = 0; i < cadenas.length; i++) {
+      const a = cadenas[i];
+      if (!a) continue;
+      const j = cadenas.findIndex((b, k) => k > i && b && b.length >= 2 && a.length >= 2 && (() => {
+        const dias = diasEntre(a[a.length - 1].fecha, b[0].fecha), x = parseFloat(a[a.length - 1].importe), y = parseFloat(b[0].importe);
+        return dias >= 25 && dias <= 36 && Math.abs(x - y) <= x * 0.25;
+      })());
+      if (j > 0) { a.push(...cadenas[j]); cadenas[j] = null; i--; }
+    }
+    for (const c of cadenas.filter(c => c && c.length >= MIN_COBROS)) {
+      const dias = c.map(t => Number(t.fecha.slice(8))).sort((a, b) => a - b);
+      const dia = dias[Math.floor(dias.length / 2)];
+      if (dias.some(d => distanciaDia(d, dia) > 4)) continue;
+      const cambios = c.filter((t, k) => k && !mismoImporte(parseFloat(t.importe), parseFloat(c[k - 1].importe))).length;
+      const recibo = c.some(t => medioDe(t) === 'recibo');
+      // Con otros cobros del mismo sitio por medio (Amazon: Prime y las compras), solo si el importe no cambia nunca
+      const otros = cobros.filter(t => !c.includes(t) && t.fecha >= c[0].fecha && t.fecha <= c[c.length - 1].fecha).length;
+      if (otros && cambios) continue;
+      if (!recibo && cambios > Math.floor((c.length - 1) / 3)) continue;
+      const ultimo = c[c.length - 1], importe = parseFloat(ultimo.importe);
+      const ym = sumarMeses(ultimo.fecha.slice(0, 7), 1);
+      lista.push({ id: `${clave}|${c[0].fecha}`, clave, nombre: nombreLimpio(ultimo), categoria: ultimo.categoria, medio: medioDe(ultimo),
+        importe, dia, cobros: c, ultimo: ultimo.fecha, proximo: `${ym}-${String(Math.min(dia, diasDelMes(ym))).padStart(2, '0')}`,
+        antes: !recibo && cambios ? parseFloat([...c].reverse().find(t => !mismoImporte(parseFloat(t.importe), importe)).importe) : null, variable: recibo && c.some(t => !mismoImporte(parseFloat(t.importe), importe)),
+        activa: diasEntre(ultimo.fecha, referencia) <= 40 });
+    }
+  }
+  const activas = lista.filter(s => s.activa).sort((a, b) => b.importe - a.importe || a.nombre.localeCompare(b.nombre));
+  const terminadas = lista.filter(s => !s.activa && diasEntre(s.ultimo, referencia) <= 183).sort((a, b) => b.ultimo.localeCompare(a.ultimo));
+  const alMes = redondear(activas.reduce((s, x) => s + x.importe, 0));
+  return { activas, terminadas, alMes, alAño: redondear(alMes * 12) };
+}
+
+// ¿Está ya entre los movimientos fijos? (un gasto fijo activo con la misma categoría o el mismo nombre e importe parecido)
+export const estaEnFijos = (fijos, s) => (fijos || []).some(f => f.activo !== false && f.tipo === 'gasto' && Math.abs(+f.importe - s.importe) <= s.importe * 0.2
+  && (f.categoria === s.categoria || (n => n.length >= 3 && (n.includes(s.clave) || s.clave.includes(n)))(claveConcepto(f.nombre))));
+
 // Empareja movimientos nuevos del extracto con lo que ya estaba apuntado: mismo tipo e importe y fecha del banco
 // entre 3 días antes y 7 después. Si hay varios posibles, gana la fecha más cercana, la misma forma de pago y alguna palabra en común.
 // - seguro: era un apuntado a mano (cuenta 'manual') o un pago de Apple Pay;

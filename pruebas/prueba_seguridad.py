@@ -12,6 +12,7 @@ txs = [fila(id=1, fecha=iso(1), descripcion=f'BIZUM DE ALGUIEN {ATAQUE}', import
        fila(id=4, fecha=iso(0), descripcion=f'Apuntado {ATAQUE}', importe=3, categoria='🍔 Comida', cuenta='manual'),
        fila(id=5, fecha=iso(2), descripcion='TRANSFERENCIA DE PAPA', importe=50, tipo='ingreso', categoria='↩️ Reenviado', paso=f'Para {ATAQUE}')]
 txs.append(fila(id=6, fecha=iso(3), descripcion='TRANSFERENCIA DE CASA', importe=500, tipo='ingreso', categoria='💰 Mensualidad', partes=[{'importe': 100, 'categoria': '↩️ Reenviado', 'paso': f'Parte {ATAQUE}'}]))
+txs += [fila(id=10 + k, fecha=iso(5 + 30 * k), descripcion=f'SUSCRIPCION {ATAQUE}', importe=4.99, categoria='📦 Suscripciones') for k in range(3)]  # un pago de cada mes
 for t in txs: t.setdefault('paso', None); t.setdefault('partes', None)  # con las columnas «paso» y «partes»
 tablas = lambda: {'pj_transacciones': [dict(t) for t in txs], 'pj_reglas_categoria': [],
                   'pj_cuentas': [{'id': 'k1', 'user_id': 'u1', 'nombre': f'Cuenta {ATAQUE}', 'tipo': 'ahorro', 'clave': None, 'saldo': 100, 'fecha_saldo': iso(5)}],
@@ -42,6 +43,12 @@ with sync_playwright() as p:
     for resumen in pg.locator('section[aria-label="Dinero de paso"] summary').all(): resumen.click()
     pg.click('section[aria-label="Dinero de paso"] [data-accion="elegir-paso"] >> nth=0'); pg.wait_for_timeout(300)
     pg.keyboard.press('Escape')
+    # Suscripciones y pagos de cada mes: el nombre del comercio viene del extracto (apartado, hoja y aviso al quitarlo)
+    SUS = 'section[aria-label="Suscripciones y pagos de cada mes"]'
+    res.comprobar('<img' in pg.inner_text(SUS), 'app nueva: el nombre de un pago de cada mes se enseña como texto')
+    pg.click(f'{SUS} [data-accion="ver-pago"] >> nth=0'); pg.wait_for_selector('[data-accion="ocultar-pago"]')
+    pg.click('[data-accion="ocultar-pago"]'); pg.wait_for_timeout(300)
+    res.comprobar('<img' in pg.inner_text('#toast'), 'app nueva: el aviso al quitar un pago de cada mes enseña el nombre como texto')
     # Un movimiento dividido con una parte cuyo «para qué» lleva código: hoja del movimiento y de dividir
     pg.goto('http://pulso.prueba/nueva/#/movimientos'); pg.wait_for_selector('#lista-movs')
     pg.click('#lista-movs .fila:has-text("500,00")'); pg.wait_for_selector('.hoja-panel')

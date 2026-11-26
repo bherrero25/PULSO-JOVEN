@@ -35,6 +35,7 @@ Si sale **✗**, algo se ha roto: no se publica hasta arreglarlo. Las capturas d
 | `prueba_cuenta_nueva.py` | Cuenta de banco añadida a mano (banco y 4 cifras, su extracto la reconoce), cuenta principal y sin la columna |
 | `prueba_devoluciones.py` | Devoluciones: preguntar de qué gasto es, restar de esa categoría (Resumen y presupuesto) con el balance igual, y «No sé» |
 | `prueba_dividir.py` | Dividir la mensualidad (alquiler como dinero de paso), compensar el Bizum del alquiler, «Igual que la última vez», no duplicar al importar y sin la columna |
+| `prueba_suscripciones.py` | Suscripciones y pagos de cada mes: encontrar Netflix, Spotify (con su subida de precio) y el recibo del gimnasio sin el súper, total al mes y al año, añadirlo a los movimientos fijos, «No es un pago de cada mes» y volver a enseñarlo, sin la tabla de fijos, con un mes de datos y la demo |
 | `prueba_efectivo.py` | Efectivo: ingreso en mano o metido en el banco (juntarlo con el extracto), y la cuenta de efectivo de «Tu dinero» que se ajusta sola, pregunta o se deshace (preguntando) |
 | `prueba_otros_bancos.py` | Cualquier banco: asistente de columnas con propuesta, recordar el formato (en la base de datos o, sin la tabla, en el dispositivo), Debe/Haber y CSV con comas leídos solos |
 | `prueba_fin_de_mes.py` | ¿Llego a fin de mes?: línea en el balance de Inicio que lleva a Resumen, semáforo, misma cifra en los dos sitios, fijos pendientes, mes pasado y pocos datos |

@@ -12,9 +12,9 @@ const GASTOS = [
   ['🎉 Ocio', 'tarjeta', [['Cines Yelmo', 8.9, 8.9, 1], ['Sala Apolo', 14, 20, 1], ['Fourvenues entradas', 18, 30, 1]]],
   ['⛽ Gasolina', 'tarjeta', [['Repsol', 25, 35, 1], ['Petroprix', 24, 30, 1]]],
   ['👕 Ropa', 'tarjeta', [['Zara', 25, 45, 1], ['Primark', 9, 18, 1]]],
-  ['🏋️ Deporte', 'tarjeta', [['Rocódromo Sputnik', 35, 35, 1]]],
-  ['🚇 Transporte', 'tarjeta', [['Renfe Cercanías', 10, 10, 1], ['Recarga Metro', 12, 20, 1]]],
-  ['📦 Suscripciones', 'transferencia', [['Spotify', 10.99, 10.99, 1], ['Netflix', 12.99, 12.99, 1]]],
+  ['🏋️ Deporte', 'tarjeta', [['Recibo Rocódromo Sputnik', 35, 35, 1, 5, 'recibo']]],
+  ['🚇 Transporte', 'tarjeta', [['Renfe Cercanías', 10, 12.6, 1], ['Recarga Metro', 12, 20, 1]]],
+  ['📦 Suscripciones', 'tarjeta', [['Spotify', 10.99, 10.99, 1, 3], ['Netflix', 12.99, 12.99, 1, 14]]],
   ['💊 Salud', 'tarjeta', [['Farmacia Centro', 5, 14, 1]]]
 ];
 
@@ -42,14 +42,17 @@ export function datosDemo() {
     mov(dia(17 + Math.floor(r() * 5)), 'Bizum de Pablo', 8 + Math.round(r() * 25), 'ingreso', i ? '🎁 Regalo recibido' : '📱 Bizum recibido', 'bizum');
     mov(dia(12 + Math.floor(r() * 5)), 'Bizum a Lucía', 6 + Math.round(r() * 12), 'gasto', i ? '🍔 Comida' : '📱 Bizum enviado', 'bizum');
     for (const [categoria, medio, comercios] of GASTOS) {
-      for (const [nombre, min, max, veces] of comercios) {
+      for (const [nombre, min, max, veces, diaFijo, medioFijo] of comercios) {
         const n = categoria === '🎉 Ocio' && i === 4 ? veces + 2 : veces; // en verano, más ocio
-        for (let k = 0; k < n; k++) mov(dia(1 + Math.floor(r() * dias)), nombre, min + r() * (max - min), 'gasto', categoria, medio);
+        // Las suscripciones y la cuota se cobran siempre el mismo día (se sigue tirando el dado, para no cambiar el resto)
+        for (let k = 0; k < n; k++) { const d = 1 + Math.floor(r() * dias); mov(dia(diaFijo || d), nombre, min + r() * (max - min), 'gasto', categoria, medioFijo || medio); }
       }
     }
     // Lo que pagan quienes van en su coche por BlaBlaCar (sin usar el generador, para no cambiar el resto de la demo)
     const blabla = [18, 22.5, 0, 31, 16, 24][i];
     if (blabla) mov(dia(14), 'TRANSF BLABLACAR COMUTO SA', blabla, 'ingreso', '🚗 Coche compartido', 'transferencia');
+    // La factura del móvil, por recibo: casi siempre igual (un mes, con algo de más)
+    mov(dia(8), 'RECIBO DIGI SPAIN TELECOM', [10, 10, 12.35, 10, 10, 10][i], 'gasto', '📦 Suscripciones', 'recibo');
   }
   // Tres movimientos que la app no ha sabido clasificar
   [['TPV 8834 ZARAGOZA', 15, -1], ['PAYPAL *STEAMGAMES', 9.99, -2], ['COMPRA 4471 MADRID', 6.5, -4]]
@@ -60,7 +63,7 @@ export function datosDemo() {
   txs.sort((a, b) => b.fecha.localeCompare(a.fecha));
 
   const desde = sumarMeses(actual, -5);
-  const presupuestos = [['🍔 Comida', 180], ['🎉 Ocio', 80], ['⛽ Gasolina', 70], ['👕 Ropa', 50], ['🚇 Transporte', 40], ['📦 Suscripciones', 25]]
+  const presupuestos = [['🍔 Comida', 180], ['🎉 Ocio', 80], ['⛽ Gasolina', 70], ['👕 Ropa', 50], ['🚇 Transporte', 40], ['📦 Suscripciones', 40]]
     .map(([categoria, limite], k) => ({ id: 'p' + k, categoria, limite, mes: desde }));
   const metas = [
     { id: 'm1', nombre: 'Viaje a Lisboa', emoji: '✈️', objetivo: 600, ahorrado: 410, fecha_limite: hoyISO(112) },

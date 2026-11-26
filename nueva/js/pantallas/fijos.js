@@ -51,6 +51,12 @@ function hojaFijo(E) {
     ${existe ? `<button type="button" class="boton peligro peq" data-accion="borrar-fijo">${ic('papelera')}Quitar este movimiento fijo</button>` : ''}`, existe ? 'Cambiar movimiento fijo' : 'Nuevo movimiento fijo');
 }
 
+// Un movimiento fijo nuevo con los datos ya puestos (por ejemplo, una suscripción que la app ha encontrado sola)
+export function nuevoFijo(E, datos) {
+  borrador = { ...datos };
+  hojaFijo(E);
+}
+
 // Lo escrito en el formulario, para no perderlo al cambiar entre «Me llega» y «Pago»
 function leerFormulario() {
   const v = id => document.getElementById(id)?.value;

@@ -299,6 +299,49 @@ prueba('forma de pago: lo importado antes como «transferencia» se enseña con 
   assert.equal(L.formaDePago({ descripcion: 'Alquiler', tipo: 'gasto', medio: 'transferencia', cuenta: 'manual' }), 'Transferencia');
 });
 
+// ── Suscripciones y pagos de cada mes: el mismo cobro, en el mismo sitio, cada mes hacia el mismo día ──
+{
+  const meses = ['2026-06', '2026-07', '2026-08', '2026-09', '2026-10', '2026-11'];
+  const g = (fecha, importe, descripcion, extra = {}) => ({ id: `${descripcion}${fecha}${importe}`, fecha, importe, tipo: 'gasto', categoria: '📦 Suscripciones', descripcion, medio: 'tarjeta', cuenta: 'bankinter', ...extra });
+  const cada = (dia, importe, descripcion, extra, desde = 0) => meses.slice(desde).map((ym, k) => g(`${ym}-${String(typeof dia === 'function' ? dia(k) : dia).padStart(2, '0')}`, typeof importe === 'function' ? importe(k) : importe, descripcion, extra));
+  const azar = k => [3, 17, 9, 28, 12, 22][k];
+  const txs = [
+    ...cada(5, 12.99, 'COMPRA TARJ. 5402XXXXXXXX1234 NETFLIX.COM'),                         // la suscripción de siempre
+    ...cada(k => [3, 4, 2, 6, 3, 1][k], k => k < 4 ? 10.99 : 11.99, 'SPOTIFY P2A1B3C4D5'),   // sube de precio y el día baila un poco
+    ...cada(8, k => [10, 10.4, 12, 10, 9.6, 10.2][k], 'RECIBO DIGI SPAIN TELECOM', { medio: 'recibo' }), // recibo que cambia un poco
+    ...cada(azar, 8.9, 'CINES YELMO', { categoria: '🎉 Ocio' }),                             // mismo precio, cualquier día
+    ...meses.flatMap((ym, k) => [3, 10, 17, 24].map(d => g(`${ym}-${String(d).padStart(2, '0')}`, 20 + ((k * 7 + d) % 13), 'MERCADONA', { categoria: '🍔 Comida' }))),
+    ...cada(2, 4.99, 'AMAZON PRIME'), ...meses.map((ym, k) => g(`${ym}-${String(k + 10)}`, 15 + k * 3.1, 'AMAZON PRIME', { categoria: '🔧 Otros' })), // Prime entre las compras
+    ...cada(20, 9.99, 'DISNEY PLUS').slice(0, 3),                                            // la dejó en agosto
+    ...cada(15, 35, 'GIMNASIO').slice(4),                                                    // solo 2 cobros: aún no
+    ...cada(27, 50, 'CUOTA PREVISTA', { cuenta: 'previsto' }), ...cada(9, 20, 'CLASES', { cuenta: 'efectivo', medio: 'efectivo' }),
+    ...cada(1, 120, 'BIZUM A ANA ALQUILER', { categoria: '↩️ Reenviado', medio: 'bizum' }) // dinero de paso: no es un gasto tuyo
+  ];
+  const r = L.pagosDeCadaMes(txs, '2026-11-26');
+  const nombres = r.activas.map(s => s.nombre).sort();
+  prueba('pagos de cada mes: encuentra Netflix, Spotify, el recibo del móvil y Prime (aunque haya otras compras en Amazon)', () => assert.deepEqual(nombres, ['Amazon Prime', 'Digi', 'Netflix', 'Spotify']));
+  prueba('pagos de cada mes: ni el súper, ni el cine a precio fijo cualquier día, ni lo previsto, el efectivo o el dinero de paso', () =>
+    assert.ok(!r.activas.concat(r.terminadas).some(s => /Mercadona|Yelmo|Cuota|Clases|Bizum|Gimnasio/i.test(s.nombre))));
+  const spotify = r.activas.find(s => s.nombre === 'Spotify'), digi = r.activas.find(s => s.nombre === 'Digi');
+  prueba('pagos de cada mes: una subida de precio cuenta con el precio nuevo y recuerda el de antes', () => { assert.equal(spotify.importe, 11.99); assert.equal(spotify.antes, 10.99); assert.equal(spotify.cobros.length, 6); });
+  prueba('pagos de cada mes: un recibo puede variar un poco (se cuenta el último)', () => { assert.equal(digi.importe, 10.2); assert.equal(digi.variable, true); assert.equal(digi.antes, null); });
+  prueba('pagos de cada mes: lo que dejó de cobrarse está aparte y no suma', () => { assert.deepEqual(r.terminadas.map(s => s.nombre), ['Disney+']); assert.ok(!r.activas.some(s => s.nombre === 'Disney+')); });
+  prueba('pagos de cada mes: el total al mes es la suma de los activos y al año, por 12', () => {
+    assert.equal(r.alMes, Math.round(r.activas.reduce((s, x) => s + x.importe, 0) * 100) / 100); assert.equal(r.alAño, Math.round(r.alMes * 12 * 100) / 100);
+  });
+  prueba('pagos de cada mes: día habitual y el próximo cobro', () => { const n = r.activas.find(s => s.nombre === 'Netflix'); assert.equal(n.dia, 5); assert.equal(n.proximo, '2026-12-05'); });
+  prueba('pagos de cada mes: si el extracto no está al día, se cuenta desde el último movimiento', () => {
+    const viejo = txs.filter(t => t.fecha < '2026-09-01');
+    assert.ok(L.pagosDeCadaMes(viejo, '2026-11-26').activas.some(s => s.nombre === 'Netflix'));
+  });
+  prueba('pagos de cada mes: ¿ya está en los movimientos fijos?', () => {
+    const n = r.activas.find(s => s.nombre === 'Netflix');
+    assert.equal(L.estaEnFijos([{ tipo: 'gasto', nombre: 'Netflix', importe: 12.99, categoria: '📦 Suscripciones' }], n), true);
+    assert.equal(L.estaEnFijos([{ tipo: 'gasto', nombre: 'Alquiler', importe: 400, categoria: '🏠 Alquiler' }], n), false);
+    assert.equal(L.estaEnFijos([{ tipo: 'gasto', nombre: '', importe: 12, categoria: '🎉 Ocio' }], n), false);
+  });
+}
+
 for (const f of fallos) console.log(`  ✗ ${f}`);
 console.log(`${fallos.length ? '✗' : '✓'} Cálculos (logica.js): ${bien} comprobaciones bien, ${fallos.length} mal`);
 process.exit(fallos.length ? 1 : 0);

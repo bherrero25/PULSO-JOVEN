@@ -4,6 +4,7 @@ import { ic } from '../iconos.js';
 import { esc, fmt, fmt0, nombreMes, resumenMes, ritmoDelMes, porCategoria, gastoHastaDia, sumarMeses, mesActual, colorCategoria, fechaCorta, infoCategoria, sumar, prevision } from '../logica.js';
 import * as finDeMes from './prevision.js';
 import * as paso from './paso.js';
+import * as suscripciones from './suscripciones.js';
 import { ficha, conceptoVisible } from '../componentes.js';
 import { datosBarras, graficoBarras } from '../graficos.js';
 
@@ -83,6 +84,8 @@ export function render(E) {
     ${R.deAhorros > 0 ? `<p class="nota" style="padding-top:6px">Además, ${ritmo.abierto ? 'has usado' : 'usaste'} ${fmt(R.deAhorros)} de tus ahorros (traspasos a tu cuenta): no cuentan como ingreso porque ya eran tuyos.</p>` : ''}
     ${R.totalPaso ? `<p class="nota" style="padding-top:6px">Ya está descontado el dinero de paso que salió de tu dinero (${fmt(-R.totalPaso, true)}): lo tienes en «Dinero de paso».</p>` : ''}
   </section>
+
+  ${suscripciones.seccion(E)}
 
   ${paso.seccion(E, E.mes, ritmo.abierto)}
 

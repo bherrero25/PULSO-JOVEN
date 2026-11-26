@@ -17,7 +17,7 @@ with sync_playwright() as p:
         if not falta: tablas['pj_codigos_atajo'] = []
         base = Supabase(tablas, por_defecto={'pj_codigos_atajo': {'codigo': CODIGO}})
         pg = pagina(b, errores); con_sesion(pg, base)
-        pg.goto('http://pulso.prueba/nueva/'); pg.wait_for_selector('.tarjeta-tinta'); pg.wait_for_timeout(800)
+        pg.goto('http://pulso.prueba/nueva/'); pg.wait_for_selector('.saludo'); pg.wait_for_timeout(800)
         if not falta:
             cat = {t['descripcion']: t['categoria'] for t in txs}
             res.comprobar(cat['MERCADONA VALENCIA'] == '🍔 Comida', 'al abrir, un pago de Apple Pay se clasifica con las reglas automáticas')

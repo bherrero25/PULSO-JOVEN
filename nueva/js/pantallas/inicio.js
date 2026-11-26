@@ -3,6 +3,8 @@
 import { ic } from '../iconos.js';
 import { esc, fmt, fmt0, nombreMes, resumenMes, ritmoDelMes, estadoPresupuestos, porRevisar, gastoHastaDia, sumarMeses, porCategoria, hoyISO, fechaCorta, TIPOS_CUENTA, totalCuentas, saldoDisponible } from '../logica.js';
 import { selectorMes, filaMovimiento, ficha, barraPresupuesto, textoEstado, inicial, conceptoVisible } from '../componentes.js';
+import * as primeros from './primeros.js';
+import * as D from '../datos.js';
 
 // Botones para apuntar a mano en dos toques: abren el formulario ya preparado
 const RAPIDOS = [['gasto', 'tarjeta', 'Gasto', 'menos'], ['ingreso', 'transferencia', 'Ingreso', 'mas'], ['gasto', 'bizum', 'Bizum', 'movil'], ['gasto', 'transferencia', 'Transferencia', 'banco']];
@@ -34,6 +36,8 @@ export function render(E) {
 
   const ultimos = [...R.movs].sort((a, b) => b.fecha.localeCompare(a.fecha)).slice(0, 5);
   const meta = metaCercana(E.metas);
+  // Cuenta recién creada (sin nada importado ni apuntado): la bienvenida con los primeros pasos ocupa el sitio del balance
+  const nuevo = !D.enDemo() && !primeros.conMovimientos(E);
 
   return `
   <header class="cabecera">
@@ -44,7 +48,7 @@ export function render(E) {
     <button type="button" class="avatar solo-movil" data-accion="cuenta" aria-label="Tu cuenta">${esc(inicial(E))}</button>
   </header>
 
-  <div class="fila-flex">
+  ${nuevo ? primeros.bienvenida(E) : `<div class="fila-flex">
     <section class="tarjeta-tinta ancha" aria-label="Balance del mes">
       <div class="etiqueta"><span class="punto"></span>${etiqueta}</div>
       <div class="cifra num">${R.queda < 0 ? '−' : ''}${fmt(R.queda)}</div>
@@ -74,17 +78,19 @@ export function render(E) {
       <span class="cifra-m num">${R.ingresado > 0 ? Math.max(0, Math.round(R.queda / R.ingresado * 100)) : 0} %</span>
       <span class="nota">de lo que entra se queda contigo · objetivo: 20 %</span>
     </section>
-  </div>
+  </div>`}
 
   <nav class="rapidos" aria-label="Apuntar rápido">
     ${RAPIDOS.map(([tipo, medio, texto, icono]) => `<a href="#/anadir?tipo=${tipo}&medio=${medio}"><span class="ficha">${ic(icono)}</span>${texto}</a>`).join('')}
   </nav>
 
-  ${tarjetaDinero(E)}
+  ${nuevo ? '' : primeros.tarjeta(E)}
+
+  ${nuevo && E.cuentas?.length === 0 ? '' : tarjetaDinero(E)}
 
   ${nRevisar ? `<a href="#/movimientos" class="aviso-revisar" data-accion="ir-revisar">${ic('alerta')}<span><b>${nRevisar} ${nRevisar === 1 ? 'movimiento' : 'movimientos'}</b> sin categoría</span><b style="display:flex;align-items:center">Revisar${ic('derecha', 'ic-s')}</b></a>` : ''}
 
-  <div class="rejilla-auto">
+  ${nuevo && !pres.length && !meta ? '' : `<div class="rejilla-auto">
     <section class="tarjeta" aria-label="Presupuestos">
       <div class="fila-titulo">
         <div style="display:flex;align-items:center;gap:8px"><h2 class="h2">Presupuestos</h2>${superados ? `<span class="pastilla critica">${superados} ${superados === 1 ? 'superado' : 'superados'}</span>` : ''}</div>
@@ -115,7 +121,7 @@ export function render(E) {
       <div class="fila-titulo"><h2 class="h2">Últimos movimientos</h2><a href="#/movimientos" class="enlace">Ver todos</a></div>
       ${ultimos.length ? ultimos.map(t => filaMovimiento(t, E)).join('') : `<p class="vacio">Aún no hay movimientos en ${mes}.<br><a href="#/anadir" style="font-weight:600;text-decoration:underline">Añade el primero</a></p>`}
     </section>
-  </div>`;
+  </div>`}`;
 }
 
 // «Tu dinero»: lo que tienes en cada sitio (saldo del banco según el último extracto, efectivo, ahorro) y el total

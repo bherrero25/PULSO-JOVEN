@@ -21,11 +21,11 @@ with sync_playwright() as p:
     # Transferencia recibida apuntada a mano: el banco sube; un café en efectivo no lo cambia
     pg.click('.rapidos a:has-text("Transferencia")'); pg.wait_for_selector('.teclado'); pg.click('.tipo button:has-text("Recibida")')
     for k in '200': pg.click(f'.teclado [data-valor="{k}"]')
-    pg.click('[data-accion="cat-nuevo"][data-valor="reenviado"]'); pg.click('[data-accion="guardar-nuevo"]'); pg.wait_for_selector('.tarjeta-tinta')
+    pg.click('[data-accion="cat-nuevo"][data-valor="reenviado"]'); pg.click('[data-accion="guardar-nuevo"]'); pg.wait_for_selector('.saludo')
     res.comprobar(abs(banco(pg) - (b0 + 200)) < 0.005, 'lo apuntado a mano después del extracto se suma al banco')
     res.comprobar('apuntado después' in pg.inner_text('section[aria-label="Tu dinero"]'), 'y la fila del banco lo dice')
     pg.click('.rapidos a:has-text("Gasto")'); pg.wait_for_selector('.teclado'); pg.click('.formas button:has-text("Efectivo")')
-    pg.click('.teclado [data-valor="5"]'); pg.click('[data-accion="guardar-nuevo"]'); pg.wait_for_selector('.tarjeta-tinta')
+    pg.click('.teclado [data-valor="5"]'); pg.click('[data-accion="guardar-nuevo"]'); pg.wait_for_selector('.saludo')
     res.comprobar(abs(banco(pg) - (b0 + 200)) < 0.005, 'lo pagado en efectivo no cambia el banco')
     # Desglose al tocar la cuenta
     pg.click('section[aria-label="Tu dinero"] .lista-cuentas .fila:has-text("Banco")'); pg.wait_for_selector('.hoja-panel')
@@ -41,7 +41,7 @@ with sync_playwright() as p:
         if not falta: tablas['pj_cuentas'] = [{'id': 'k1', 'user_id': 'u1', 'nombre': 'Bankinter', 'tipo': 'banco', 'clave': 'bankinter', 'saldo': 700, 'fecha_saldo': iso(9)}]
         base = Supabase(tablas)
         pg = pagina(b, errores); con_sesion(pg, base)
-        pg.goto('http://pulso.prueba/nueva/'); pg.wait_for_selector('.tarjeta-tinta'); pg.wait_for_timeout(400)
+        pg.goto('http://pulso.prueba/nueva/'); pg.wait_for_selector('.saludo'); pg.wait_for_timeout(400)
         res.comprobar(not pg.is_visible('#aviso-error'), f'{"sin" if falta else "con"} la tabla de cuentas la app abre sin errores')
         if falta:
             res.comprobar('sql/2026-11-cuentas.sql' in pg.inner_text('section[aria-label="Tu dinero"]'), 'sin la tabla, «Tu dinero» explica qué falta')

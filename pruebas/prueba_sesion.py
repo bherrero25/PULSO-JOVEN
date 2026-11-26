@@ -18,7 +18,7 @@ base = Supabase({
 with sync_playwright() as p:
     b = lanzar(p); errores = []
     pg = pagina(b, errores); con_sesion(pg, base)
-    pg.goto('http://pulso.prueba/nueva/'); pg.wait_for_selector('.tarjeta-tinta')
+    pg.goto('http://pulso.prueba/nueva/'); pg.wait_for_selector('.saludo')
     res.comprobar(pg.text_content('.saludo').strip() == 'Hola, Prueba', 'saluda con el nombre de la cuenta')
     res.comprobar(base.lecturas['pj_transacciones'] >= 2, 'lee los movimientos en varias páginas (más de 1.000)')
     res.comprobar(not pg.evaluate("document.querySelector('[data-accion=\"mes-anterior\"]').disabled"), 'se puede ir a meses anteriores')

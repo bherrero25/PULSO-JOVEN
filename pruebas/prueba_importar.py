@@ -24,7 +24,7 @@ with sync_playwright() as p:
         ext = extracto('retenidos', retenidos=[(dmy(0), 'REPSOL VALENCIA', -40), (dmy(1), 'AMAZON EU', -23.99)],
                        filas=[(dmy(0), 'LIBRERIA PAPEL', -12, 464.60), (dmy(1), 'COMPRA TARJ. 5402XXXX MERCADONA VALENCIA', -23.4, 476.60), (dmy(20), 'ZARA', -30, 500.00)])
         pg = pagina(b, errores); con_sesion(pg, base)
-        pg.goto('http://pulso.prueba/nueva/'); pg.wait_for_selector('.tarjeta-tinta')
+        pg.goto('http://pulso.prueba/nueva/'); pg.wait_for_selector('.saludo')
         vista = ' | '.join(importar(pg, ext))
         foto(pg, f'im01_retenidos_{"sin" if sin_columna else "con"}_columna')
         pg.click('[data-accion="confirmar-importacion"]'); pg.wait_for_timeout(900)
@@ -52,7 +52,7 @@ with sync_playwright() as p:
     ext1 = extracto('juntar_1', retenidos=[(dmy(0), 'LIBRERIA PAPEL', -12), (dmy(0), 'CAFETERIA LOLA VALENCIA', -0.9)],
                     filas=[(dmy(0), 'BIZUM A LAURA GARCIA', -15, 1455.00), (dmy(0), 'CAFETERIA EL PUERTO', -5, 1470.00), (dmy(0), 'NOMINA', 1000, 1475.00), (dmy(20), 'ZARA', -30, 500.00)])
     pg = pagina(b, errores); con_sesion(pg, base)
-    pg.goto('http://pulso.prueba/nueva/'); pg.wait_for_selector('.tarjeta-tinta')
+    pg.goto('http://pulso.prueba/nueva/'); pg.wait_for_selector('.saludo')
     vista = ' | '.join(importar(pg, ext1)); foto(pg, 'im02_juntar')
     res.comprobar(pg.locator('input[data-cambio="par-unir"]:checked').count() == 3, 'propone juntar el Bizum, los libros (retenido) y el café de Apple Pay (retenido)')
     pg.click('[data-accion="confirmar-importacion"]'); pg.wait_for_timeout(900)

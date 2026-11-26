@@ -25,14 +25,14 @@ with sync_playwright() as p:
     res.comprobar(f == {'tipos': ['Enviado', 'Recibido'], 'forma': 'Bizum', 'cat': 'Lo decido luego', 'concepto': '¿A quién?', 'boton': 'Guardar Bizum enviado'}, 'con Bizum: Enviado/Recibido, «¿A quién?» y «Lo decido luego»')
     for k in '15': pg.click(f'.teclado [data-valor="{k}"]')
     pg.fill('input[data-entrada="concepto-nuevo"]', 'Marta'); foto(pg, 'ap02_bizum', False)
-    pg.click('[data-accion="guardar-nuevo"]'); pg.wait_for_selector('.tarjeta-tinta')
+    pg.click('[data-accion="guardar-nuevo"]'); pg.wait_for_selector('.saludo')
     res.comprobar('Por revisar' in pg.inner_text('#toast'), 'al guardar «luego», recuerda que queda por revisar')
 
     pg.click('.rapidos a:has-text("Transferencia")'); pg.wait_for_selector('.teclado'); pg.click('.tipo button:has-text("Recibida")')
     f = formulario(pg)
     res.comprobar(f['concepto'] == '¿De quién o de qué?' and f['boton'] == 'Guardar transferencia recibida', 'transferencia recibida: textos adaptados')
     for k in '50': pg.click(f'.teclado [data-valor="{k}"]')
-    pg.click('[data-accion="cat-nuevo"][data-valor="devolucion"]'); pg.click('[data-accion="guardar-nuevo"]'); pg.wait_for_selector('.tarjeta-tinta')
+    pg.click('[data-accion="cat-nuevo"][data-valor="devolucion"]'); pg.click('[data-accion="guardar-nuevo"]'); pg.wait_for_selector('.saludo')
     res.comprobar('guardada' in pg.inner_text('#toast'), 'la transferencia se guarda')
 
     pg.click('.rapidos a:has-text("Gasto")'); pg.wait_for_selector('.teclado')

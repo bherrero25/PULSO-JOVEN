@@ -22,7 +22,7 @@ with sync_playwright() as p:
 
     # ── App nueva: todas las pantallas, la vista previa de un extracto y los avisos ──
     pg = pagina(b, errores); con_sesion(pg, Supabase(tablas()))
-    pg.goto('http://pulso.prueba/nueva/'); pg.wait_for_selector('.tarjeta-tinta')
+    pg.goto('http://pulso.prueba/nueva/'); pg.wait_for_selector('.saludo')
     for ruta in ('movimientos', 'resumen', 'presupuesto', 'metas', 'inicio'):
         pg.goto(f'http://pulso.prueba/nueva/#/{ruta}'); pg.wait_for_timeout(400)
     pg.goto('http://pulso.prueba/nueva/#/movimientos'); pg.wait_for_selector('#lista-movs')

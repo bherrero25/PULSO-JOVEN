@@ -182,7 +182,7 @@ def apuntar(pg, tipo, teclas, cat, fecha, medio, concepto, url='http://pulso.pru
     pg.fill('input[data-entrada="fecha-nuevo"]', fecha)
     pg.fill('input[data-entrada="concepto-nuevo"]', concepto)
     pg.click('[data-accion="guardar-nuevo"]')
-    pg.wait_for_selector('.tarjeta-tinta')
+    pg.wait_for_selector('.saludo')
 
 
 def importar(pg, ruta, url='http://pulso.prueba/nueva/#/anadir'):

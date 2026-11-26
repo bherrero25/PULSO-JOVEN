@@ -34,11 +34,11 @@ with sync_playwright() as p:
     cuentas = [{'id': 'k1', 'user_id': 'u1', 'nombre': 'Bankinter', 'tipo': 'banco', 'clave': 'bankinter', 'saldo': 500, 'fecha_saldo': iso(10)}]
     base = Supabase({'pj_fijos': fijos, 'pj_transacciones': txs, 'pj_cuentas': cuentas, 'pj_presupuestos': [], 'pj_metas': [], 'pj_reglas_categoria': []})
     pg = pagina(b, errores); con_sesion(pg, base)
-    pg.goto('http://pulso.prueba/nueva/'); pg.wait_for_selector('.tarjeta-tinta'); pg.wait_for_timeout(800)
+    pg.goto('http://pulso.prueba/nueva/'); pg.wait_for_selector('.saludo'); pg.wait_for_timeout(800)
     previstos = [t for t in txs if t['cuenta'] == 'previsto']
     res.comprobar(len(previstos) == 1 and previstos[0]['importe'] == 470, 'al abrir se crea la mensualidad prevista del día que tocaba')
     res.comprobar(fijos[0]['ultimo'] == previstos[0]['fecha'], 'y se apunta hasta cuándo se ha creado')
-    pg.reload(); pg.wait_for_selector('.tarjeta-tinta'); pg.wait_for_timeout(800)
+    pg.reload(); pg.wait_for_selector('.saludo'); pg.wait_for_timeout(800)
     res.comprobar(len([t for t in txs if t['cuenta'] == 'previsto']) == 1, 'al recargar no se repite')
     ext = extracto('fijos', [(dmy(0), 'TRANSF INM /PADRE GARCIA', 480, 950.00), (dmy(20), 'ZARA', -30, 470.00)])
     importar(pg, ext)

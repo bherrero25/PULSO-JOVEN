@@ -16,7 +16,7 @@ with sync_playwright() as p:
     pg.wait_for_selector('#form-entrar'); foto(pg, 'r00_entrar', False)
     res.comprobar(pg.is_visible('text=Ver la demo con datos de ejemplo'), 'la pantalla de entrar ofrece la demo')
     pg.click('text=Ver la demo con datos de ejemplo')
-    pg.wait_for_selector('.tarjeta-tinta'); foto(pg, 'r01_inicio')
+    pg.wait_for_selector('.saludo'); foto(pg, 'r01_inicio')
     res.comprobar(pg.inner_text('.tarjeta-tinta .etiqueta').strip() == 'Balance mensual', 'Inicio muestra el «Balance mensual»')
     res.comprobar(pg.locator('.rapidos a').count() == 4, 'Inicio tiene los 4 botones de apuntar rápido')
     mes = pg.inner_text('.selector-mes span')
@@ -45,7 +45,7 @@ with sync_playwright() as p:
     res.comprobar(pg.inner_text('.pantalla-importe').replace(' ', ' ').startswith('−12,5'), 'el teclado escribe el importe')
     pg.click('[data-accion="cat-nuevo"][data-valor="ocio"]')
     pg.fill('input[data-entrada="concepto-nuevo"]', 'Cañas con amigos'); foto(pg, 'r04_anadir', False)
-    pg.click('[data-accion="guardar-nuevo"]'); pg.wait_for_selector('.tarjeta-tinta')
+    pg.click('[data-accion="guardar-nuevo"]'); pg.wait_for_selector('.saludo')
     res.comprobar('guardado' in pg.inner_text('#toast'), 'al guardar avisa de que se ha guardado')
     pg.click('.barra a[href="#/movimientos"]'); pg.wait_for_selector('#lista-movs')
     res.comprobar(num_movs(pg) == total + 1, 'el movimiento nuevo aparece en la lista')
@@ -84,7 +84,7 @@ with sync_playwright() as p:
 
     # Ordenador
     pg = pagina(b, errores, 1440, 900)
-    pg.goto('http://pulso.prueba/nueva/?demo'); pg.wait_for_selector('.tarjeta-tinta'); foto(pg, 'r13_ordenador_inicio')
+    pg.goto('http://pulso.prueba/nueva/?demo'); pg.wait_for_selector('.saludo'); foto(pg, 'r13_ordenador_inicio')
     res.comprobar(pg.is_visible('.lateral') and not pg.is_visible('.barra'), 'en ordenador hay menú lateral y no barra inferior')
     for ruta, sel in [('movimientos', '#lista-movs'), ('resumen', '.grafico-barras'), ('presupuesto', '.contenido'), ('anadir', '.teclado')]:
         pg.click(f'.lateral a[href="#/{ruta}"]'); pg.wait_for_selector(sel); foto(pg, f'r14_ordenador_{ruta}', False)

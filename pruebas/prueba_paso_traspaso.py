@@ -7,7 +7,7 @@ res = Resultado('Dinero de paso y traspasos')
 
 
 def cifras(pg):
-    pg.click('.barra a[href="#/inicio"]'); pg.wait_for_selector('.tarjeta-tinta')
+    pg.click('.barra a[href="#/inicio"]'); pg.wait_for_selector('.saludo')
     return {'balance': euros(pg.inner_text('.tarjeta-tinta .cifra')),
             'ingresado': euros(pg.inner_text('.tarjeta-tinta .dato:has-text("Ingresado") b')),
             'gastado': euros(pg.inner_text('.tarjeta-tinta .dato:has-text("Gastado") b'))}
@@ -18,7 +18,7 @@ ahorrado = lambda pg: euros(pg.locator('section[aria-label="Tu dinero"] .fila:ha
 with sync_playwright() as p:
     b = lanzar(p); errores = []
     pg = pagina(b, errores)
-    pg.goto('http://pulso.prueba/nueva/?demo'); pg.wait_for_selector('.tarjeta-tinta')
+    pg.goto('http://pulso.prueba/nueva/?demo'); pg.wait_for_selector('.saludo')
     c0 = cifras(pg); a0 = ahorrado(pg)
 
     # ── Dinero de paso: llega una transferencia de casa para pagar algo y luego se paga ──

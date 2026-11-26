@@ -13,7 +13,7 @@ RESPUESTAS = {
 }
 # Cómo se rellena y se lee cada app: (dirección, abrir «crear cuenta», nombre, email, contraseña, botón, dentro, saludo, mensaje)
 APPS = {
-    'nueva': ('nueva/', '[data-accion="modo-entrar"][data-valor="crear"]', '#acc-nombre', '#acc-email', '#acc-pass', '#form-entrar button[type=submit]', '.tarjeta-tinta', '.saludo', '#acc-msg'),
+    'nueva': ('nueva/', '[data-accion="modo-entrar"][data-valor="crear"]', '#acc-nombre', '#acc-email', '#acc-pass', '#form-entrar button[type=submit]', '.saludo', '.saludo', '#acc-msg'),
     'antigua': ('app.html', '.auth-tab:has-text("Crear cuenta")', '#reg-name', '#reg-email', '#reg-pass', 'text=Crear cuenta →', '#app.visible', '#header-name', '#auth-msg'),
 }
 

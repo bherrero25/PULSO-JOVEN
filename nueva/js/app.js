@@ -12,6 +12,7 @@ import * as resumen from './pantallas/resumen.js';
 import * as planes from './pantallas/planes.js';
 import * as dinero from './pantallas/dinero.js';
 import * as fijos from './pantallas/fijos.js';
+import * as primeros from './pantallas/primeros.js';
 
 // Estado de la app: datos de la persona y lo que tiene elegido en pantalla
 const E = {
@@ -47,11 +48,12 @@ function irA() {
   const anterior = E.pantalla;
   const [p, consulta] = (location.hash.replace(/^#\/?/, '') || 'inicio').split('?');
   E.pantalla = PANTALLAS[p] ? p : 'inicio';
-  // «Apuntar rápido» (botones de Inicio y accesos del icono): #/anadir?tipo=gasto&medio=bizum abre el formulario ya preparado
+  // «Apuntar rápido» (botones de Inicio y accesos del icono): #/anadir?tipo=gasto&medio=bizum abre el formulario ya preparado;
+  // #/anadir?pestana=extracto abre directamente la pestaña de subir el extracto (primeros pasos)
   if (p === 'anadir' && consulta) {
     const q = new URLSearchParams(consulta);
-    E.nuevo = anadir.nuevoMovimiento({ tipo: q.get('tipo'), medio: q.get('medio') });
-    E.tabAnadir = 'mano';
+    E.tabAnadir = ['extracto', 'auto'].includes(q.get('pestana')) ? q.get('pestana') : 'mano';
+    if (E.tabAnadir === 'mano') E.nuevo = anadir.nuevoMovimiento({ tipo: q.get('tipo'), medio: q.get('medio') });
     history.replaceState(null, '', '#/anadir');
   }
   if (anterior === 'anadir' && E.pantalla !== 'anadir') E.importacion = null;
@@ -194,7 +196,7 @@ const generales = {
 };
 
 const ctx = { E, pintar };
-const ACCIONES = { ...generales, ...movimientos.acciones, ...anadir.acciones, ...resumen.acciones, ...planes.acciones, ...dinero.acciones, ...fijos.acciones };
+const ACCIONES = { ...generales, ...movimientos.acciones, ...anadir.acciones, ...resumen.acciones, ...planes.acciones, ...dinero.acciones, ...fijos.acciones, ...primeros.acciones };
 const ENTRADAS = { ...movimientos.entradas, ...anadir.entradas, ...planes.entradas };
 const CAMBIOS = { ...movimientos.cambios, ...anadir.cambios };
 

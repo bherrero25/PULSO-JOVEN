@@ -16,7 +16,7 @@ EXT_C = extracto('cuenta_sin_numero', [(dmy(0), 'CAFETERIA', -3, 100.0)])
 with sync_playwright() as p:
     b = lanzar(p); errores = []
     pg = pagina(b, errores); con_sesion(pg, base)
-    pg.goto('http://pulso.prueba/nueva/'); pg.wait_for_selector('.tarjeta-tinta')
+    pg.goto('http://pulso.prueba/nueva/'); pg.wait_for_selector('.saludo')
 
     # 1) La cuenta de siempre adopta su número (MERCADONA ya estaba: es la misma cuenta)
     vista = ' | '.join(importar(pg, EXT_A))
@@ -33,7 +33,7 @@ with sync_playwright() as p:
     pg.click('[data-accion="confirmar-importacion"]'); pg.wait_for_timeout(900)
     res.comprobar(any(c['clave'] == 'bankinter·5678' and c['nombre'] == 'Ahorro' for c in cuentas), 'la cuenta nueva se crea con el nombre elegido')
     res.comprobar(all(t['categoria'] == '🔄 Traspaso' for t in txs if 'TRASPASO' in t['descripcion']), 'las dos mitades del traspaso quedan como traspaso')
-    pg.goto('http://pulso.prueba/nueva/#/inicio'); pg.wait_for_selector('.tarjeta-tinta')
+    pg.goto('http://pulso.prueba/nueva/#/inicio'); pg.wait_for_selector('.saludo')
     ingresado = euros(pg.inner_text('.tarjeta-tinta .dato:has-text("Ingresado") b'))
     res.comprobar(abs(ingresado - 1000.5) < 0.005, 'el traspaso no cuenta como ingreso ni como gasto')
     res.comprobar(abs(euros(pg.inner_text('section[aria-label="Tu dinero"] .cifra-m')) - 3480.5) < 0.005, '«Tu dinero» suma las dos cuentas')

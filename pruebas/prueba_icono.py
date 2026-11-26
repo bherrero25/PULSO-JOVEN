@@ -7,7 +7,7 @@ res = Resultado('Icono y manifiesto')
 with sync_playwright() as p:
     b = lanzar(p); errores = []
     pg = pagina(b, errores)
-    pg.goto('http://pulso.prueba/nueva/?demo'); pg.wait_for_selector('.tarjeta-tinta')
+    pg.goto('http://pulso.prueba/nueva/?demo'); pg.wait_for_selector('.saludo')
     enlaces = pg.evaluate("[...document.querySelectorAll('link[rel=manifest], link[rel=icon], link[rel=apple-touch-icon]')].map(l => l.href)")
     man = pg.evaluate("fetch('manifest.webmanifest').then(r => r.json())")
     res.comprobar(len(enlaces) == 4, 'la página enlaza el manifiesto, los dos favicon y el icono del iPhone')

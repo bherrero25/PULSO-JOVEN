@@ -1,7 +1,8 @@
 // Resumen: gasto de los últimos meses, en qué se va, de dónde viene el dinero y la comparación con el mes anterior
 
 import { ic } from '../iconos.js';
-import { esc, fmt, fmt0, nombreMes, resumenMes, ritmoDelMes, porCategoria, gastoHastaDia, sumarMeses, mesActual, colorCategoria, fechaCorta, infoCategoria, sumar } from '../logica.js';
+import { esc, fmt, fmt0, nombreMes, resumenMes, ritmoDelMes, porCategoria, gastoHastaDia, sumarMeses, mesActual, colorCategoria, fechaCorta, infoCategoria, sumar, prevision } from '../logica.js';
+import * as finDeMes from './prevision.js';
 import { ficha, conceptoVisible } from '../componentes.js';
 import { datosBarras, graficoBarras } from '../graficos.js';
 
@@ -23,13 +24,15 @@ export function render(E) {
   // Ingresos que se descuentan de una categoría de gasto para ver lo que de verdad ha costado (coche compartido → gasolina)
   const compensan = cat => R.ingresos.filter(t => infoCategoria(t.categoria).compensa === cat.id);
 
+  // ¿Llego a fin de mes? (solo en el mes en curso): si hay previsión, la comparación ya no hace la suya, más simple
+  const pv = ritmo.abierto ? prevision(E.txs, E.fijos) : null;
   let comparacion;
   if (ritmo.abierto) {
     const antHastaHoy = gastoHastaDia(E.txs, anterior, ritmo.dia);
     const dif = R.totalGastos - antHastaHoy;
-    const prevision = R.totalGastos / ritmo.dia * ritmo.dias;
-    comparacion = (antHastaHoy > 0 ? `Vas ${fmt(Math.abs(dif))} ${dif <= 0 ? 'por debajo' : 'por encima'} de ${mesAnt} a estas alturas del mes. ` : '')
-      + `A este ritmo acabarás ${mes} con unos ${fmt0(prevision)} gastados.`;
+    const aEsteRitmo = R.totalGastos / ritmo.dia * ritmo.dias;
+    comparacion = (antHastaHoy > 0 ? `Vas ${fmt(Math.abs(dif))} ${dif <= 0 ? 'por debajo' : 'por encima'} de ${mesAnt} a estas alturas del mes.` : '')
+      + (pv?.final != null ? '' : `${antHastaHoy > 0 ? ' ' : ''}A este ritmo acabarás ${mes} con unos ${fmt0(aEsteRitmo)} gastados.`);
   } else {
     const totalAnt = resumenMes(E.txs, anterior).totalGastos;
     const dif = R.totalGastos - totalAnt;
@@ -39,6 +42,7 @@ export function render(E) {
   return `
   <header class="cabecera"><h1 class="titulo num">Resumen</h1><span class="sub">Últimos 6 meses</span></header>
   <div class="rejilla-auto">
+  ${finDeMes.apartado(E, pv)}
   <section class="tarjeta" aria-label="Gasto por mes" style="grid-column:1/-1">
     <div style="display:flex;flex-direction:column;gap:2px">
       <span class="sub">Gastado en ${mes}</span>
@@ -79,10 +83,10 @@ export function render(E) {
       <div class="detalle">${[...R.paso].sort((a, b) => b.fecha.localeCompare(a.fecha)).map(t => `<div><span>${fechaCorta(t.fecha)} · ${esc(conceptoVisible(t))}</span><span class="num${t.tipo === 'ingreso' ? ' positivo' : ''}">${fmt(t.tipo === 'ingreso' ? +t.importe : -t.importe, true)}</span></div>`).join('')}</div></details>` : ''}
   </section>
 
-  <section class="tarjeta-tinta" aria-label="Comparación" style="flex-direction:row;align-items:flex-start;gap:12px;padding:16px">
+  ${comparacion ? `<section class="tarjeta-tinta" aria-label="Comparación" style="flex-direction:row;align-items:flex-start;gap:12px;padding:16px">
     <span class="ficha" style="background:var(--tinta-2);color:var(--lima)">${ic('tendencia')}</span>
     <span style="font-size:14px;line-height:1.45">${comparacion}</span>
-  </section>
+  </section>` : ''}
   </div>`;
 }
 

@@ -60,7 +60,7 @@ export function render(E) {
       <div class="lima" style="font-size:13px;font-weight:500">${sub}</div>
       <div style="display:flex;flex-direction:column;gap:6px">
         <div class="progreso gruesa tinta"><i style="width:${Math.min(pctGastado, 100)}%"></i></div>
-        <span style="font-size:12px;color:var(--texto-claro-2)">${R.ingresado > 0 ? `Has gastado el ${pctGastado} % de lo que ha entrado` : 'Aún no ha entrado dinero este mes'}</span>
+        ${finDeMes.lineaInicio(pv) || `<span style="font-size:12px;color:var(--texto-claro-2)">${R.ingresado > 0 ? `Has gastado el ${pctGastado} % de lo que ha entrado` : 'Aún no ha entrado dinero este mes'}</span>`}
       </div>
       <div class="dos-col separador-tinta solo-movil">
         <div class="dato"><small>Ingresado</small><b class="num">${fmt(R.ingresado, true)}</b></div>
@@ -84,8 +84,6 @@ export function render(E) {
       <span class="nota">de lo que entra se queda contigo · objetivo: 20 %</span>
     </section>
   </div>`}
-
-  ${nuevo ? '' : finDeMes.tarjeta(E, pv)}
 
   <nav class="rapidos" aria-label="Apuntar rápido">
     ${RAPIDOS.map(([tipo, medio, texto, icono]) => `<a href="#/anadir?tipo=${tipo}&medio=${medio}"><span class="ficha">${ic(icono)}</span>${texto}</a>`).join('')}

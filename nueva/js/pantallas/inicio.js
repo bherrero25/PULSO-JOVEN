@@ -76,7 +76,7 @@ export function render(E) {
     <section class="tarjeta solo-ordenador" aria-label="Gastado">
       <span class="sub">Gastado</span>
       <span class="cifra-m num">${fmt(-R.totalGastos, true)}</span>
-      <span class="nota">${R.gastos.length} gastos${mayor ? ` · el mayor: ${esc(conceptoVisible(mayor))}, ${fmt(mayor.importe)}` : ''}</span>
+      <span class="nota">${R.gastos.filter(t => !t.devolucion).length} gastos${R.devuelto > 0 ? ` · ${fmt0(R.devuelto)} devueltos` : ''}${mayor ? ` · el mayor: ${esc(conceptoVisible(mayor))}, ${fmt(mayor.importe)}` : ''}</span>
       ${antHastaHoy > 0 ? `<span class="nota" style="font-weight:600;color:${difGasto <= 0 ? 'var(--positivo)' : 'var(--critico-texto)'}">${difGasto <= 0 ? '▼' : '▲'} ${fmt(Math.abs(difGasto))} ${difGasto <= 0 ? 'menos' : 'más'} que ${nombreMes(anterior, { año: false }).toLowerCase()} ${ritmo.abierto ? 'a estas alturas' : ''}</span>` : ''}
     </section>
     <section class="tarjeta solo-ordenador" aria-label="Ahorro">

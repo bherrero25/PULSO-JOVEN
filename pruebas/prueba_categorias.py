@@ -17,7 +17,8 @@ with sync_playwright() as p:
     opciones = pg.locator('.rejilla-cats button').all_inner_texts()
     res.comprobar('Bizum recibido' not in opciones and {'Devoluciones', 'Regalos', 'Ventas', 'Dinero de paso'} <= set(opciones), 'ofrece categorías reales y no «Bizum recibido»')
     res.comprobar(not pg.is_checked('#recordar'), 'con un Bizum, «recordar» viene sin marcar')
-    pg.click('.rejilla-cats button:has-text("Devoluciones")'); pg.wait_for_timeout(300)
+    pg.click('.rejilla-cats button:has-text("Devoluciones")'); pg.wait_for_selector('[data-sub="1"]')
+    pg.click('[data-sub="1"][data-cat="🤝 Devolución"]'); pg.wait_for_timeout(300)  # «No sé de qué gasto es»: sigue siendo ingreso
     pg.click('.barra a[href="#/resumen"]'); pg.wait_for_selector('section[aria-label="De dónde viene"]')
     res.comprobar('Devoluciones' in pg.inner_text('section[aria-label="De dónde viene"]'), 'el Bizum clasificado aparece en «De dónde viene»')
 

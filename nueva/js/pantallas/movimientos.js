@@ -1,10 +1,11 @@
 // Movimientos: lista del mes con buscador y filtros; al tocar uno se puede cambiar su categoría, fecha o forma de pago
 
 import { ic } from '../iconos.js';
-import { esc, fmt, resumenMes, porRevisar, etiquetaDia, infoCategoria, CATEGORIAS, claveConcepto, MEDIOS, BD, esGasto, esIngreso, esBizum, CUENTA_MANUAL, esManual, cuentasBanco, cuentaManual, cuentaPrincipal, gemeloEnBanco, medioDe, propositoPaso, desglosar, partesDe } from '../logica.js';
+import { esc, fmt, resumenMes, porRevisar, etiquetaDia, infoCategoria, CATEGORIAS, claveConcepto, MEDIOS, BD, esGasto, esIngreso, esBizum, CUENTA_MANUAL, esManual, cuentasBanco, cuentaManual, cuentaPrincipal, gemeloEnBanco, medioDe, propositoPaso, desglosar, partesDe, esDevolucion, gastosNetos } from '../logica.js';
 import { preguntarTraspaso, ajustarEfectivo } from './dinero.js';
 import { preguntarPaso } from './paso.js';
 import { sePuedeDividir, resumenPartes } from './dividir.js';
+import { preguntarDevolucion, DEVOLUCION } from './devolucion.js';
 import { selectorMes, filaMovimiento, ficha, conceptoVisible, importeMovimiento } from '../componentes.js';
 import { abrirHoja, cerrarHoja, cabeceraHoja, toast, confirmar } from '../ui.js';
 import * as D from '../datos.js';
@@ -61,7 +62,7 @@ function filtroCuentas(E) {
 export function renderLista(E) {
   const lista = visibles(E);
   const partes = desglosar(lista); // los divididos cuentan por partes
-  const gastos = partes.filter(esGasto).reduce((s, t) => s + +t.importe, 0);
+  const gastos = gastosNetos(partes).reduce((s, t) => s + +t.importe, 0); // las devoluciones restan
   const ingresos = partes.filter(esIngreso).reduce((s, t) => s + +t.importe, 0);
   const cab = `<div style="display:flex;flex-wrap:wrap;gap:4px 14px;font-size:13px;color:var(--texto-2)">
     <span>${lista.length} ${lista.length === 1 ? 'movimiento' : 'movimientos'}</span>
@@ -100,14 +101,15 @@ function abrirEdicion(ctx, t) {
   const textoRecordar = bizum ? 'Usar esta categoría siempre para los Bizum de esta persona'
     : rev ? 'Recordar para los próximos movimientos de este comercio'
     : `Cambiar también ${otros ? `${otros === 1 ? 'el otro igual' : `los otros ${otros} iguales`} y ` : ''}los próximos de este concepto`;
-  const pregunta = !rev ? esc(actual.nombre) : bizum ? (t.tipo === 'ingreso' ? '¿De qué es este Bizum?' : '¿Para qué era este Bizum?') : '¿Qué es este movimiento?';
+  const devolucion = esDevolucion(t);
+  const pregunta = devolucion ? `Devolución de ${esc(actual.nombre)}` : !rev ? esc(actual.nombre) : bizum ? (t.tipo === 'ingreso' ? '¿De qué es este Bizum?' : '¿Para qué era este Bizum?') : '¿Qué es este movimiento?';
   abrirHoja(`${cabeceraHoja(esc(conceptoVisible(t)), pregunta)}
     <span class="num texto-2" style="font-size:15px;margin-top:-8px">${imp.texto}</span>
     ${conceptoVisible(t) !== String(t.descripcion || '').trim() ? `<span class="nota" style="margin-top:-10px;word-break:break-word">Concepto original: ${esc(t.descripcion)}</span>` : ''}
     ${esManual(t) ? (gemeloEnBanco(t, E.txs) ? `<p class="nota" style="background:var(--fondo);border-radius:12px;padding:10px 12px"><b>¿Repetido?</b> El banco ya tiene «${esc(conceptoVisible(gemeloEnBanco(t, E.txs)))}» del ${etiquetaDia(gemeloEnBanco(t, E.txs).fecha, E.mes).toLowerCase()} con el mismo importe. Si es el mismo, borra este.</p>` : '<p class="nota">Lo apuntaste a mano. Cuando importes el extracto del banco, se juntará con su movimiento sin repetirse.</p>') : ''}
     ${t.cuenta === 'previsto' ? '<p class="nota" style="background:var(--fondo);border-radius:12px;padding:10px 12px"><b>Previsto:</b> lo ha apuntado la app por tus movimientos fijos. Cuando importes el extracto se juntará con el de verdad y se quedará con su importe. Si este mes no llega, bórralo.</p>' : ''}
     ${t.pendiente ? '<p class="nota" style="background:var(--fondo);border-radius:12px;padding:10px 12px"><b>Retenido:</b> el banco aún no lo ha cobrado del todo. Ya cuenta en tus gastos; cuando lo cobre, al importar el siguiente extracto se convertirá en el movimiento definitivo.</p>' : ''}
-    ${opciones.length ? `<div class="rejilla-cats">${opciones.map(c => `<button type="button" data-accion="poner-categoria" data-id="${esc(t.id)}" data-cat="${esc(c.bd)}" aria-pressed="${!rev && c.bd === t.categoria}">${ficha(c)}${esc(c.nombre)}</button>`).join('')}</div>
+    ${opciones.length ? `<div class="rejilla-cats">${opciones.map(c => `<button type="button" data-accion="poner-categoria" data-id="${esc(t.id)}" data-cat="${esc(c.bd)}" aria-pressed="${!rev && (c.bd === t.categoria || (devolucion && c.bd === DEVOLUCION))}">${ficha(c)}${esc(c.nombre)}</button>`).join('')}</div>
     <label class="casilla"><input type="checkbox" id="recordar"${recordarMarcado ? ' checked' : ''}> <span>${esc(textoRecordar)}</span></label>
     ${!rev && !bizum ? '<p class="nota" style="margin-top:-10px">Si no la marcas, solo cambia este movimiento.</p>' : ''}` : '<p class="nota">Es el cargo mensual de la tarjeta: sus compras ya están contadas una a una.</p>'}
     <div class="par">
@@ -165,6 +167,8 @@ export const acciones = {
     const t = buscarTx(E, el.dataset.id);
     const nueva = el.dataset.cat;
     const anterior = t.categoria;
+    // «Devoluciones» en un ingreso: antes, de qué gasto es (se guarda con la categoría de ese gasto y resta de ella)
+    if (nueva === DEVOLUCION && t.tipo === 'ingreso' && !el.dataset.sub) { preguntarDevolucion(ctx, t, !!document.getElementById('recordar')?.checked); return; }
     // Los traspasos no se recuerdan: cada uno pregunta de qué cuenta sale el dinero
     const recordar = document.getElementById('recordar')?.checked && nueva !== BD.TRASPASO;
     // Si se recuerda, cambian también los del mismo concepto que estaban sin clasificar o en la misma categoría
@@ -174,8 +178,9 @@ export const acciones = {
     if (!await D.actualizarMovimientos([t.id, ...mismos.map(x => x.id)], { categoria: nueva }, 'cambiar la categoría')) return;
     [t, ...mismos].forEach(x => { x.categoria = nueva; });
     if (recordar && await D.guardarRegla(t.descripcion, nueva)) E.reglas[clave] = nueva;
-    const nombre = infoCategoria(nueva).nombre;
-    toast(mismos.length ? `${nombre}: ${mismos.length + 1} movimientos cambiados. Lo recordaremos.` : recordar ? `Guardado en ${nombre}. Lo recordaremos.` : `Guardado en ${nombre} (solo este)`);
+    const devolucion = esDevolucion({ tipo: t.tipo, categoria: nueva }), nombre = infoCategoria(nueva).nombre;
+    const donde = devolucion ? `como devolución de ${nombre}` : `en ${nombre}`;
+    toast(mismos.length ? `${devolucion ? 'Devolución de ' : ''}${nombre}: ${mismos.length + 1} movimientos cambiados. Lo recordaremos.` : recordar ? `Guardado ${donde}. Lo recordaremos.` : `Guardado ${donde} (solo este)`);
     ctx.pintar();
     if (nueva === BD.TRASPASO && anterior !== BD.TRASPASO) preguntarTraspaso(ctx, t);
     else if (anterior === BD.TRASPASO && nueva !== BD.TRASPASO) preguntarTraspaso(ctx, t, true);

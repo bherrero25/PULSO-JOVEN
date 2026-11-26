@@ -62,6 +62,16 @@ prueba('dividir: la mensualidad con el alquiler dentro cuenta por partes, en el 
   assert.deepEqual(L.desglosar(txs).filter(t => t.parteDe === 1).map(t => [t.categoria, t.importe]), [['💰 Mensualidad', 386], ['↩️ Reenviado', 300]]);
   assert.equal(L.resumenMes(txs, '2026-10').ingresado, 0, 'la parte no se va al mes de la fecha (octubre)');
 });
+prueba('devoluciones: un ingreso con categoría de gasto resta de esa categoría y no cuenta como ingreso', () => {
+  const txs = [...base, m('2026-11-06', 60, 'gasto', '🎉 Ocio'), m('2026-11-07', 20, 'ingreso', '🎉 Ocio'), m('2026-11-08', 10, 'ingreso', '🔧 Otros'), m('2026-11-09', 5, 'ingreso', '🤝 Devolución')];
+  const r = L.resumenMes(txs, '2026-11');
+  assert.equal(r.ingresado, 485, 'mensualidad + «Otros» (por revisar) + devolución sin decir de qué: siguen siendo ingreso');
+  assert.equal(r.devuelto, 20); assert.equal(r.totalGastos, 140);
+  assert.deepEqual(L.porCategoria(r.gastos).map(g => [g.cat.nombre, g.total]), [['Comida', 100], ['Ocio', 40]]);
+  assert.equal(r.queda, 345, 'el balance es el mismo que si contara como ingreso');
+  const p = L.estadoPresupuestos([{ categoria: '🎉 Ocio', limite: 100, mes: '2026-01' }], txs, '2026-11');
+  assert.equal(p[0].gastado, 40, 'el presupuesto cuenta lo gastado menos lo devuelto');
+});
 prueba('traspaso: no cuenta como ingreso ni gasto', () => {
   const r = L.resumenMes([...base, m('2026-11-03', 200, 'ingreso', '🔄 Traspaso'), m('2026-11-04', 50, 'gasto', '🔄 Traspaso')], '2026-11');
   assert.equal(r.ingresado, 470); assert.equal(r.totalGastos, 100);

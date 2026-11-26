@@ -122,7 +122,17 @@ export function tinteCategoria(c) {
 export const esTraspaso = t => t.categoria === BD.TRASPASO;
 export const esPaso = t => (t.tipo === 'gasto' || t.tipo === 'ingreso') && t.categoria === BD.REENVIO;
 export const esGasto = t => t.tipo === 'gasto' && t.categoria !== BD.REENVIO && !esTraspaso(t);
-export const esIngreso = t => t.tipo === 'ingreso' && t.categoria !== BD.REENVIO && !esTraspaso(t);
+export const esIngreso = t => t.tipo === 'ingreso' && t.categoria !== BD.REENVIO && !esTraspaso(t) && !esDevolucion(t);
+// Devolución: un ingreso con la categoría de un gasto (tu parte de la cena que te devuelve un amigo → Ocio; lo que te
+// devuelven en una tienda de ropa → Ropa). No es un ingreso: resta de lo gastado en esa categoría. «Otros» y las
+// genéricas (Bizum enviado…) no cuentan, porque son «por revisar».
+export const esDevolucion = t => {
+  if (t.tipo !== 'ingreso' || !t.categoria || t.categoria === BD.OTROS) return false;
+  const c = infoCategoria(t.categoria);
+  return c.tipo === 'gasto' && !c.generica;
+};
+// Lo gastado, con las devoluciones restando (como movimientos de importe negativo, `devolucion: true`)
+export const gastosNetos = lista => [...lista.filter(esGasto), ...lista.filter(esDevolucion).map(t => ({ ...t, importe: -Math.abs(parseFloat(t.importe)), devolucion: true }))];
 const esMensualidad = t => t.tipo === 'ingreso' && t.categoria === BD.MENSUALIDAD;
 
 // La mensualidad y el dinero de paso de los 3 últimos días del mes cuentan para el mes siguiente
@@ -198,7 +208,7 @@ export function bolsasPaso(txs, ym) {
 export function resumenMes(txs, ym) {
   const movs = txs.filter(t => mesEfectivo(t) === ym); // tal cual, para las listas
   const partes = desglosar(movs);                       // para las cuentas: los movimientos divididos, en sus partes
-  const gastos = partes.filter(esGasto), ingresos = partes.filter(esIngreso), paso = partes.filter(esPaso);
+  const gastos = gastosNetos(partes), ingresos = partes.filter(esIngreso), paso = partes.filter(esPaso); // las devoluciones restan de lo gastado
   const pasoLlega = sumar(paso.filter(t => t.tipo === 'ingreso')), pasoSale = sumar(paso.filter(t => t.tipo === 'gasto'));
   // totalPaso > 0: este mes ha salido dinero de paso con tu dinero (se resta de lo ingresado); < 0: te han devuelto lo que pusiste
   const { totalPaso, enEspera } = bolsasPaso(txs, ym), liberado = sumar(partes.filter(esLiberado));
@@ -208,7 +218,8 @@ export function resumenMes(txs, ym) {
   // no es dinero nuevo (no cuenta como ingreso), pero explica un balance en negativo («has usado X € de tus ahorros»)
   const traspasos = partes.filter(esTraspaso);
   const deAhorros = Math.max(0, Math.round((sumar(traspasos.filter(t => t.tipo === 'ingreso')) - sumar(traspasos.filter(t => t.tipo === 'gasto'))) * 100) / 100);
-  return { ym, movs, gastos, ingresos, paso, pasoLlega, pasoSale, totalGastos, ingresosBrutos, totalPaso, enEspera, liberado, deAhorros, ingresado, queda: ingresado - totalGastos };
+  const devuelto = -sumar(gastos.filter(t => t.devolucion));
+  return { ym, movs, gastos, ingresos, paso, pasoLlega, pasoSale, totalGastos, ingresosBrutos, totalPaso, enEspera, liberado, deAhorros, devuelto, ingresado, queda: ingresado - totalGastos };
 }
 
 // Agrupa movimientos por categoría, de mayor a menor importe
@@ -224,7 +235,7 @@ export function porCategoria(lista) {
 }
 
 export function gastoHastaDia(txs, ym, dia) {
-  return sumar(desglosar(txs).filter(t => esGasto(t) && t.fecha.slice(0, 7) === ym && Number(t.fecha.slice(8)) <= dia));
+  return sumar(gastosNetos(desglosar(txs)).filter(t => t.fecha.slice(0, 7) === ym && Number(t.fecha.slice(8)) <= dia));
 }
 
 // Meses que se pueden consultar: desde el primero con datos hasta el actual
@@ -629,7 +640,7 @@ const sumarDias = (fecha, n) => { const d = new Date(fecha + 'T12:00:00'); d.set
 const redondear = n => Math.round(n * 100) / 100;
 // Gasto del día a día: lo que no es un movimiento fijo (ni lo previsto, ni traspasos ni dinero de paso)
 const categoriasFijas = fijos => new Set((fijos || []).filter(f => f.activo !== false && f.tipo === 'gasto').map(f => f.categoria));
-const esDelDiaADia = (t, fijas) => esGasto(t) && t.cuenta !== CUENTA_PREVISTO && !fijas.has(t.categoria);
+const esDelDiaADia = (t, fijas) => t.cuenta !== CUENTA_PREVISTO && !fijas.has(t.categoria); // sobre gastosNetos
 
 // Lo que sueles gastar al día en el día a día: la semana típica (la mediana) de las últimas 12 semanas hasta ayer, para
 // que una compra grande puntual o un pago mensual (el alquiler cae en una sola semana) no lo cambien. Con menos de una
@@ -642,7 +653,7 @@ export function gastoDiarioHabitual(txs, fijos, hoy = hoyISO()) {
   const semanas = Math.min(12, Math.floor((diasEntre(primero, ayer) + 1) / 7));
   if (semanas < 1) return null;
   const fijas = categoriasFijas(fijos);
-  const delDia = desglosar(txs).filter(t => esDelDiaADia(t, fijas));
+  const delDia = gastosNetos(desglosar(txs)).filter(t => esDelDiaADia(t, fijas));
   const sumas = Array.from({ length: semanas }, (_, k) => {
     const hasta = sumarDias(ayer, -7 * k), desde = sumarDias(hasta, -6);
     return sumar(delDia.filter(t => t.fecha >= desde && t.fecha <= hasta));
@@ -677,7 +688,7 @@ export function prevision(txs, fijos, hoy = hoyISO()) {
     maxDiario: base > 0 ? redondear(base / (restantes + 1)) : 0, habitual, final: null, estado: null };
   if (!habitual) return out;
   const fijas = categoriasFijas(fijos);
-  const gastoHoy = sumar(desglosar(txs).filter(t => t.fecha === hoy && esDelDiaADia(t, fijas)));
+  const gastoHoy = sumar(gastosNetos(desglosar(txs)).filter(t => t.fecha === hoy && esDelDiaADia(t, fijas)));
   out.restoDeHoy = redondear(Math.max(0, habitual.diario - gastoHoy));
   out.diaADia = redondear(habitual.diario * restantes + out.restoDeHoy);
   out.final = redondear(base - out.diaADia);

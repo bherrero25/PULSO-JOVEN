@@ -58,15 +58,17 @@ export function render(E) {
     ${cats.length ? cats.map(g => {
       const pct = R.totalGastos ? Math.round(g.total / R.totalGastos * 100) : 0;
       const rec = compensan(g.cat), recuperado = sumar(rec), neto = g.total - recuperado;
+      const devuelto = -sumar(g.txs.filter(t => t.devolucion));
       const con = [...new Set(rec.map(t => infoCategoria(t.categoria).nombre.toLowerCase()))].join(' y ');
       const movs = [...g.txs, ...rec].sort((a, b) => b.fecha.localeCompare(a.fecha));
       return `<details class="cat-fila"><summary>
         <div class="cab"><i class="cuadro" style="background:${colorCategoria(g.cat)}"></i><span class="nombre">${esc(g.cat.nombre)}</span><span class="pct">${pct} %</span><span class="imp num">${fmt(g.total)}</span></div>
-        <div class="progreso" style="height:4px"><i style="width:${g.total / cats[0].total * 100}%;background:${colorCategoria(g.cat)}"></i></div>
+        <div class="progreso" style="height:4px"><i style="width:${cats[0].total > 0 ? Math.max(0, g.total / cats[0].total * 100) : 0}%;background:${colorCategoria(g.cat)}"></i></div>
+        ${devuelto ? `<span class="nota" style="display:block;margin-top:2px">Te devolvieron <b class="num positivo">${fmt(devuelto, true)}</b>: ya está descontado</span>` : ''}
         ${recuperado ? `<span class="nota" style="display:block;margin-top:2px">Recuperado con ${esc(con)} <b class="num positivo">${fmt(recuperado, true)}</b> · ${neto > 0 ? `te ha costado <b class="num" style="color:var(--texto)">${fmt(neto)}</b>` : `has recuperado ${neto < 0 ? `<b class="num positivo">${fmt(-neto)}</b> más de lo que gastaste` : 'todo lo que gastaste'}`}</span>` : ''}
       </summary>
       <div class="detalle">${movs.map(t => t.tipo === 'ingreso'
-        ? `<div><span>${fechaCorta(t.fecha)} · ${esc(conceptoVisible(t))}</span><span class="num positivo">${fmt(t.importe, true)}</span></div>`
+        ? `<div><span>${fechaCorta(t.fecha)} · ${esc(conceptoVisible(t))}${t.devolucion ? ' (devolución)' : ''}</span><span class="num positivo">${fmt(Math.abs(+t.importe), true)}</span></div>`
         : `<div><span>${fechaCorta(t.fecha)} · ${esc(conceptoVisible(t))}</span><span class="num">${fmt(t.importe)}</span></div>`).join('')}</div>
       </details>`;
     }).join('') : `<p class="vacio">Aún no hay gastos en ${mes}</p>`}
@@ -77,6 +79,7 @@ export function render(E) {
     ${fuentes.length ? fuentes.map(g => `<details class="cat-fila"><summary><div class="fila" style="border:none">${ficha(g.cat)}<span class="cuerpo"><span class="concepto" style="font-size:14px">${esc(g.cat.nombre)}</span></span><span class="importe num" style="font-size:14px">${fmt(g.total)}</span></div></summary>
       <div class="detalle">${g.txs.map(t => `<div><span>${fechaCorta(t.fecha)} · ${esc(conceptoVisible(t))}</span><span class="num">${fmt(t.importe)}</span></div>`).join('')}</div></details>`).join('')
       : `<p class="vacio">Aún no ha entrado dinero en ${mes}</p>`}
+    ${R.devuelto > 0 ? `<p class="nota" style="padding-top:6px">Las devoluciones (${fmt(R.devuelto)}) no cuentan aquí: restan de lo que gastaste en su categoría.</p>` : ''}
     ${R.deAhorros > 0 ? `<p class="nota" style="padding-top:6px">Además, ${ritmo.abierto ? 'has usado' : 'usaste'} ${fmt(R.deAhorros)} de tus ahorros (traspasos a tu cuenta): no cuentan como ingreso porque ya eran tuyos.</p>` : ''}
     ${R.totalPaso ? `<p class="nota" style="padding-top:6px">Ya está descontado el dinero de paso que salió de tu dinero (${fmt(-R.totalPaso, true)}): lo tienes en «Dinero de paso».</p>` : ''}
   </section>

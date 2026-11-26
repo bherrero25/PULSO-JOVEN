@@ -8,6 +8,7 @@ import * as D from '../datos.js';
 import { leerFilas, analizarExtracto, leerConFormato, proponerFormato, columnasArchivo, firmaFormato, formatoParaGuardar, formatosLocales, guardarFormatoLocal } from '../importar.js';
 import { preguntarTraspaso, ajustarEfectivo } from './dinero.js';
 import { preguntarPaso } from './paso.js';
+import { preguntarDevolucion } from './devolucion.js';
 
 // ─── A MANO ───
 // La forma de pago se elige con botones; con Bizum o transferencia los textos hablan de enviar y recibir, y la categoría
@@ -308,6 +309,7 @@ export const acciones = {
     // (al cambiar de pantalla se cierran las hojas)
     const aviso = `${textos.nombre} de ${fmt(importe)} ${n.medio === 'transferencia' ? 'guardada' : 'guardado'}${luego ? '. Ponle categoría cuando quieras en «Por revisar».' : ''}`;
     if (n.cat === 'traspaso') window.addEventListener('hashchange', () => preguntarTraspaso(ctx, fila), { once: true });
+    else if (n.cat === 'devolucion' && n.tipo === 'ingreso') window.addEventListener('hashchange', () => { toast(aviso); preguntarDevolucion(ctx, fila); }, { once: true });
     else if (n.cat === 'reenviado' && E.conPaso) window.addEventListener('hashchange', async () => {
       if (fila.cuenta === 'efectivo') await ajustarEfectivo(ctx, fila, false, aviso); else toast(aviso);
       preguntarPaso(ctx, fila);

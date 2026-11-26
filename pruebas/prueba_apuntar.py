@@ -33,7 +33,9 @@ with sync_playwright() as p:
     res.comprobar(f['concepto'] == '¿De quién o de qué?' and f['boton'] == 'Guardar transferencia recibida', 'transferencia recibida: textos adaptados')
     for k in '50': pg.click(f'.teclado [data-valor="{k}"]')
     pg.click('[data-accion="cat-nuevo"][data-valor="devolucion"]'); pg.click('[data-accion="guardar-nuevo"]'); pg.wait_for_selector('.saludo')
+    pg.wait_for_selector('[data-sub="1"]')
     res.comprobar('guardada' in pg.inner_text('#toast'), 'la transferencia se guarda')
+    pg.click('[data-sub="1"][data-cat="🤝 Devolución"]'); pg.wait_for_timeout(300)  # «¿De qué gasto es?» → «No sé de qué gasto es»
 
     pg.click('.rapidos a:has-text("Gasto")'); pg.wait_for_selector('.teclado')
     res.comprobar(formulario(pg)['cat'] == 'Comida' and formulario(pg)['forma'] == 'Tarjeta', 'Gasto abre con tarjeta y comida')

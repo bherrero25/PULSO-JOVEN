@@ -18,12 +18,21 @@ const catPorDefecto = (tipo, medio) => conPersona(medio) ? LUEGO : tipo === 'gas
 export function nuevoMovimiento({ tipo, medio } = {}) {
   const t = tipo === 'ingreso' ? 'ingreso' : 'gasto';
   const m = MEDIOS[medio] ? medio : t === 'gasto' ? 'tarjeta' : 'transferencia';
-  return { tipo: t, importe: '', cat: catPorDefecto(t, m), catElegida: false, fecha: hoyISO(), medio: m, concepto: '' };
+  return { tipo: t, importe: '', cat: catPorDefecto(t, m), catElegida: false, fecha: hoyISO(), medio: m, concepto: '', alBanco: false };
+}
+// Un ingreso en efectivo puede quedarse en mano o meterse en el banco (en el cajero o la oficina): entonces sale en el
+// extracto, cuenta en «Tu dinero» y se juntará con su movimiento del banco
+// (un traspaso en efectivo siempre: es sacar del banco o meter en él tus ahorros)
+const vaAlBanco = n => n.medio !== 'efectivo' || n.cat === 'traspaso' || (n.tipo === 'ingreso' && n.alBanco);
+function dondeEfectivo(n) {
+  if (n.tipo !== 'ingreso' || n.medio !== 'efectivo' || n.cat === 'traspaso') return '';
+  const b = (v, t) => `<button type="button" data-accion="donde-nuevo" data-valor="${v}" aria-pressed="${(v === 'banco') === !!n.alBanco}">${t}</button>`;
+  return `<div class="formas" role="group" aria-label="Dónde está el dinero">${b('mano', 'Lo tengo en mano')}${b('banco', 'Lo he metido en el banco')}</div>`;
 }
 // Con varias cuentas de banco, a cuál va lo apuntado (para «Tu dinero» y para juntarlo con el extracto de esa cuenta)
 function selectorCuenta(E, n) {
   const bancos = cuentasBanco(E.cuentas);
-  if (bancos.length < 2 || n.medio === 'efectivo') return '';
+  if (bancos.length < 2 || !vaAlBanco(n)) return '';
   const principal = cuentaPrincipal(bancos).clave, elegida = n.cuentaBanco || principal;
   return `<label class="campo" style="gap:4px"><span class="solo-lector">Cuenta</span><select data-entrada="cuenta-nuevo" aria-label="Cuenta">
     ${bancos.map(c => `<option value="${esc(c.clave)}"${c.clave === elegida ? ' selected' : ''}>Cuenta: ${esc(c.nombre)}${c.clave === principal ? ' (principal)' : ''}</option>`).join('')}</select></label>`;
@@ -59,6 +68,7 @@ function aMano(E) {
   return `
     <div class="tipo" role="group" aria-label="Tipo">${boton('gasto', tx.tipos[0])}${boton('ingreso', tx.tipos[1])}</div>
     <div class="formas" role="group" aria-label="Forma de pago">${FORMAS.map(([k, t]) => `<button type="button" data-accion="forma-nuevo" data-valor="${k}" aria-pressed="${n.medio === k}">${t}</button>`).join('')}</div>
+    ${dondeEfectivo(n)}
     ${selectorCuenta(E, n)}
     <div class="pantalla-importe num${n.importe ? '' : ' vacio-imp'}${n.tipo === 'ingreso' && n.importe ? ' positivo' : ''}" aria-live="polite">${n.importe ? (n.tipo === 'gasto' ? '−' : '+') + n.importe : '0'} €</div>
     <div class="chips sin-scroll" role="group" aria-label="Categoría">
@@ -219,6 +229,7 @@ export const acciones = {
     ctx.pintar();
   },
   'cat-nuevo': (ctx, el) => { Object.assign(ctx.E.nuevo, { cat: el.dataset.valor, catElegida: true }); ctx.pintar(); },
+  'donde-nuevo': (ctx, el) => { ctx.E.nuevo.alBanco = el.dataset.valor === 'banco'; ctx.pintar(); },
   'tecla': (ctx, el) => {
     const n = ctx.E.nuevo, k = el.dataset.valor;
     let a = n.importe;
@@ -241,7 +252,7 @@ export const acciones = {
     const categoria = !luego ? cat.bd : n.medio === 'bizum' ? (n.tipo === 'gasto' ? '📱 Bizum enviado' : '📱 Bizum recibido') : BD.OTROS;
     // Lo pagado en efectivo no sale en el banco; lo demás (y meter efectivo en el banco) se juntará con el extracto
     const bancos = cuentasBanco(E.cuentas);
-    const cuenta = n.medio === 'efectivo' && n.cat !== 'traspaso' ? 'efectivo'
+    const cuenta = !vaAlBanco(n) ? 'efectivo'
       : cuentaManual(bancos.length > 1 ? (n.cuentaBanco || cuentaPrincipal(bancos).clave) : null);
     const descripcion = n.concepto.trim() || (conPersona(n.medio) || luego ? textos.nombre : cat.nombre);
     const tx = { fecha: n.fecha || hoyISO(), descripcion, importe, tipo: n.tipo, categoria, medio: n.medio, cuenta };

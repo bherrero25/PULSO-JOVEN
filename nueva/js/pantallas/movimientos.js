@@ -113,7 +113,20 @@ function abrirEdicion(ctx, t) {
         ${Object.entries(MEDIOS).map(([k, v]) => `<option value="${k}"${medioDe(t) === k ? ' selected' : ''}>${v}</option>`).join('')}
       </select></label>
     </div>
+    ${dondeEsta(E, t)}
     <button type="button" class="boton peligro peq" data-accion="borrar-mov" data-id="${esc(t.id)}">${ic('papelera')}Borrar movimiento</button>`, 'Editar movimiento');
+}
+
+// Un ingreso en efectivo apuntado a mano: ¿se quedó en mano o se metió en el banco? Si está en el banco, cuenta en
+// «Tu dinero» y se junta con su movimiento al importar el extracto.
+function dondeEsta(E, t) {
+  if (t.tipo !== 'ingreso' || medioDe(t) !== 'efectivo' || t.categoria === BD.TRASPASO || !(t.cuenta === 'efectivo' || esManual(t))) return '';
+  const bancos = cuentasBanco(E.cuentas);
+  // Lo apuntado sin cuenta va a la principal; con una sola cuenta de banco no hace falta decir cuál
+  const actual = t.cuenta === 'efectivo' ? 'efectivo' : bancos.length < 2 ? CUENTA_MANUAL : t.cuenta === CUENTA_MANUAL ? cuentaManual(cuentaPrincipal(bancos).clave) : t.cuenta;
+  const op = (v, texto) => `<option value="${esc(v)}"${actual === v ? ' selected' : ''}>${esc(texto)}</option>`;
+  const enBanco = bancos.length < 2 ? op(CUENTA_MANUAL, 'Lo metí en el banco') : bancos.map(c => op(cuentaManual(c.clave), `Lo metí en ${c.nombre}`)).join('');
+  return `<label class="campo">¿Dónde está este dinero?<select data-cambio="donde-mov" data-id="${esc(t.id)}">${op('efectivo', 'Lo tengo en mano')}${enBanco}</select></label>`;
 }
 
 const buscarTx = (E, id) => E.txs.find(t => String(t.id) === String(id));
@@ -179,6 +192,14 @@ export const cambios = {
     if (!await D.actualizarMovimientos([t.id], cambios, 'cambiar la forma de pago')) { el.value = t.medio || 'transferencia'; return; }
     Object.assign(t, cambios);
     toast('Forma de pago cambiada');
+    ctx.pintar();
+    if (t.tipo === 'ingreso' && 'cuenta' in cambios) abrirEdicion(ctx, t); // para que aparezca (o no) «¿Dónde está este dinero?»
+  },
+  'donde-mov': async (ctx, el) => {
+    const t = buscarTx(ctx.E, el.dataset.id);
+    if (!await D.actualizarMovimientos([t.id], { cuenta: el.value }, 'cambiar dónde está el dinero')) { el.value = t.cuenta; return; }
+    t.cuenta = el.value;
+    toast(el.value === 'efectivo' ? 'Cuenta como efectivo en mano' : 'Cuenta en el banco: se juntará con el extracto');
     ctx.pintar();
   }
 };
